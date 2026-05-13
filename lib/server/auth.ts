@@ -97,7 +97,7 @@ export function hashApiKey(value: string) {
 }
 
 export function createApiKeySecret() {
-  const secret = `dv_live_${crypto.randomBytes(24).toString("base64url")}`
+  const secret = `art_live_${crypto.randomBytes(24).toString("base64url")}`
   return {
     secret,
     prefix: secret.slice(0, 12),

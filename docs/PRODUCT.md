@@ -1,8 +1,8 @@
-# DataVision - 产品定位与功能说明
+# Artifacta - 产品定位与功能说明
 
 ## 产品定位
 
-**DataVision** 是一个面向企业的**新一代 BI 看板托管平台**，专为数据驱动的团队设计。
+**Artifacta** 是一个面向企业的**新一代 BI 看板托管平台**，专为数据驱动的团队设计。
 
 ### 核心理念
 
@@ -13,7 +13,7 @@
 - 缺乏统一的权限管理和访问控制
 - 无法追踪看板的访问情况
 
-**DataVision 解决这些问题**，提供一个简单、安全、高效的平台，让团队可以：
+**Artifacta 解决这些问题**，提供一个简单、安全、高效的平台，让团队可以：
 
 1. **一键上传** - 将本地生成的 HTML 看板和数据文件打包上传
 2. **即时分享** - 通过链接或权限配置分享给团队成员
@@ -29,7 +29,7 @@
 
 ### 与传统 BI 工具的区别
 
-| 特性 | 传统 BI 工具 | DataVision |
+| 特性 | 传统 BI 工具 | Artifacta |
 |------|-------------|------------|
 | 看板创建 | 在平台内拖拽创建 | 本地使用任意工具/AI 生成 |
 | 灵活性 | 受限于平台组件 | 完全自定义 HTML/CSS/JS |
@@ -148,10 +148,10 @@
 
 #### 5.2 CLI 工具
 
-命令行工具 `datavision` 现在同时支持仓库内调用和对外独立发布包：
+命令行工具 `artifacta` 现在同时支持仓库内调用和对外独立发布包：
 
 - 仓库内：`pnpm cli -- ...`
-- 对外发布后：`npx @datavision/cli@latest ...`
+- 对外发布后：`npx @artifacta/cli@latest ...`
 
 支持项目创建、HTML 替换、数据集上传/替换、同步配置提交和同步触发。当前仓库内可通过 `pnpm cli -- ...` 调用：
 
@@ -210,7 +210,7 @@ pnpm cli -- projects list
 ### 场景一：日报/周报自动化
 
 1. 数据分析师使用 Python + AI 工具生成日报看板
-2. 通过 CLI 自动上传到 DataVision
+2. 通过 CLI 自动上传到 Artifacta
 3. 配置企业微信/钉钉 Webhook，自动推送链接到群组
 4. 团队成员点击链接直接查看，无需下载文件
 
@@ -235,7 +235,7 @@ pnpm cli -- projects list
 - name: Generate Dashboard
   run: python generate_dashboard.py
 
-- name: Upload to DataVision
+- name: Upload to Artifacta
   run: |
     pnpm cli -- projects upload \
       --file ./output/dashboard.zip \
@@ -304,6 +304,6 @@ pnpm cli -- projects list
 
 ## 联系我们
 
-- **产品反馈**: feedback@datavision.io
-- **技术支持**: support@datavision.io
-- **商务合作**: business@datavision.io
+- **产品反馈**: feedback@Artifacta.io
+- **技术支持**: support@Artifacta.io
+- **商务合作**: business@Artifacta.io

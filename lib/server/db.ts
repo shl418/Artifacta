@@ -18,7 +18,7 @@ function seedDatabase(): Database {
     organizations: [
       {
         id: "org_demo",
-        name: "DataVision Demo",
+        name: "Artifacta Demo",
         slug: "demo",
         description: "Local demo organization for self-hosted development.",
         createdAt,
@@ -29,7 +29,7 @@ function seedDatabase(): Database {
       {
         id: "user_admin",
         organizationId: "org_demo",
-        email: "admin@datavision.local",
+        email: "admin@artifacta.local",
         name: "张三",
         role: "admin",
         status: "active",
@@ -39,7 +39,7 @@ function seedDatabase(): Database {
       {
         id: "user_lisi",
         organizationId: "org_demo",
-        email: "lisi@datavision.local",
+        email: "lisi@artifacta.local",
         name: "李四",
         role: "member",
         status: "active",
@@ -49,7 +49,7 @@ function seedDatabase(): Database {
       {
         id: "user_wangwu",
         organizationId: "org_demo",
-        email: "wangwu@datavision.local",
+        email: "wangwu@artifacta.local",
         name: "王五",
         role: "member",
         status: "active",
@@ -302,12 +302,22 @@ async function ensureSqliteDatabase() {
   const database = getSqliteDatabase()
   database.pragma("journal_mode = WAL")
   database.exec(`
-    CREATE TABLE IF NOT EXISTS datavision_migrations (
+    CREATE TABLE IF NOT EXISTS artifacta_migrations (
       id INTEGER PRIMARY KEY,
       name TEXT NOT NULL UNIQUE,
       applied_at TEXT NOT NULL
     );
   `)
+
+  const legacyMigrations = database
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='datavision_migrations'")
+    .get() as { name: string } | undefined
+  if (legacyMigrations) {
+    database.exec(`
+      INSERT OR IGNORE INTO artifacta_migrations SELECT * FROM datavision_migrations;
+      DROP TABLE datavision_migrations;
+    `)
+  }
 
   applySqliteMigration(
     database,
@@ -427,12 +437,12 @@ function getSqliteDatabase() {
 }
 
 function applySqliteMigration(database: SqliteDatabase, id: number, name: string, sql: string) {
-  const applied = database.prepare("SELECT id FROM datavision_migrations WHERE id = ?").get(id)
+  const applied = database.prepare("SELECT id FROM artifacta_migrations WHERE id = ?").get(id)
   if (applied) return
 
   const migrate = database.transaction(() => {
     database.exec(sql)
-    database.prepare("INSERT INTO datavision_migrations (id, name, applied_at) VALUES (?, ?, ?)").run(id, name, now())
+    database.prepare("INSERT INTO artifacta_migrations (id, name, applied_at) VALUES (?, ?, ?)").run(id, name, now())
   })
   migrate()
 }

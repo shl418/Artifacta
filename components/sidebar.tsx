@@ -75,7 +75,7 @@ export function Sidebar() {
                 <span className="text-primary-foreground font-bold text-sm">DV</span>
               </div>
               <span className="font-semibold text-sidebar-foreground">
-                DataVision
+                Artifacta
               </span>
             </div>
           </div>
@@ -158,7 +158,7 @@ export function Sidebar() {
               </Avatar>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-sidebar-foreground truncate">
-                  {user?.name ?? "DataVision"}
+                  {user?.name ?? "Artifacta"}
                 </p>
                 <p className="text-xs text-sidebar-foreground/60 truncate">
                   {user?.role === "admin" ? "管理员" : "使用者"}

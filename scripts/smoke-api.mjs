@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import AdmZip from "adm-zip"
 
-const baseUrl = (process.env.DATAVISION_URL ?? "http://localhost:3000").replace(/\/+$/, "")
+const baseUrl = (process.env.ARTIFACTA_URL ?? "http://localhost:3000").replace(/\/+$/, "")
 const apiBase = `${baseUrl}/api/v1`
 let apiKeyId = null
 let apiKey = null
@@ -56,7 +56,7 @@ async function login() {
   const response = await fetch(`${apiBase}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: "admin@datavision.local", name: "Smoke Tester" }),
+    body: JSON.stringify({ email: "admin@artifacta.local", name: "Smoke Tester" }),
   })
   assert(response.ok, `Login failed with ${response.status}`)
   const setCookie = response.headers.get("set-cookie")

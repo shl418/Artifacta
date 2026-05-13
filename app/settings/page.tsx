@@ -188,7 +188,7 @@ export default function SettingsPage() {
                     <div className="space-y-2">
                       <Label>组织名称</Label>
                       <Input
-                        defaultValue="DataVision Inc."
+                        defaultValue="Artifacta Inc."
                         className="bg-secondary/50"
                       />
                     </div>

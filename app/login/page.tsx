@@ -9,8 +9,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
 const demoAccounts = [
-  { email: "admin@datavision.local", name: "张三", label: "管理员" },
-  { email: "lisi@datavision.local", name: "李四", label: "使用者" },
+  { email: "admin@artifacta.local", name: "张三", label: "管理员" },
+  { email: "lisi@artifacta.local", name: "李四", label: "使用者" },
 ]
 
 export default function LoginPage() {
@@ -60,8 +60,8 @@ function LoginForm() {
             <BarChart3 className="size-5" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold text-foreground">DataVision</h1>
-            <p className="text-sm text-muted-foreground">企业级 BI 看板托管平台</p>
+            <h1 className="text-xl font-semibold text-foreground">Artifacta</h1>
+            <p className="text-sm text-muted-foreground">AI 时代的数据应用托管与分发</p>
           </div>
         </div>
 
@@ -88,7 +88,7 @@ function LoginForm() {
 
               <Button className="w-full" type="submit" disabled={isSubmitting}>
                 <LogIn className="size-4" />
-                {isSubmitting ? "登录中" : "进入 DataVision"}
+                {isSubmitting ? "登录中" : "进入 Artifacta"}
               </Button>
             </form>
           </CardContent>

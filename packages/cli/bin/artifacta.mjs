@@ -25,24 +25,24 @@ try {
 }
 
 function printHelp() {
-  console.log(`DataVision CLI
+  console.log(`Artifacta CLI
 
 Usage:
-  datavision projects list [--search text]
-  datavision projects upload --file dashboard.html --name "Sales" [--data-file data.csv] [--visibility team]
-  datavision projects update-html --project-id proj_x --file dashboard.zip
-  datavision datasets list [--source manual|cos|presto]
-  datavision datasets upload --project-id proj_x --file data.csv [--name "Sales Data"]
-  datavision datasets replace --project-id proj_x --dataset-id ds_x --file data.csv
-  datavision datasets sync set --project-id proj_x --dataset-id ds_x --source-type presto --config-file ./sync.json
-  datavision sync trigger --project-id proj_x --dataset-id ds_x
+  artifacta projects list [--search text]
+  artifacta projects upload --file dashboard.html --name "Sales" [--data-file data.csv] [--visibility team]
+  artifacta projects update-html --project-id proj_x --file dashboard.zip
+  artifacta datasets list [--source manual|cos|presto]
+  artifacta datasets upload --project-id proj_x --file data.csv [--name "Sales Data"]
+  artifacta datasets replace --project-id proj_x --dataset-id ds_x --file data.csv
+  artifacta datasets sync set --project-id proj_x --dataset-id ds_x --source-type presto --config-file ./sync.json
+  artifacta sync trigger --project-id proj_x --dataset-id ds_x
 
 Legacy alias:
-  datavision upload --file dashboard.html --name "Sales" [--data-file data.csv] [--visibility team]
+  artifacta upload --file dashboard.html --name "Sales" [--data-file data.csv] [--visibility team]
 
 Environment:
-  DATAVISION_URL       Defaults to http://localhost:3000
-  DATAVISION_API_KEY   Required for API calls
+  ARTIFACTA_URL       Defaults to http://localhost:3000
+  ARTIFACTA_API_KEY   Required for API calls
 `)
 }
 
@@ -64,7 +64,7 @@ async function projectsCommand(projectArgs) {
     return
   }
 
-  throw new Error("Usage: datavision projects <list|upload|update-html> ...")
+  throw new Error("Usage: artifacta projects <list|upload|update-html> ...")
 }
 
 async function datasetsCommand(datasetArgs) {
@@ -90,7 +90,7 @@ async function datasetsCommand(datasetArgs) {
     return
   }
 
-  throw new Error("Usage: datavision datasets <list|upload|replace|sync> ...")
+  throw new Error("Usage: artifacta datasets <list|upload|replace|sync> ...")
 }
 
 async function listProjects(options) {
@@ -128,7 +128,7 @@ async function uploadProject(options) {
   const form = new FormData()
 
   form.append("name", name)
-  form.append("description", String(options.description ?? "Uploaded with DataVision CLI"))
+  form.append("description", String(options.description ?? "Uploaded with Artifacta CLI"))
   form.append("visibility", String(options.visibility ?? "team"))
   if (options["folder-id"]) form.append("folder_id", String(options["folder-id"]))
   await appendFile(form, "html_file", filePath)
@@ -180,7 +180,7 @@ async function replaceDataset(options) {
 async function datasetSyncCommand(syncArgs) {
   const subcommand = syncArgs[0]
   if (subcommand !== "set") {
-    throw new Error("Usage: datavision datasets sync set --project-id proj_x --dataset-id ds_x [--source-type presto] [--config-file ./sync.json]")
+    throw new Error("Usage: artifacta datasets sync set --project-id proj_x --dataset-id ds_x [--source-type presto] [--config-file ./sync.json]")
   }
 
   const options = parseOptions(syncArgs.slice(1))
@@ -207,7 +207,7 @@ async function datasetSyncCommand(syncArgs) {
 
 async function syncCommand(syncArgs) {
   const subcommand = syncArgs[0]
-  if (subcommand !== "trigger") throw new Error("Usage: datavision sync trigger --project-id proj_x --dataset-id ds_x")
+  if (subcommand !== "trigger") throw new Error("Usage: artifacta sync trigger --project-id proj_x --dataset-id ds_x")
 
   const options = parseOptions(syncArgs.slice(1))
   const projectId = requiredOption(options, "project-id")
@@ -245,8 +245,8 @@ async function appendFile(form, field, filePath) {
 }
 
 async function request(route, init = {}) {
-  const apiKey = process.env.DATAVISION_API_KEY
-  if (!apiKey) throw new Error("DATAVISION_API_KEY is required for this command.")
+  const apiKey = process.env.ARTIFACTA_API_KEY
+  if (!apiKey) throw new Error("ARTIFACTA_API_KEY is required for this command.")
 
   const response = await fetch(`${apiBase()}${route}`, {
     ...init,
@@ -266,7 +266,7 @@ async function request(route, init = {}) {
 }
 
 function apiBase() {
-  const base = process.env.DATAVISION_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
+  const base = process.env.ARTIFACTA_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
   return base.replace(/\/api\/v1\/?$/, "").replace(/\/+$/, "") + "/api/v1"
 }
 

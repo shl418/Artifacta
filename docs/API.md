@@ -1,8 +1,8 @@
-# DataVision API 接口文档
+# Artifacta API 接口文档
 
 ## 概述
 
-DataVision 提供 RESTful API 接口，支持通过编程方式管理项目、数据集和权限。Web 控制台使用 Cookie Session；外部自动化、CI/CD 和 Coding Agent 使用 API Key。
+Artifacta 提供 RESTful API 接口，支持通过编程方式管理项目、数据集和权限。Web 控制台使用 Cookie Session；外部自动化、CI/CD 和 Coding Agent 使用 API Key。
 
 **Local Base URL:** `http://localhost:3000/api/v1`
 
@@ -113,8 +113,8 @@ curl -X POST http://localhost:3000/api/v1/projects \
   "name": "销售月报",
   "description": "2024年1月销售数据看板",
   "visibility": "team",
-  "html_url": "https://cdn.datavision.io/projects/proj_abc123/index.html",
-  "preview_url": "https://app.datavision.io/view/proj_abc123",
+  "html_url": "https://cdn.artifacta.io/projects/proj_abc123/index.html",
+  "preview_url": "https://app.artifacta.io/view/proj_abc123",
   "datasets": [
     {
       "id": "ds_001",
@@ -168,7 +168,7 @@ GET /projects
       "description": "2024年1月销售数据看板",
       "visibility": "team",
       "folder_id": "folder_001",
-      "preview_url": "https://app.datavision.io/view/proj_abc123",
+      "preview_url": "https://app.artifacta.io/view/proj_abc123",
       "owner": {
         "id": "user_abc123",
         "name": "张三",
@@ -219,8 +219,8 @@ GET /projects/:project_id
   "name": "销售月报",
   "description": "2024年1月销售数据看板",
   "visibility": "team",
-  "html_url": "https://cdn.datavision.io/projects/proj_abc123/index.html",
-  "preview_url": "https://app.datavision.io/view/proj_abc123",
+  "html_url": "https://cdn.artifacta.io/projects/proj_abc123/index.html",
+  "preview_url": "https://app.artifacta.io/view/proj_abc123",
   "datasets": [...],
   "permissions": [
     {
@@ -739,7 +739,7 @@ POST /api-keys
 {
   "id": "key_abc123",
   "name": "CI/CD Pipeline",
-  "key": "dv_live_xxxxxxxxxxxxxxxxxxxx",
+  "key": "art_live_xxxxxxxxxxxxxxxxxxxx",
   "created_at": "2024-01-20T10:00:00Z",
   "expires_at": "2025-01-01T00:00:00Z"
 }
@@ -845,7 +845,7 @@ POST /webhooks
 
 请求头包含签名用于验证：
 ```
-X-DataVision-Signature: sha256=xxxxxx
+X-Artifacta-Signature: sha256=xxxxxx
 ```
 
 ---
@@ -855,21 +855,21 @@ X-DataVision-Signature: sha256=xxxxxx
 当前仓库有两种 CLI 使用方式：
 
 - 仓库内开发：`pnpm cli -- ...`
-- 对外发布包：`packages/cli`，发布后包名为 `@datavision/cli`
+- 对外发布包：`packages/cli`，发布后包名为 `@artifacta/cli`
 
-零仓库终端用户接入流程见 `docs/ONBOARDING.md` / `docs/ONBOARDING.zh-CN.md`。Claude Code skill 模板见 `templates/claude-code-datavision-publisher/SKILL.md`。
+零仓库终端用户接入流程见 `docs/ONBOARDING.md` / `docs/ONBOARDING.zh-CN.md`。Claude Code skill 模板见 `templates/claude-code-artifacta-publisher/SKILL.md`。
 
 ### 认证配置
 
 ```bash
-export DATAVISION_URL=http://localhost:3000
-export DATAVISION_API_KEY=dv_live_xxxxxxxxxxxx
+export ARTIFACTA_URL=http://localhost:3000
+export ARTIFACTA_API_KEY=art_live_xxxxxxxxxxxx
 ```
 
 发布到 npm 后，外部用户可以不克隆仓库，直接运行：
 
 ```bash
-npx @datavision/cli@latest --help
+npx @artifacta/cli@latest --help
 ```
 
 ### 常用命令
@@ -932,7 +932,7 @@ pnpm cli -- sync trigger --project-id proj_abc123 --dataset-id ds_001
 Worker 使用相同 API Key，从 `/datasets` 读取启用同步的数据集，并调用 `/sync/trigger`。
 
 ```bash
-export DATAVISION_API_KEY=dv_live_xxxxxxxxxxxx
+export ARTIFACTA_API_KEY=art_live_xxxxxxxxxxxx
 pnpm worker:once
 node scripts/sync-worker.mjs --interval 300
 ```
@@ -952,7 +952,7 @@ pnpm test:smoke
 
 ```bash
 # 1. Agent 读取 CSV/JSON 并生成 dashboard.zip
-# 2. Agent 上传到 DataVision
+# 2. Agent 上传到 Artifacta
 pnpm cli -- projects upload \
   --file ./dashboard.zip \
   --name "AI 生成的增长周报" \
@@ -972,8 +972,8 @@ pnpm cli -- datasets sync set \
 ```yaml
 - name: Deploy Dashboard
   env:
-    DATAVISION_URL: https://datavision.example.com
-    DATAVISION_API_KEY: ${{ secrets.DATAVISION_API_KEY }}
+    ARTIFACTA_URL: https://artifacta.example.com
+    ARTIFACTA_API_KEY: ${{ secrets.ARTIFACTA_API_KEY }}
   run: |
     pnpm install --frozen-lockfile
     pnpm cli -- projects upload \

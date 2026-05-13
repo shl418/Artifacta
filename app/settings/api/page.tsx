@@ -25,35 +25,35 @@ const cliInstallExample = `# 仓库内开发者
 pnpm cli -- projects list
 
 # 独立发布包发布后，外部用户可直接使用
-npx @datavision/cli@latest projects list
+npx @artifacta/cli@latest projects list
 
 # 或全局安装
-npm install -g @datavision/cli`
+npm install -g @artifacta/cli`
 
 const cliExample = `# 创建项目并上传 HTML + 数据文件
-datavision projects upload \
+artifacta projects upload \
   --file ./dashboard.html \
   --data-file ./sales.csv \
   --name "Q2 销售看板" \
   --visibility team
 
 # 替换已有项目的 HTML
-datavision projects update-html \
+artifacta projects update-html \
   --project-id proj_123 \
   --file ./dashboard-v2.zip
 
 # 给数据集提交同步配置 JSON
-datavision datasets sync set \
+artifacta datasets sync set \
   --project-id proj_123 \
   --dataset-id ds_456 \
   --source-type presto \
   --config-file ./sync.json
 
 # 或直接使用 API Key 列项目
-DATAVISION_API_KEY=dv_live_xxx datavision projects list`
+ARTIFACTA_API_KEY=art_live_xxx artifacta projects list`
 
 const apiExample = `curl -X POST http://localhost:3000/api/v1/projects \
-  -H "Authorization: Bearer $DATAVISION_API_KEY" \
+  -H "Authorization: Bearer $ARTIFACTA_API_KEY" \
   -F "name=Q2 销售看板" \
   -F "visibility=team" \
   -F "html_file=@./dashboard.html" \
@@ -164,7 +164,7 @@ export default function ApiDocsPage() {
                   <Card className="border-border bg-card">
                     <CardHeader>
                       <CardTitle className="text-lg">安装方式</CardTitle>
-                      <CardDescription>仓库内可以继续用 `pnpm cli -- ...`，对外用户走独立发布包 `@datavision/cli`。</CardDescription>
+                      <CardDescription>仓库内可以继续用 `pnpm cli -- ...`，对外用户走独立发布包 `@artifacta/cli`。</CardDescription>
                     </CardHeader>
                     <CardContent>
                       <CodeBlock code={cliInstallExample} />

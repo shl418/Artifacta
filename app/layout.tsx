@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'DataVision - 企业级 BI 看板托管平台',
-  description: '新一代企业数据可视化平台，支持 HTML 看板托管、SSO 登录、团队协作与权限管理',
+  title: 'Artifacta — AI 时代的数据应用托管',
+  description: '面向 AI 生成数据应用的协议与托管：HTML/JS 产物、数据集、同步与团队共享',
   generator: 'v0.app',
   icons: {
     icon: [

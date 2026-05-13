@@ -51,7 +51,7 @@ export const salesDashboardHtml = String.raw`<!doctype html>
       <div class="shell">
         <div class="topbar">
           <div>
-            <p class="eyebrow">DataVision Hosted Dashboard</p>
+            <p class="eyebrow">Artifacta Hosted Dashboard</p>
             <h1>Q2 销售业绩分析</h1>
           </div>
           <div class="period">刷新时间 2026-05-11 09:30</div>
@@ -153,7 +153,7 @@ export const growthDashboardHtml = String.raw`<!doctype html>
             <h1>用户行为漏斗</h1>
             <p class="caption">从访问到付费的关键转化路径，自动同步自增长实验表。</p>
           </div>
-          <div class="badge">公开分享 · DataVision 托管</div>
+          <div class="badge">公开分享 · Artifacta 托管</div>
         </div>
 
         <section class="grid">

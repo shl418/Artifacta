@@ -1,4 +1,4 @@
-# DataVision Fullstack Implementation Plan
+# Artifacta Fullstack Implementation Plan
 
 ## Goal
 
@@ -8,7 +8,7 @@ Turn the current frontend-only prototype into an open-source, self-hostable BI d
 
 - Keep a single Next.js App Router application for the first open-source release.
 - Add server-side modules under `lib/server` for authentication, persistence, file storage, API responses, and access control.
-- Store metadata in a local JSON database at `DATA_DIR/datavision.json` during development.
+- Store metadata in a local JSON database at `DATA_DIR/artifacta.json` during development.
 - Store uploaded dashboard HTML/data artifacts under `UPLOAD_DIR/projects` and serve dashboards through controlled API routes.
 - Use Cookie sessions for the web app and Bearer API keys for external API/agent workflows.
 - Protect app routes with middleware, while allowing login, public dashboard preview, and API authentication endpoints.
@@ -69,7 +69,7 @@ The next phase turns the MVP into a more convincing open-source release while ke
    - Reject unsafe paths and missing entry HTML files.
 
 3. CLI workflow
-   - Add a local `datavision` CLI for login hints, API key based uploads, project listing, and sync triggers.
+   - Add a local `artifacta` CLI for login hints, API key based uploads, project listing, and sync triggers.
    - Keep the CLI dependency-light so agents can call it from generated dashboard projects.
    - Document CI and local agent examples.
 
@@ -85,4 +85,4 @@ The next phase turns the MVP into a more convincing open-source release while ke
 
 6. Verification
    - Run typecheck, lint, build, CLI smoke tests, API smoke tests, worker smoke tests, and browser preview checks.
-   - Keep all generated data under `.datavision` and all committed demo assets under `public/demo`.
+   - Keep all generated data under `.artifacta` and all committed demo assets under `public/demo`.

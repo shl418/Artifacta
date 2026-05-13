@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Move the current DataVision MVP toward Artifacta: an open protocol and hosting platform for AI-generated data applications.
+**Goal:** Evolve the Artifacta MVP into a clearer open protocol and hosting platform for AI-generated data applications.
 
 **Architecture:** Keep the current Next.js app and local-first runtime, but introduce stable protocol boundaries before deeper platform refactors. The next phase should harden artifact publishing, define bundle/data binding contracts, turn sync into explicit jobs, and make the API contract usable by CLI, agents, and external tools.
 
@@ -39,7 +39,7 @@ This phase produces five reviewable tracks:
 - Create: `packages/client/package.json` - publishable TypeScript client package metadata.
 - Create: `packages/client/src/index.ts` - small typed client wrapping the v1 REST API.
 - Modify: `pnpm-workspace.yaml` - include `packages/client`.
-- Modify: `README.md` and `README.zh-CN.md` - reposition project around Artifacta while preserving current DataVision compatibility notes.
+- Modify: `README.md` and `README.zh-CN.md` - align messaging with the Artifacta protocol and hosting story.
 
 ## Task 1: Protocol Manifest V1
 
@@ -657,17 +657,13 @@ Chinese equivalent:
 Artifacta 是面向 AI 生成数据应用的开放协议与托管平台。它让本地 AI 工具、脚本和分析师可以发布 HTML/JS 产物，绑定数据源，并把可更新的数据应用共享给团队。
 ```
 
-- [ ] **Step 2: Preserve DataVision compatibility**
+- [ ] **Step 2: Align docs with protocol positioning**
 
-Add a compatibility note:
+Ensure README and product docs describe Artifacta as an open protocol and hosting platform for AI-generated data applications, not only as a BI dashboard host.
 
-```markdown
-The original MVP was named DataVision. CLI commands and environment names may continue to use `datavision` until the Artifacta package rename is completed.
-```
+- [ ] **Step 3: Keep npm scope aligned with publish target**
 
-- [ ] **Step 3: Rename package metadata only after CLI compatibility is decided**
-
-If command compatibility remains `datavision`, only change package descriptions in this phase. Do not rename the CLI binary until a migration note exists.
+Confirm `@artifacta/cli` matches the npm org you publish under; adjust scope in `packages/cli/package.json` if you use a different namespace (for example `@shl418/artifacta-cli`).
 
 - [ ] **Step 4: Verify docs and package metadata**
 

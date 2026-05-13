@@ -72,7 +72,7 @@ export default function UploadPage() {
                     <CheckCircle2 className="h-8 w-8 text-primary" />
                   </div>
                   <h2 className="text-xl font-semibold text-foreground mb-2">项目发布成功</h2>
-                  <p className="text-muted-foreground mb-6">{createdProject.name} 已经托管到 DataVision。</p>
+                  <p className="text-muted-foreground mb-6">{createdProject.name} 已经托管到 Artifacta。</p>
                   <div className="flex justify-center gap-3">
                     <Button variant="secondary" onClick={() => window.location.reload()}>继续上传</Button>
                     <Button asChild>

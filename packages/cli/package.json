@@ -1,17 +1,17 @@
 {
-  "name": "@datavision/cli",
+  "name": "@artifacta/cli",
   "version": "0.1.0",
-  "description": "CLI for uploading HTML dashboards, datasets, and sync configs to DataVision.",
+  "description": "CLI for uploading HTML dashboards, datasets, and sync configs to Artifacta.",
   "license": "MIT",
   "bin": {
-    "datavision": "./bin/datavision.mjs"
+    "artifacta": "./bin/artifacta.mjs"
   },
   "files": [
     "bin",
     "README.md"
   ],
   "keywords": [
-    "datavision",
+    "artifacta",
     "cli",
     "dashboard",
     "bi",

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 
-const sessionCookieName = "datavision_session"
+const sessionCookieName = "artifacta_session"
 
 const publicPrefixes = [
   "/login",

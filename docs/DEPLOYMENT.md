@@ -1,6 +1,6 @@
 # Deployment Guide
 
-DataVision can run as a single Next.js service for small self-hosted teams. The current open-source shape keeps metadata and uploaded artifacts local, with a SQLite adapter available when you want a more realistic persistent setup.
+Artifacta can run as a single Next.js service for small self-hosted teams. The current open-source shape keeps metadata and uploaded artifacts local, with a SQLite adapter available when you want a more realistic persistent setup.
 
 ## Local Production Run
 
@@ -16,21 +16,21 @@ Set a strong `AUTH_SECRET` before using any shared environment.
 ## Recommended Self-Hosted MVP
 
 ```bash
-NEXT_PUBLIC_APP_URL=https://datavision.example.com
+NEXT_PUBLIC_APP_URL=https://artifacta.example.com
 AUTH_SECRET=<long-random-secret>
 DATA_DRIVER=sqlite
-DATA_DIR=/var/lib/datavision
-SQLITE_PATH=/var/lib/datavision/datavision.sqlite
-UPLOAD_DIR=/var/lib/datavision/uploads
+DATA_DIR=/var/lib/Artifacta
+SQLITE_PATH=/var/lib/Artifacta/artifacta.sqlite
+UPLOAD_DIR=/var/lib/Artifacta/uploads
 ```
 
-Mount `/var/lib/datavision` to durable storage. The app stores uploaded dashboard HTML, extracted ZIP assets, uploaded datasets, and SQLite metadata there.
+Mount `/var/lib/Artifacta` to durable storage. The app stores uploaded dashboard HTML, extracted ZIP assets, uploaded datasets, and SQLite metadata there.
 
 ## Runtime Data
 
 | Path | Purpose |
 | --- | --- |
-| `DATA_DIR/datavision.json` | JSON metadata database when `DATA_DRIVER=json`. |
+| `DATA_DIR/artifacta.json` | JSON metadata database when `DATA_DRIVER=json`. |
 | `SQLITE_PATH` | SQLite metadata database when `DATA_DRIVER=sqlite`. |
 | `UPLOAD_DIR/projects/:projectId/index.html` | Single-file dashboard uploads. |
 | `UPLOAD_DIR/projects/:projectId/bundle/...` | Extracted ZIP dashboard assets. |
@@ -48,7 +48,7 @@ Do not store these paths in an ephemeral container filesystem unless you are onl
 | `DATA_DIR` | Recommended | Persistent metadata directory. |
 | `SQLITE_PATH` | When SQLite | Path to the SQLite file. Defaults inside `DATA_DIR`. |
 | `UPLOAD_DIR` | Recommended | Persistent uploaded artifact directory. |
-| `DATAVISION_API_KEY` | Worker only | API key used by `scripts/sync-worker.mjs`. |
+| `ARTIFACTA_API_KEY` | Worker only | API key used by `scripts/sync-worker.mjs`. |
 
 ## Container Shape
 
@@ -76,15 +76,15 @@ proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 
 ## Dashboard Isolation
 
-Uploaded dashboard HTML is untrusted. DataVision renders it in a sandboxed iframe and serves ZIP assets through controlled routes. For stricter production isolation, host preview routes on a separate domain such as `dashboards.example.com`.
+Uploaded dashboard HTML is untrusted. Artifacta renders it in a sandboxed iframe and serves ZIP assets through controlled routes. For stricter production isolation, host preview routes on a separate domain such as `dashboards.example.com`.
 
 ## Worker Deployment
 
 The worker is API-driven and can run anywhere that can reach the app:
 
 ```bash
-DATAVISION_URL=https://datavision.example.com \
-DATAVISION_API_KEY=dv_... \
+ARTIFACTA_URL=https://artifacta.example.com \
+ARTIFACTA_API_KEY=art_... \
 node scripts/sync-worker.mjs --interval 300
 ```
 

@@ -21,7 +21,7 @@ try {
 }
 
 function printHelp() {
-  console.log(`DataVision sync worker
+  console.log(`Artifacta sync worker
 
 Usage:
   pnpm worker:once
@@ -29,13 +29,13 @@ Usage:
   node scripts/sync-worker.mjs --interval 60
 
 Environment:
-  DATAVISION_URL       Defaults to http://localhost:3000
-  DATAVISION_API_KEY   Required
+  ARTIFACTA_URL       Defaults to http://localhost:3000
+  ARTIFACTA_API_KEY   Required
 `)
 }
 
 async function runLoop(options, intervalSeconds) {
-  console.log(`DataVision worker started. interval=${intervalSeconds}s`)
+  console.log(`Artifacta worker started. interval=${intervalSeconds}s`)
   while (true) {
     await runOnce(options)
     await new Promise((resolve) => setTimeout(resolve, intervalSeconds * 1000))
@@ -79,8 +79,8 @@ function isDue(dataset) {
 }
 
 async function request(route, init = {}) {
-  const apiKey = process.env.DATAVISION_API_KEY
-  if (!apiKey) throw new Error("DATAVISION_API_KEY is required.")
+  const apiKey = process.env.ARTIFACTA_API_KEY
+  if (!apiKey) throw new Error("ARTIFACTA_API_KEY is required.")
 
   const response = await fetch(`${apiBase()}${route}`, {
     ...init,
@@ -99,7 +99,7 @@ async function request(route, init = {}) {
 }
 
 function apiBase() {
-  const base = process.env.DATAVISION_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
+  const base = process.env.ARTIFACTA_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
   return base.replace(/\/api\/v1\/?$/, "").replace(/\/+$/, "") + "/api/v1"
 }
 

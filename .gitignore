@@ -10,7 +10,9 @@ __v0_jsx-dev-runtime.ts
 .env
 .env*.local
 
-# Local DataVision storage
+# Local Artifacta storage
+.artifacta/
+# Legacy local directory (pre-rename)
 .datavision/
 
 # Common ignores
