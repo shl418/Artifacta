@@ -1,0 +1,208 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+/* NIOFlow Light Theme - Islands Design */
+:root {
+  /* Base layer - the "ocean" background */
+  --background: oklch(95% 0.01 180);
+  --foreground: oklch(18% 0.02 180);
+  
+  /* Island surfaces - floating panels */
+  --card: oklch(100% 0 0);
+  --card-foreground: oklch(18% 0.02 180);
+  
+  /* Soft background for sections */
+  --bg-soft: oklch(97% 0.015 180);
+  
+  /* Popover */
+  --popover: oklch(100% 0 0);
+  --popover-foreground: oklch(18% 0.02 180);
+  
+  /* Primary - NIO Teal */
+  --primary: oklch(70% 0.14 185);
+  --primary-foreground: oklch(100% 0 0);
+  
+  /* Secondary */
+  --secondary: oklch(97% 0.015 180);
+  --secondary-foreground: oklch(25% 0.03 180);
+  
+  /* Muted */
+  --muted: oklch(97% 0.015 180);
+  --muted-foreground: oklch(45% 0.03 180);
+  
+  /* Accent */
+  --accent: oklch(95% 0.02 180);
+  --accent-foreground: oklch(30% 0.06 200);
+  
+  /* Destructive */
+  --destructive: oklch(55% 0.2 25);
+  --destructive-foreground: oklch(100% 0 0);
+  
+  /* Borders and inputs */
+  --border: oklch(90% 0.02 180);
+  --input: oklch(97% 0.015 180);
+  --ring: oklch(70% 0.14 185);
+  
+  /* Chart colors */
+  --chart-1: oklch(70% 0.14 185);
+  --chart-2: oklch(65% 0.12 185);
+  --chart-3: oklch(55% 0.08 190);
+  --chart-4: oklch(55% 0.18 280);
+  --chart-5: oklch(75% 0.15 85);
+  
+  --radius: 0.5rem;
+  
+  /* Sidebar - Light (Island) */
+  --sidebar: oklch(100% 0 0);
+  --sidebar-foreground: oklch(25% 0.03 180);
+  --sidebar-primary: oklch(70% 0.14 185);
+  --sidebar-primary-foreground: oklch(100% 0 0);
+  --sidebar-accent: oklch(96% 0.015 180);
+  --sidebar-accent-foreground: oklch(18% 0.02 180);
+  --sidebar-border: oklch(92% 0.01 180);
+  --sidebar-ring: oklch(70% 0.14 185);
+}
+
+/* NIO Dark Theme - Islands Design */
+.dark {
+  /* Base layer - the dark "ocean" background */
+  --background: oklch(8% 0.01 180);
+  --foreground: oklch(95% 0.01 180);
+  
+  /* Island surfaces - floating panels */
+  --card: oklch(14% 0.015 180);
+  --card-foreground: oklch(95% 0.01 180);
+  
+  /* Soft background */
+  --bg-soft: oklch(16% 0.015 180);
+  
+  /* Popover */
+  --popover: oklch(16% 0.015 180);
+  --popover-foreground: oklch(95% 0.01 180);
+  
+  /* Primary - Brighter teal for dark mode */
+  --primary: oklch(78% 0.14 185);
+  --primary-foreground: oklch(10% 0.01 180);
+  
+  /* Secondary */
+  --secondary: oklch(18% 0.02 180);
+  --secondary-foreground: oklch(88% 0.015 180);
+  
+  /* Muted */
+  --muted: oklch(18% 0.015 180);
+  --muted-foreground: oklch(60% 0.03 180);
+  
+  /* Accent */
+  --accent: oklch(20% 0.025 180);
+  --accent-foreground: oklch(78% 0.14 185);
+  
+  /* Destructive */
+  --destructive: oklch(55% 0.2 25);
+  --destructive-foreground: oklch(100% 0 0);
+  
+  /* Borders and inputs */
+  --border: oklch(25% 0.02 180);
+  --input: oklch(18% 0.02 180);
+  --ring: oklch(78% 0.14 185);
+  
+  /* Chart colors */
+  --chart-1: oklch(78% 0.14 185);
+  --chart-2: oklch(70% 0.14 185);
+  --chart-3: oklch(55% 0.08 190);
+  --chart-4: oklch(55% 0.18 280);
+  --chart-5: oklch(75% 0.15 85);
+  
+  /* Sidebar - Dark (Island) */
+  --sidebar: oklch(14% 0.015 180);
+  --sidebar-foreground: oklch(88% 0.015 180);
+  --sidebar-primary: oklch(78% 0.14 185);
+  --sidebar-primary-foreground: oklch(10% 0.01 180);
+  --sidebar-accent: oklch(18% 0.02 180);
+  --sidebar-accent-foreground: oklch(95% 0.01 180);
+  --sidebar-border: oklch(22% 0.015 180);
+  --sidebar-ring: oklch(78% 0.14 185);
+}
+
+@theme inline {
+  --font-sans: 'Geist', 'Geist Fallback', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', 'Geist Mono Fallback', monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Custom scrollbar - Light theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: oklch(97% 0.015 180);
+}
+
+::-webkit-scrollbar-thumb {
+  background: oklch(85% 0.02 180);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(75% 0.03 180);
+}
+
+/* Dark mode scrollbar */
+.dark ::-webkit-scrollbar-track {
+  background: oklch(15% 0.015 180);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: oklch(30% 0.02 180);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: oklch(40% 0.03 180);
+}

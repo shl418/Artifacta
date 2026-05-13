@@ -1,0 +1,534 @@
+import { promises as fs } from "node:fs"
+import path from "node:path"
+import Sqlite from "better-sqlite3"
+import type { Database as SqliteDatabase } from "better-sqlite3"
+import type { Activity, ApiKey, Database, Dataset, Folder, Organization, Project, ProjectMember, SyncHistory, User } from "@/lib/types"
+import { absoluteUploadPath, dataDir, dataDriver, databasePath, sqlitePath, uploadDir } from "@/lib/server/config"
+import { growthDashboardHtml, growthDatasetJson, salesDashboardHtml, salesDatasetCsv } from "@/lib/server/demo-artifacts"
+
+const now = () => new Date().toISOString()
+const salesDemoDescription = "精美经营驾驶舱示例，展示收入、漏斗、区域表现和经营信号。"
+const growthDemoDescription = "增长团队分享示例，展示从访问到付费的转化路径和行动建议。"
+
+function seedDatabase(): Database {
+  const createdAt = now()
+
+  return {
+    version: 1,
+    organizations: [
+      {
+        id: "org_demo",
+        name: "DataVision Demo",
+        slug: "demo",
+        description: "Local demo organization for self-hosted development.",
+        createdAt,
+        updatedAt: createdAt,
+      },
+    ],
+    users: [
+      {
+        id: "user_admin",
+        organizationId: "org_demo",
+        email: "admin@datavision.local",
+        name: "张三",
+        role: "admin",
+        status: "active",
+        createdAt,
+        updatedAt: createdAt,
+      },
+      {
+        id: "user_lisi",
+        organizationId: "org_demo",
+        email: "lisi@datavision.local",
+        name: "李四",
+        role: "member",
+        status: "active",
+        createdAt,
+        updatedAt: createdAt,
+      },
+      {
+        id: "user_wangwu",
+        organizationId: "org_demo",
+        email: "wangwu@datavision.local",
+        name: "王五",
+        role: "member",
+        status: "active",
+        createdAt,
+        updatedAt: createdAt,
+      },
+    ],
+    folders: [
+      {
+        id: "folder_sales",
+        organizationId: "org_demo",
+        name: "销售分析",
+        createdBy: "user_admin",
+        createdAt,
+        updatedAt: createdAt,
+      },
+      {
+        id: "folder_growth",
+        organizationId: "org_demo",
+        name: "用户增长",
+        createdBy: "user_admin",
+        createdAt,
+        updatedAt: createdAt,
+      },
+    ],
+    projects: [
+      {
+        id: "proj_sales_demo",
+        organizationId: "org_demo",
+        ownerId: "user_admin",
+        folderId: "folder_sales",
+        name: "Q2 销售业绩分析",
+        description: salesDemoDescription,
+        visibility: "team",
+        viewsCount: 234,
+        htmlArtifact: {
+          kind: "html",
+          originalName: "sales-dashboard.html",
+          path: "projects/proj_sales_demo/index.html",
+          size: 2048,
+          contentType: "text/html",
+        },
+        createdAt,
+        updatedAt: createdAt,
+      },
+      {
+        id: "proj_growth_demo",
+        organizationId: "org_demo",
+        ownerId: "user_lisi",
+        folderId: "folder_growth",
+        name: "用户行为漏斗",
+        description: growthDemoDescription,
+        visibility: "public",
+        viewsCount: 156,
+        htmlArtifact: {
+          kind: "html",
+          originalName: "growth-funnel.html",
+          path: "projects/proj_growth_demo/index.html",
+          size: 2048,
+          contentType: "text/html",
+        },
+        createdAt,
+        updatedAt: createdAt,
+      },
+    ],
+    datasets: [
+      {
+        id: "ds_sales_demo",
+        projectId: "proj_sales_demo",
+        organizationId: "org_demo",
+        name: "sales_2026_q2.csv",
+        description: "示例销售数据",
+        fileName: "sales_2026_q2.csv",
+        filePath: "projects/proj_sales_demo/datasets/ds_sales_demo/sales_2026_q2.csv",
+        fileType: "csv",
+        size: 124,
+        rows: 4,
+        columns: 4,
+        schema: [
+          { name: "region", type: "string" },
+          { name: "revenue", type: "number" },
+          { name: "orders", type: "number" },
+          { name: "conversion", type: "number" },
+        ],
+        version: 1,
+        syncConfig: {
+          enabled: false,
+          sourceType: "manual",
+          sourceConfig: {},
+          updateMode: "full",
+          schedule: null,
+        },
+        createdAt,
+        updatedAt: createdAt,
+      },
+      {
+        id: "ds_growth_demo",
+        projectId: "proj_growth_demo",
+        organizationId: "org_demo",
+        name: "growth_funnel.json",
+        description: "示例漏斗数据",
+        fileName: "growth_funnel.json",
+        filePath: "projects/proj_growth_demo/datasets/ds_growth_demo/growth_funnel.json",
+        fileType: "json",
+        size: 168,
+        rows: 4,
+        columns: 2,
+        schema: [
+          { name: "step", type: "string" },
+          { name: "users", type: "number" },
+        ],
+        version: 1,
+        syncConfig: {
+          enabled: true,
+          sourceType: "presto",
+          sourceConfig: { query: "SELECT step, users FROM growth_funnel_daily" },
+          updateMode: "full",
+          schedule: "0 8 * * *",
+          lastSyncAt: createdAt,
+          lastSyncStatus: "success",
+        },
+        createdAt,
+        updatedAt: createdAt,
+      },
+    ],
+    projectMembers: [
+      {
+        projectId: "proj_sales_demo",
+        userId: "user_lisi",
+        permission: "edit",
+        addedAt: createdAt,
+      },
+      {
+        projectId: "proj_sales_demo",
+        userId: "user_wangwu",
+        permission: "view",
+        addedAt: createdAt,
+      },
+    ],
+    apiKeys: [],
+    syncHistory: [
+      {
+        id: "sync_growth_demo",
+        projectId: "proj_growth_demo",
+        datasetId: "ds_growth_demo",
+        status: "success",
+        startedAt: createdAt,
+        completedAt: createdAt,
+        rowsSynced: 4,
+        updateMode: "full",
+        error: null,
+      },
+    ],
+    activities: [
+      {
+        id: "act_seed_upload",
+        organizationId: "org_demo",
+        type: "upload",
+        userId: "user_admin",
+        action: "上传了新看板",
+        target: "Q2 销售业绩分析",
+        createdAt,
+      },
+      {
+        id: "act_seed_permission",
+        organizationId: "org_demo",
+        type: "permission",
+        userId: "user_lisi",
+        action: "开放了公开访问",
+        target: "用户行为漏斗",
+        createdAt,
+      },
+    ],
+  }
+}
+
+async function exists(filePath: string) {
+  try {
+    await fs.access(filePath)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function writeSeedFile(relativePath: string, content: string) {
+  const filePath = absoluteUploadPath(relativePath)
+  await fs.mkdir(path.dirname(filePath), { recursive: true })
+  await fs.writeFile(filePath, content, "utf8")
+}
+
+async function ensureSeedArtifacts() {
+  await writeSeedFile("projects/proj_sales_demo/index.html", salesDashboardHtml)
+  await writeSeedFile("projects/proj_growth_demo/index.html", growthDashboardHtml)
+  await writeSeedFile("projects/proj_sales_demo/datasets/ds_sales_demo/sales_2026_q2.csv", salesDatasetCsv)
+  await writeSeedFile("projects/proj_growth_demo/datasets/ds_growth_demo/growth_funnel.json", growthDatasetJson)
+}
+
+let sqliteDatabase: SqliteDatabase | null = null
+let sqliteReady = false
+
+async function ensureDatabase() {
+  await fs.mkdir(dataDir, { recursive: true })
+  await fs.mkdir(uploadDir, { recursive: true })
+  await ensureSeedArtifacts()
+
+  if (dataDriver === "sqlite") {
+    await ensureSqliteDatabase()
+    return
+  }
+
+  if (!(await exists(databasePath))) {
+    await writeJsonDatabase(seedDatabase())
+  } else {
+    const content = await fs.readFile(databasePath, "utf8")
+    const database = JSON.parse(content) as Database
+    if (applySeedDataUpdates(database)) await writeJsonDatabase(database)
+  }
+}
+
+export async function readDatabase(): Promise<Database> {
+  await ensureDatabase()
+  if (dataDriver === "sqlite") return readSqliteDatabase()
+  const content = await fs.readFile(databasePath, "utf8")
+  return JSON.parse(content) as Database
+}
+
+export async function writeDatabase(database: Database) {
+  await fs.mkdir(dataDir, { recursive: true })
+  if (dataDriver === "sqlite") {
+    await ensureSqliteDatabase()
+    writeSqliteDatabase(database)
+    return
+  }
+
+  await writeJsonDatabase(database)
+}
+
+async function writeJsonDatabase(database: Database) {
+  await fs.mkdir(dataDir, { recursive: true })
+  const tempPath = `${databasePath}.${process.pid}.${Date.now()}.tmp`
+  await fs.writeFile(tempPath, JSON.stringify(database, null, 2), "utf8")
+  await fs.rename(tempPath, databasePath)
+}
+
+async function ensureSqliteDatabase() {
+  if (sqliteReady) return
+
+  await fs.mkdir(path.dirname(sqlitePath), { recursive: true })
+  const database = getSqliteDatabase()
+  database.pragma("journal_mode = WAL")
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS datavision_migrations (
+      id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      applied_at TEXT NOT NULL
+    );
+  `)
+
+  applySqliteMigration(
+    database,
+    1,
+    "initial_domain_tables",
+    `
+      CREATE TABLE IF NOT EXISTS metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS organizations (
+        id TEXT PRIMARY KEY,
+        data TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL,
+        email TEXT NOT NULL,
+        data TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS folders (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL,
+        data TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS projects (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL,
+        owner_id TEXT NOT NULL,
+        folder_id TEXT,
+        updated_at TEXT NOT NULL,
+        data TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS datasets (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        organization_id TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        data TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS project_members (
+        project_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        data TEXT NOT NULL,
+        PRIMARY KEY (project_id, user_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS api_keys (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        prefix TEXT NOT NULL,
+        data TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS sync_history (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        dataset_id TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        data TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS activities (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        data TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_users_org ON users (organization_id);
+      CREATE INDEX IF NOT EXISTS idx_projects_org ON projects (organization_id);
+      CREATE INDEX IF NOT EXISTS idx_datasets_project ON datasets (project_id);
+      CREATE INDEX IF NOT EXISTS idx_sync_history_dataset ON sync_history (dataset_id, started_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_activities_org ON activities (organization_id, created_at DESC);
+    `
+  )
+
+  const row = database.prepare("SELECT COUNT(1) AS count FROM organizations").get() as { count: number }
+  if (row.count === 0) {
+    writeSqliteDatabase(seedDatabase())
+  } else {
+    const current = readSqliteDatabase()
+    if (applySeedDataUpdates(current)) writeSqliteDatabase(current)
+  }
+
+  sqliteReady = true
+}
+
+function applySeedDataUpdates(database: Database) {
+  let changed = false
+  const salesProject = database.projects.find((project) => project.id === "proj_sales_demo")
+  const growthProject = database.projects.find((project) => project.id === "proj_growth_demo")
+
+  if (salesProject && salesProject.description !== salesDemoDescription) {
+    salesProject.description = salesDemoDescription
+    changed = true
+  }
+
+  if (growthProject && growthProject.description !== growthDemoDescription) {
+    growthProject.description = growthDemoDescription
+    changed = true
+  }
+
+  return changed
+}
+
+function getSqliteDatabase() {
+  sqliteDatabase ??= new Sqlite(sqlitePath)
+  return sqliteDatabase
+}
+
+function applySqliteMigration(database: SqliteDatabase, id: number, name: string, sql: string) {
+  const applied = database.prepare("SELECT id FROM datavision_migrations WHERE id = ?").get(id)
+  if (applied) return
+
+  const migrate = database.transaction(() => {
+    database.exec(sql)
+    database.prepare("INSERT INTO datavision_migrations (id, name, applied_at) VALUES (?, ?, ?)").run(id, name, now())
+  })
+  migrate()
+}
+
+function readSqliteDatabase(): Database {
+  const database = getSqliteDatabase()
+  const versionRow = database.prepare("SELECT value FROM metadata WHERE key = 'version'").get() as { value: string } | undefined
+
+  return {
+    version: versionRow ? Number(versionRow.value) : 1,
+    organizations: readSqliteRows<Organization>(database, "organizations"),
+    users: readSqliteRows<User>(database, "users"),
+    folders: readSqliteRows<Folder>(database, "folders"),
+    projects: readSqliteRows<Project>(database, "projects"),
+    datasets: readSqliteRows<Dataset>(database, "datasets"),
+    projectMembers: readSqliteRows<ProjectMember>(database, "project_members"),
+    apiKeys: readSqliteRows<ApiKey>(database, "api_keys"),
+    syncHistory: readSqliteRows<SyncHistory>(database, "sync_history").sort((left, right) => right.startedAt.localeCompare(left.startedAt)),
+    activities: readSqliteRows<Activity>(database, "activities").sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
+  }
+}
+
+function writeSqliteDatabase(appDatabase: Database) {
+  const database = getSqliteDatabase()
+  const writeAll = database.transaction(() => {
+    database.prepare("DELETE FROM project_members").run()
+    database.prepare("DELETE FROM sync_history").run()
+    database.prepare("DELETE FROM activities").run()
+    database.prepare("DELETE FROM api_keys").run()
+    database.prepare("DELETE FROM datasets").run()
+    database.prepare("DELETE FROM projects").run()
+    database.prepare("DELETE FROM folders").run()
+    database.prepare("DELETE FROM users").run()
+    database.prepare("DELETE FROM organizations").run()
+    database.prepare("DELETE FROM metadata").run()
+
+    database.prepare("INSERT INTO metadata (key, value) VALUES ('version', ?)").run(String(appDatabase.version))
+
+    const insertOrganization = database.prepare("INSERT INTO organizations (id, data) VALUES (?, ?)")
+    const insertUser = database.prepare("INSERT INTO users (id, organization_id, email, data) VALUES (?, ?, ?, ?)")
+    const insertFolder = database.prepare("INSERT INTO folders (id, organization_id, data) VALUES (?, ?, ?)")
+    const insertProject = database.prepare("INSERT INTO projects (id, organization_id, owner_id, folder_id, updated_at, data) VALUES (?, ?, ?, ?, ?, ?)")
+    const insertDataset = database.prepare("INSERT INTO datasets (id, project_id, organization_id, updated_at, data) VALUES (?, ?, ?, ?, ?)")
+    const insertProjectMember = database.prepare("INSERT INTO project_members (project_id, user_id, data) VALUES (?, ?, ?)")
+    const insertApiKey = database.prepare("INSERT INTO api_keys (id, organization_id, user_id, prefix, data) VALUES (?, ?, ?, ?, ?)")
+    const insertSyncHistory = database.prepare("INSERT INTO sync_history (id, project_id, dataset_id, started_at, data) VALUES (?, ?, ?, ?, ?)")
+    const insertActivity = database.prepare("INSERT INTO activities (id, organization_id, created_at, data) VALUES (?, ?, ?, ?)")
+
+    for (const organization of appDatabase.organizations) insertOrganization.run(organization.id, stringifySqliteRow(organization))
+    for (const user of appDatabase.users) insertUser.run(user.id, user.organizationId, user.email, stringifySqliteRow(user))
+    for (const folder of appDatabase.folders) insertFolder.run(folder.id, folder.organizationId, stringifySqliteRow(folder))
+    for (const project of appDatabase.projects) insertProject.run(project.id, project.organizationId, project.ownerId, project.folderId, project.updatedAt, stringifySqliteRow(project))
+    for (const dataset of appDatabase.datasets) insertDataset.run(dataset.id, dataset.projectId, dataset.organizationId, dataset.updatedAt, stringifySqliteRow(dataset))
+    for (const member of appDatabase.projectMembers) insertProjectMember.run(member.projectId, member.userId, stringifySqliteRow(member))
+    for (const apiKey of appDatabase.apiKeys) insertApiKey.run(apiKey.id, apiKey.organizationId, apiKey.userId, apiKey.prefix, stringifySqliteRow(apiKey))
+    for (const history of appDatabase.syncHistory) insertSyncHistory.run(history.id, history.projectId, history.datasetId, history.startedAt, stringifySqliteRow(history))
+    for (const activity of appDatabase.activities) insertActivity.run(activity.id, activity.organizationId, activity.createdAt, stringifySqliteRow(activity))
+  })
+
+  writeAll()
+}
+
+type SqliteTable =
+  | "organizations"
+  | "users"
+  | "folders"
+  | "projects"
+  | "datasets"
+  | "project_members"
+  | "api_keys"
+  | "sync_history"
+  | "activities"
+
+function readSqliteRows<T>(database: SqliteDatabase, table: SqliteTable) {
+  const rows = database.prepare(`SELECT data FROM ${table}`).all() as Array<{ data: string }>
+  return rows.map((row) => JSON.parse(row.data) as T)
+}
+
+function stringifySqliteRow(value: unknown) {
+  return JSON.stringify(value)
+}
+
+export async function updateDatabase<T>(updater: (database: Database) => T | Promise<T>): Promise<T> {
+  const database = await readDatabase()
+  const result = await updater(database)
+  await writeDatabase(database)
+  return result
+}
+
+export function addActivity(database: Database, activity: Omit<Database["activities"][number], "id" | "createdAt">) {
+  database.activities.unshift({
+    ...activity,
+    id: `act_${crypto.randomUUID()}`,
+    createdAt: now(),
+  })
+  database.activities = database.activities.slice(0, 100)
+}
+
+export { now }

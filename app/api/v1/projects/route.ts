@@ -1,0 +1,145 @@
+import type { Project, ProjectVisibility } from "@/lib/types"
+import { authenticateRequest } from "@/lib/server/auth"
+import { canViewProject } from "@/lib/server/access"
+import { buildDatasetRecord } from "@/lib/server/dataset-records"
+import { addActivity, now, readDatabase, updateDatabase } from "@/lib/server/db"
+import { apiError, created, ok, paginate, parsePagination } from "@/lib/server/responses"
+import { serializeFolder, serializeProject, serializeProjectDetail } from "@/lib/server/serializers"
+import { saveProjectArtifact } from "@/lib/server/storage"
+
+export const runtime = "nodejs"
+
+const visibilityValues = new Set(["private", "team", "public"])
+
+export async function GET(request: Request) {
+  const auth = await authenticateRequest(request)
+  if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
+
+  const database = await readDatabase()
+  const url = new URL(request.url)
+  const { page, perPage } = parsePagination(url)
+  const search = url.searchParams.get("search")?.trim().toLowerCase() ?? ""
+  const visibility = url.searchParams.get("visibility")
+  const ownerId = url.searchParams.get("owner_id")
+  const folderParam = url.searchParams.get("folder_id")
+
+  const visibleProjects = database.projects.filter(
+    (project) => project.organizationId === auth.user.organizationId && canViewProject(database, auth.user, project)
+  )
+
+  const globallyFiltered = visibleProjects.filter((project) => {
+    const matchesSearch = !search || project.name.toLowerCase().includes(search) || project.description.toLowerCase().includes(search)
+    const matchesVisibility = !visibility || project.visibility === visibility
+    const matchesOwner = !ownerId || project.ownerId === ownerId
+    return matchesSearch && matchesVisibility && matchesOwner
+  })
+
+  const currentFolderId = folderParam === "root" || folderParam === "null" ? null : folderParam
+  const folderFiltered = folderParam === null ? globallyFiltered : globallyFiltered.filter((project) => project.folderId === currentFolderId)
+
+  const folderCounts = globallyFiltered.reduce<Record<string, number>>((accumulator, project) => {
+    const key = project.folderId ?? "root"
+    accumulator[key] = (accumulator[key] ?? 0) + 1
+    return accumulator
+  }, {})
+
+  const serializedFolders = database.folders
+    .filter((folder) => folder.organizationId === auth.user.organizationId)
+    .map((folder) => serializeFolder(folder, folderCounts[folder.id] ?? 0))
+    .filter((folder) => folder.project_count > 0 || !search)
+
+  const result = paginate(folderFiltered.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)), page, perPage)
+
+  return ok({
+    data: result.data.map((project) => serializeProject(database, project)),
+    folders: serializedFolders,
+    folder_counts: { root: folderCounts.root ?? 0, ...folderCounts },
+    pagination: result.pagination,
+  })
+}
+
+export async function POST(request: Request) {
+  const auth = await authenticateRequest(request)
+  if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
+
+  const form = await request.formData().catch(() => null)
+  if (!form) return apiError(400, "INVALID_REQUEST", "请求体必须是 multipart/form-data。")
+
+  const name = String(form.get("name") ?? "").trim()
+  const description = String(form.get("description") ?? "").trim()
+  const visibilityInput = String(form.get("visibility") ?? "private")
+  const folderId = nullableString(form.get("folder_id"))
+  const htmlFile = asFile(form.get("html_file"))
+
+  if (!name) return apiError(400, "INVALID_REQUEST", "项目名称不能为空。", { field: "name" })
+  if (!htmlFile) return apiError(400, "INVALID_REQUEST", "请上传 html_file。", { field: "html_file" })
+  if (!visibilityValues.has(visibilityInput)) {
+    return apiError(400, "INVALID_REQUEST", "visibility 必须是 private、team 或 public。", { field: "visibility" })
+  }
+
+  const projectId = `proj_${crypto.randomUUID()}`
+  const artifact = await saveProjectArtifact(projectId, htmlFile).catch((error) => {
+    if (error instanceof Error) return error
+    return new Error("看板文件保存失败。")
+  })
+  if (artifact instanceof Error) return apiError(400, "INVALID_ARTIFACT", artifact.message, { field: "html_file" })
+
+  const datasetFiles = [
+    ...form.getAll("data_files"),
+    ...form.getAll("data_files[]"),
+    ...form.getAll("data"),
+  ].map(asFile).filter(Boolean) as File[]
+  const datasets = await Promise.all(
+    datasetFiles.map((file) => buildDatasetRecord({ projectId, organizationId: auth.user.organizationId, file }))
+  )
+
+  const project = await updateDatabase<Project>((database) => {
+    if (folderId && !database.folders.some((folder) => folder.id === folderId && folder.organizationId === auth.user.organizationId)) {
+      throw new Error("FOLDER_NOT_FOUND")
+    }
+
+    const createdAt = now()
+    const record: Project = {
+      id: projectId,
+      organizationId: auth.user.organizationId,
+      ownerId: auth.user.id,
+      folderId,
+      name,
+      description,
+      visibility: visibilityInput as ProjectVisibility,
+      htmlArtifact: artifact,
+      viewsCount: 0,
+      createdAt,
+      updatedAt: createdAt,
+    }
+
+    database.projects.push(record)
+    database.datasets.push(...datasets)
+    addActivity(database, {
+      organizationId: auth.user.organizationId,
+      type: "upload",
+      userId: auth.user.id,
+      action: "上传了新看板",
+      target: name,
+    })
+
+    return record
+  }).catch((error) => {
+    if (error instanceof Error && error.message === "FOLDER_NOT_FOUND") return null
+    throw error
+  })
+
+  if (!project) return apiError(404, "NOT_FOUND", "文件夹不存在。")
+
+  const database = await readDatabase()
+  return created(serializeProjectDetail(database, project))
+}
+
+function asFile(value: FormDataEntryValue | null): File | null {
+  return value && typeof value === "object" && "arrayBuffer" in value ? (value as File) : null
+}
+
+function nullableString(value: FormDataEntryValue | null) {
+  const stringValue = String(value ?? "").trim()
+  return !stringValue || stringValue === "null" || stringValue === "root" ? null : stringValue
+}

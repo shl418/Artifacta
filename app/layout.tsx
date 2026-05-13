@@ -1,0 +1,39 @@
+import type { Metadata } from 'next'
+import './globals.css'
+
+export const metadata: Metadata = {
+  title: 'DataVision - 企业级 BI 看板托管平台',
+  description: '新一代企业数据可视化平台，支持 HTML 看板托管、SSO 登录、团队协作与权限管理',
+  generator: 'v0.app',
+  icons: {
+    icon: [
+      {
+        url: '/icon-light-32x32.png',
+        media: '(prefers-color-scheme: light)',
+      },
+      {
+        url: '/icon-dark-32x32.png',
+        media: '(prefers-color-scheme: dark)',
+      },
+      {
+        url: '/icon.svg',
+        type: 'image/svg+xml',
+      },
+    ],
+    apple: '/apple-icon.png',
+  },
+}
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode
+}>) {
+  return (
+    <html lang="zh-CN" className="bg-background">
+      <body className="font-sans antialiased bg-background text-foreground">
+        {children}
+      </body>
+    </html>
+  )
+}

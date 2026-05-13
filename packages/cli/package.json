@@ -1,0 +1,26 @@
+{
+  "name": "@datavision/cli",
+  "version": "0.1.0",
+  "description": "CLI for uploading HTML dashboards, datasets, and sync configs to DataVision.",
+  "license": "MIT",
+  "bin": {
+    "datavision": "./bin/datavision.mjs"
+  },
+  "files": [
+    "bin",
+    "README.md"
+  ],
+  "keywords": [
+    "datavision",
+    "cli",
+    "dashboard",
+    "bi",
+    "agents"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
