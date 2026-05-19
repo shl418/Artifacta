@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "name": "Basic Sales Dashboard",
+  "entrypoint": "index.html",
+  "datasets": [
+    {
+      "id": "sales",
+      "name": "Sales CSV",
+      "kind": "csv",
+      "path": "data/sales.csv",
+      "refresh": "manual"
+    }
+  ]
+}

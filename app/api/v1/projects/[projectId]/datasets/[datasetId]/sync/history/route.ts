@@ -36,5 +36,16 @@ export async function GET(request: Request, context: RouteContext) {
       error: history.error,
     })),
     pagination: result.pagination,
+    jobs: database.syncJobs
+      .filter((job) => job.projectId === projectId && job.datasetId === datasetId)
+      .map((job) => ({
+        job_id: job.id,
+        status: job.status,
+        trigger: job.trigger,
+        created_at: job.createdAt,
+        started_at: job.startedAt,
+        completed_at: job.completedAt,
+        error: job.error,
+      })),
   })
 }

@@ -22,6 +22,10 @@ Authorization: Bearer <API_KEY>
 - 已接入同步执行器：本地文件、上传目录文件、URL 拉取、`mock_rows`。COS/S3 和真实 Presto/Trino 客户端保留为 connector adapter。
 - API 错误响应统一使用本文档底部的错误 envelope。
 
+### OpenAPI
+
+OpenAPI 3.1 描述文件位于 [`docs/openapi/artifacta.v1.yaml`](./openapi/artifacta.v1.yaml)，覆盖核心发布、项目、数据集和同步 Worker API。添加契约测试前，Next.js route handlers 仍是接口行为的最终来源。
+
 ---
 
 ## 认证相关
@@ -506,11 +510,12 @@ POST /projects/:project_id/datasets/:dataset_id/sync/trigger
 **响应示例:**
 ```json
 {
-  "sync_id": "sync_abc123",
-  "status": "pending",
-  "started_at": "2024-01-20T14:30:00Z"
+  "job_id": "job_abc123",
+  "status": "queued"
 }
 ```
+
+该接口只负责入队并返回 HTTP `202`。同步 Worker 通过 `POST /sync/jobs/claim` 领取队列任务并执行实际同步。
 
 ### 查询同步状态
 
@@ -566,7 +571,18 @@ GET /projects/:project_id/datasets/:dataset_id/sync/history
       "error": "Connection timeout: Unable to connect to COS bucket"
     }
   ],
-  "pagination": {...}
+  "pagination": {...},
+  "jobs": [
+    {
+      "job_id": "job_abc123",
+      "status": "success",
+      "trigger": "manual",
+      "created_at": "2024-01-20T14:29:59Z",
+      "started_at": "2024-01-20T14:30:00Z",
+      "completed_at": "2024-01-20T14:30:45Z",
+      "error": null
+    }
+  ]
 }
 ```
 
@@ -929,7 +945,7 @@ pnpm cli -- sync trigger --project-id proj_abc123 --dataset-id ds_001
 
 ### 同步 Worker
 
-Worker 使用相同 API Key，从 `/datasets` 读取启用同步的数据集，并调用 `/sync/trigger`。
+Worker 使用相同 API Key，先通过 `POST /sync/jobs/claim` 处理已入队任务，再从 `/datasets` 读取启用同步的数据集并调用 `/sync/trigger` 入队，到期数据集入队后会继续领取并执行。
 
 ```bash
 export ARTIFACTA_API_KEY=art_live_xxxxxxxxxxxx
@@ -966,6 +982,10 @@ pnpm cli -- datasets sync set \
   --source-type presto \
   --config-file ./sync.json
 ```
+
+## OpenAPI
+
+The first checked-in OpenAPI contract lives at `docs/openapi/artifacta.v1.yaml`. Treat route handlers as the source of truth until contract tests are added, then use the OpenAPI file as the compatibility gate for CLI, client, and agent integrations.
 
 ### CI/CD 集成示例
 

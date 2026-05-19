@@ -42,9 +42,15 @@ try {
     headers: { "Content-Type": "application/json" },
   })
 
-  const sync = await jsonRequest(`/projects/${project.id}/datasets/${dataset.id}/sync/trigger`, { method: "POST" })
-  assert(sync.status === "success", "Sync trigger should finish successfully.")
-  assert(sync.rows_synced === 2, "Sync trigger should write mock_rows data.")
+  const sync = await jsonRequestWithStatus(`/projects/${project.id}/datasets/${dataset.id}/sync/trigger`, { method: "POST" })
+  assert(sync.status === 202, "Sync trigger should enqueue a job.")
+  assert(sync.payload.job_id, "Sync trigger should return a job_id.")
+  assert(sync.payload.status === "queued", "Sync trigger should return queued status.")
+
+  const claim = await jsonRequest("/sync/jobs/claim", { method: "POST" })
+  assert(claim.job?.job_id === sync.payload.job_id, "Claim should run the enqueued sync job.")
+  assert(claim.job.status === "success", "Claimed sync job should finish successfully.")
+  assert(claim.job.rows_synced === 2, "Claimed sync job should write mock_rows data.")
 
   console.log("Smoke API passed: login, API key, ZIP hosting, asset serving, sync runner, cleanup.")
 } finally {
@@ -92,11 +98,15 @@ async function uploadZipDashboard() {
 }
 
 async function jsonRequest(route, init = {}) {
+  return (await jsonRequestWithStatus(route, init)).payload
+}
+
+async function jsonRequestWithStatus(route, init = {}) {
   const response = await fetch(`${apiBase}${route}`, withAuth(init))
   const text = await response.text()
   const payload = text ? JSON.parse(text) : null
   assert(response.ok, payload?.error?.message ?? `Request ${route} failed with ${response.status}`)
-  return payload
+  return { status: response.status, payload }
 }
 
 async function textRequest(route, init = {}) {

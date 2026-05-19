@@ -1,9 +1,8 @@
 import { promises as fs } from "node:fs"
-import path from "node:path"
 import type { Database, Dataset, SyncHistory } from "@/lib/types"
-import { absoluteUploadPath } from "@/lib/server/config"
 import { inspectDataset } from "@/lib/server/datasets"
 import { addActivity, now } from "@/lib/server/db"
+import { assertAllowedLocalPath, assertAllowedSyncUrl, assertAllowedUploadPath } from "@/lib/server/sync/source-policy"
 import { writeDatasetBuffer } from "@/lib/server/storage"
 
 interface RunDatasetSyncInput {
@@ -85,18 +84,18 @@ async function loadDatasetSource(dataset: Dataset): Promise<LoadedDatasetSource 
   const config = dataset.syncConfig.sourceConfig
   const localPath = firstString(config, ["local_path", "localPath", "path", "file_path"])
   if (localPath) {
-    const resolvedPath = path.isAbsolute(localPath) ? localPath : path.resolve(process.cwd(), localPath)
-    return { buffer: await fs.readFile(resolvedPath) }
+    return { buffer: await fs.readFile(assertAllowedLocalPath(localPath)) }
   }
 
   const relativeUploadPath = firstString(config, ["upload_path", "uploadPath"])
   if (relativeUploadPath) {
-    return { buffer: await fs.readFile(absoluteUploadPath(relativeUploadPath)) }
+    return { buffer: await fs.readFile(assertAllowedUploadPath(relativeUploadPath)) }
   }
 
   const url = firstString(config, ["url", "endpoint"])
   if (url) {
-    const response = await fetch(url)
+    const allowedUrl = await assertAllowedSyncUrl(url)
+    const response = await fetch(allowedUrl)
     if (!response.ok) throw new Error(`拉取远程数据失败：${response.status}`)
     return { buffer: Buffer.from(await response.arrayBuffer()) }
   }

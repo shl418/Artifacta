@@ -31,6 +31,7 @@ export async function buildDatasetRecord(input: BuildDatasetInput): Promise<Data
     columns: inspection.columns,
     schema: inspection.schema,
     version: 1,
+    origin: "upload",
     syncConfig: {
       enabled: false,
       sourceType: "manual",

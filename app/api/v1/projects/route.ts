@@ -5,6 +5,7 @@ import { buildDatasetRecord } from "@/lib/server/dataset-records"
 import { addActivity, now, readDatabase, updateDatabase } from "@/lib/server/db"
 import { apiError, created, ok, paginate, parsePagination } from "@/lib/server/responses"
 import { serializeFolder, serializeProject, serializeProjectDetail } from "@/lib/server/serializers"
+import { commitUploadSession } from "@/lib/server/artifacts/upload-session"
 import { saveProjectArtifact } from "@/lib/server/storage"
 
 export const runtime = "nodejs"
@@ -69,13 +70,75 @@ export async function POST(request: Request) {
   const description = String(form.get("description") ?? "").trim()
   const visibilityInput = String(form.get("visibility") ?? "private")
   const folderId = nullableString(form.get("folder_id"))
+  const uploadSessionId = String(form.get("upload_session_id") ?? "").trim()
   const htmlFile = asFile(form.get("html_file"))
 
   if (!name) return apiError(400, "INVALID_REQUEST", "项目名称不能为空。", { field: "name" })
-  if (!htmlFile) return apiError(400, "INVALID_REQUEST", "请上传 html_file。", { field: "html_file" })
   if (!visibilityValues.has(visibilityInput)) {
     return apiError(400, "INVALID_REQUEST", "visibility 必须是 private、team 或 public。", { field: "visibility" })
   }
+
+  if (uploadSessionId) {
+    let datasetsConfig: Array<{ bundle_path: string; name: string; refresh: "manual" | "sync" }>
+    try {
+      datasetsConfig = JSON.parse(String(form.get("datasets") ?? "[]"))
+    } catch {
+      return apiError(400, "INVALID_REQUEST", "datasets 必须是 JSON 数组。", { field: "datasets" })
+    }
+
+    if (!Array.isArray(datasetsConfig)) {
+      return apiError(400, "INVALID_REQUEST", "datasets 必须是 JSON 数组。", { field: "datasets" })
+    }
+
+    const project = await updateDatabase<Project | null>(async (database) => {
+      if (folderId && !database.folders.some((folder) => folder.id === folderId && folder.organizationId === auth.user.organizationId)) {
+        throw new Error("FOLDER_NOT_FOUND")
+      }
+
+      try {
+        const committed = await commitUploadSession(database, {
+          sessionId: uploadSessionId,
+          userId: auth.user.id,
+          organizationId: auth.user.organizationId,
+          name,
+          description,
+          visibility: visibilityInput as ProjectVisibility,
+          folderId,
+          datasets: datasetsConfig,
+        })
+
+        addActivity(database, {
+          organizationId: auth.user.organizationId,
+          type: "upload",
+          userId: auth.user.id,
+          action: "上传了新看板",
+          target: name,
+        })
+
+        return committed.project
+      } catch (error) {
+        if (error instanceof Error && error.message === "UPLOAD_SESSION_NOT_FOUND") throw new Error("UPLOAD_SESSION_NOT_FOUND")
+        if (error instanceof Error && error.message === "PROJECT_NOT_FOUND") throw new Error("PROJECT_NOT_FOUND")
+        throw error
+      }
+    }).catch((error) => {
+      if (error instanceof Error && error.message === "FOLDER_NOT_FOUND") return null
+      if (error instanceof Error && error.message === "UPLOAD_SESSION_NOT_FOUND") return "UPLOAD_SESSION_NOT_FOUND"
+      if (error instanceof Error && error.message === "PROJECT_NOT_FOUND") return "PROJECT_NOT_FOUND"
+      throw error
+    })
+
+    if (project === "UPLOAD_SESSION_NOT_FOUND") {
+      return apiError(404, "NOT_FOUND", "上传会话不存在或已过期。", { field: "upload_session_id" })
+    }
+    if (project === "PROJECT_NOT_FOUND") return apiError(404, "NOT_FOUND", "项目不存在。")
+    if (!project) return apiError(404, "NOT_FOUND", "文件夹不存在。")
+
+    const database = await readDatabase()
+    return created(serializeProjectDetail(database, project))
+  }
+
+  if (!htmlFile) return apiError(400, "INVALID_REQUEST", "请上传 html_file 或提供 upload_session_id。", { field: "html_file" })
 
   const projectId = `proj_${crypto.randomUUID()}`
   const artifact = await saveProjectArtifact(projectId, htmlFile).catch((error) => {

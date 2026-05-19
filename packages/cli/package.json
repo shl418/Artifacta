@@ -1,7 +1,7 @@
 {
   "name": "@artifacta/cli",
   "version": "0.1.0",
-  "description": "CLI for uploading HTML dashboards, datasets, and sync configs to Artifacta.",
+  "description": "CLI for the Artifacta open protocol — publish HTML/JS data applications, bind datasets, and manage sync from local tools and agents.",
   "license": "MIT",
   "bin": {
     "artifacta": "./bin/artifacta.mjs"
@@ -13,8 +13,8 @@
   "keywords": [
     "artifacta",
     "cli",
-    "dashboard",
-    "bi",
+    "data-apps",
+    "protocol",
     "agents"
   ],
   "engines": {

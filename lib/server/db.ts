@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs"
 import path from "node:path"
 import Sqlite from "better-sqlite3"
 import type { Database as SqliteDatabase } from "better-sqlite3"
-import type { Activity, ApiKey, Database, Dataset, Folder, Organization, Project, ProjectMember, SyncHistory, User } from "@/lib/types"
+import type { Activity, ApiKey, Database, Dataset, Folder, Organization, Project, ProjectMember, SyncHistory, SyncJob, UploadSession, User } from "@/lib/types"
 import { absoluteUploadPath, dataDir, dataDriver, databasePath, sqlitePath, uploadDir } from "@/lib/server/config"
 import { growthDashboardHtml, growthDatasetJson, salesDashboardHtml, salesDatasetCsv } from "@/lib/server/demo-artifacts"
 
@@ -135,6 +135,7 @@ function seedDatabase(): Database {
           { name: "conversion", type: "number" },
         ],
         version: 1,
+        origin: "upload",
         syncConfig: {
           enabled: false,
           sourceType: "manual",
@@ -162,6 +163,7 @@ function seedDatabase(): Database {
           { name: "users", type: "number" },
         ],
         version: 1,
+        origin: "upload",
         syncConfig: {
           enabled: true,
           sourceType: "presto",
@@ -203,6 +205,8 @@ function seedDatabase(): Database {
         error: null,
       },
     ],
+    syncJobs: [],
+    uploadSessions: [],
     activities: [
       {
         id: "act_seed_upload",
@@ -250,6 +254,7 @@ async function ensureSeedArtifacts() {
 
 let sqliteDatabase: SqliteDatabase | null = null
 let sqliteReady = false
+let updateDatabaseQueue = Promise.resolve()
 
 async function ensureDatabase() {
   await fs.mkdir(dataDir, { recursive: true })
@@ -265,16 +270,16 @@ async function ensureDatabase() {
     await writeJsonDatabase(seedDatabase())
   } else {
     const content = await fs.readFile(databasePath, "utf8")
-    const database = JSON.parse(content) as Database
+    const database = normalizeDatabase(JSON.parse(content) as Database)
     if (applySeedDataUpdates(database)) await writeJsonDatabase(database)
   }
 }
 
 export async function readDatabase(): Promise<Database> {
   await ensureDatabase()
-  if (dataDriver === "sqlite") return readSqliteDatabase()
+  if (dataDriver === "sqlite") return normalizeDatabase(readSqliteDatabase())
   const content = await fs.readFile(databasePath, "utf8")
-  return JSON.parse(content) as Database
+  return normalizeDatabase(JSON.parse(content) as Database)
 }
 
 export async function writeDatabase(database: Database) {
@@ -402,6 +407,48 @@ async function ensureSqliteDatabase() {
     `
   )
 
+  applySqliteMigration(
+    database,
+    2,
+    "sync_jobs_table",
+    `
+      CREATE TABLE IF NOT EXISTS sync_jobs (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        dataset_id TEXT NOT NULL,
+        organization_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        trigger TEXT NOT NULL,
+        requested_by TEXT,
+        created_at TEXT NOT NULL,
+        started_at TEXT,
+        completed_at TEXT,
+        data TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_sync_jobs_status_created ON sync_jobs (status, created_at);
+      CREATE INDEX IF NOT EXISTS idx_sync_jobs_dataset_status ON sync_jobs (project_id, dataset_id, status);
+    `
+  )
+
+  applySqliteMigration(
+    database,
+    3,
+    "upload_sessions_and_dataset_origin",
+    `
+      CREATE TABLE IF NOT EXISTS upload_sessions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        organization_id TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        data TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_upload_sessions_user ON upload_sessions (user_id);
+      CREATE INDEX IF NOT EXISTS idx_upload_sessions_expires ON upload_sessions (expires_at);
+    `
+  )
+
   const row = database.prepare("SELECT COUNT(1) AS count FROM organizations").get() as { count: number }
   if (row.count === 0) {
     writeSqliteDatabase(seedDatabase())
@@ -429,6 +476,15 @@ function applySeedDataUpdates(database: Database) {
   }
 
   return changed
+}
+
+function normalizeDatabase(database: Database) {
+  database.syncJobs ??= []
+  database.uploadSessions ??= []
+  for (const dataset of database.datasets) {
+    dataset.origin ??= "upload"
+  }
+  return database
 }
 
 function getSqliteDatabase() {
@@ -461,6 +517,8 @@ function readSqliteDatabase(): Database {
     projectMembers: readSqliteRows<ProjectMember>(database, "project_members"),
     apiKeys: readSqliteRows<ApiKey>(database, "api_keys"),
     syncHistory: readSqliteRows<SyncHistory>(database, "sync_history").sort((left, right) => right.startedAt.localeCompare(left.startedAt)),
+    syncJobs: readSqliteRows<SyncJob>(database, "sync_jobs").sort((left, right) => left.createdAt.localeCompare(right.createdAt)),
+    uploadSessions: readSqliteRows<UploadSession>(database, "upload_sessions").sort((left, right) => left.createdAt.localeCompare(right.createdAt)),
     activities: readSqliteRows<Activity>(database, "activities").sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
   }
 }
@@ -469,6 +527,8 @@ function writeSqliteDatabase(appDatabase: Database) {
   const database = getSqliteDatabase()
   const writeAll = database.transaction(() => {
     database.prepare("DELETE FROM project_members").run()
+    database.prepare("DELETE FROM upload_sessions").run()
+    database.prepare("DELETE FROM sync_jobs").run()
     database.prepare("DELETE FROM sync_history").run()
     database.prepare("DELETE FROM activities").run()
     database.prepare("DELETE FROM api_keys").run()
@@ -489,6 +549,12 @@ function writeSqliteDatabase(appDatabase: Database) {
     const insertProjectMember = database.prepare("INSERT INTO project_members (project_id, user_id, data) VALUES (?, ?, ?)")
     const insertApiKey = database.prepare("INSERT INTO api_keys (id, organization_id, user_id, prefix, data) VALUES (?, ?, ?, ?, ?)")
     const insertSyncHistory = database.prepare("INSERT INTO sync_history (id, project_id, dataset_id, started_at, data) VALUES (?, ?, ?, ?, ?)")
+    const insertSyncJob = database.prepare(
+      "INSERT INTO sync_jobs (id, project_id, dataset_id, organization_id, status, trigger, requested_by, created_at, started_at, completed_at, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    )
+    const insertUploadSession = database.prepare(
+      "INSERT INTO upload_sessions (id, user_id, organization_id, expires_at, data) VALUES (?, ?, ?, ?, ?)"
+    )
     const insertActivity = database.prepare("INSERT INTO activities (id, organization_id, created_at, data) VALUES (?, ?, ?, ?)")
 
     for (const organization of appDatabase.organizations) insertOrganization.run(organization.id, stringifySqliteRow(organization))
@@ -499,6 +565,22 @@ function writeSqliteDatabase(appDatabase: Database) {
     for (const member of appDatabase.projectMembers) insertProjectMember.run(member.projectId, member.userId, stringifySqliteRow(member))
     for (const apiKey of appDatabase.apiKeys) insertApiKey.run(apiKey.id, apiKey.organizationId, apiKey.userId, apiKey.prefix, stringifySqliteRow(apiKey))
     for (const history of appDatabase.syncHistory) insertSyncHistory.run(history.id, history.projectId, history.datasetId, history.startedAt, stringifySqliteRow(history))
+    for (const job of appDatabase.syncJobs ?? [])
+      insertSyncJob.run(
+        job.id,
+        job.projectId,
+        job.datasetId,
+        job.organizationId,
+        job.status,
+        job.trigger,
+        job.requestedBy,
+        job.createdAt,
+        job.startedAt,
+        job.completedAt,
+        stringifySqliteRow(job)
+      )
+    for (const session of appDatabase.uploadSessions ?? [])
+      insertUploadSession.run(session.id, session.userId, session.organizationId, session.expiresAt, stringifySqliteRow(session))
     for (const activity of appDatabase.activities) insertActivity.run(activity.id, activity.organizationId, activity.createdAt, stringifySqliteRow(activity))
   })
 
@@ -514,6 +596,8 @@ type SqliteTable =
   | "project_members"
   | "api_keys"
   | "sync_history"
+  | "sync_jobs"
+  | "upload_sessions"
   | "activities"
 
 function readSqliteRows<T>(database: SqliteDatabase, table: SqliteTable) {
@@ -526,10 +610,21 @@ function stringifySqliteRow(value: unknown) {
 }
 
 export async function updateDatabase<T>(updater: (database: Database) => T | Promise<T>): Promise<T> {
-  const database = await readDatabase()
-  const result = await updater(database)
-  await writeDatabase(database)
-  return result
+  const previousUpdate = updateDatabaseQueue
+  let releaseQueue!: () => void
+  updateDatabaseQueue = new Promise((resolve) => {
+    releaseQueue = resolve
+  })
+
+  await previousUpdate.catch(() => undefined)
+  try {
+    const database = await readDatabase()
+    const result = await updater(database)
+    await writeDatabase(database)
+    return result
+  } finally {
+    releaseQueue()
+  }
 }
 
 export function addActivity(database: Database, activity: Omit<Database["activities"][number], "id" | "createdAt">) {

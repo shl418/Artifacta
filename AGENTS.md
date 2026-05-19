@@ -4,7 +4,7 @@ This repository is intended to be friendly to coding agents and human maintainer
 
 ## Product Intent
 
-Artifacta hosts HTML dashboards generated locally by users and coding agents. The platform should make upload, preview, sharing, permissions, datasets, and automation APIs boringly reliable for enterprise teams.
+Artifacta is an open protocol and hosting platform for AI-generated data applications. It lets local AI tools, scripts, and analysts publish HTML/JS artifacts, bind datasets, and share live applications with teams. The platform should make upload, preview, sharing, permissions, datasets, and automation APIs boringly reliable for enterprise teams.
 
 ## Current Architecture
 

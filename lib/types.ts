@@ -6,7 +6,9 @@ export type ArtifactKind = "html" | "zip"
 export type DatasetSourceType = "manual" | "cos" | "presto"
 export type DatasetUpdateMode = "full" | "incremental"
 export type SyncStatus = "pending" | "running" | "success" | "failed"
+export type SyncJobStatus = "queued" | "running" | "success" | "failed"
 export type ActivityType = "dashboard" | "dataset" | "team" | "upload" | "permission"
+export type DatasetOrigin = "bundle" | "upload" | "sync"
 
 export interface Organization {
   id: string
@@ -92,9 +94,31 @@ export interface Dataset {
   columns: number | null
   schema: DatasetColumn[]
   version: number
+  origin: DatasetOrigin
   syncConfig: DatasetSyncConfig
   createdAt: string
   updatedAt: string
+}
+
+export interface BundleFileEntry {
+  path: string
+  size: number
+  extension: string
+  inferredDataset: boolean
+  existingDatasetId?: string
+  currentRefresh?: "manual" | "sync"
+}
+
+export interface UploadSession {
+  id: string
+  userId: string
+  organizationId: string
+  projectId: string | null
+  fileTree: BundleFileEntry[]
+  originalName: string
+  tempPath: string
+  createdAt: string
+  expiresAt: string
 }
 
 export interface ProjectMember {
@@ -130,6 +154,20 @@ export interface SyncHistory {
   error: string | null
 }
 
+export interface SyncJob {
+  id: string
+  projectId: string
+  datasetId: string
+  organizationId: string
+  status: SyncJobStatus
+  trigger: "manual" | "scheduled"
+  requestedBy: string | null
+  error: string | null
+  createdAt: string
+  startedAt: string | null
+  completedAt: string | null
+}
+
 export interface Activity {
   id: string
   organizationId: string
@@ -150,5 +188,7 @@ export interface Database {
   projectMembers: ProjectMember[]
   apiKeys: ApiKey[]
   syncHistory: SyncHistory[]
+  syncJobs: SyncJob[]
+  uploadSessions: UploadSession[]
   activities: Activity[]
 }

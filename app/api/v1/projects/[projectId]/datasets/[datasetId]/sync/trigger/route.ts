@@ -1,8 +1,8 @@
 import { authenticateRequest } from "@/lib/server/auth"
 import { canEditProject } from "@/lib/server/access"
-import { readDatabase, updateDatabase } from "@/lib/server/db"
-import { apiError, created } from "@/lib/server/responses"
-import { runDatasetSync } from "@/lib/server/sync-runner"
+import { updateDatabase } from "@/lib/server/db"
+import { apiError, ok } from "@/lib/server/responses"
+import { enqueueSyncJob } from "@/lib/server/sync/jobs"
 
 export const runtime = "nodejs"
 
@@ -13,20 +13,31 @@ export async function POST(request: Request, context: RouteContext) {
   const auth = await authenticateRequest(request)
   if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
 
-  const database = await readDatabase()
-  const project = database.projects.find((candidate) => candidate.id === projectId)
-  const dataset = database.datasets.find((candidate) => candidate.id === datasetId && candidate.projectId === projectId)
+  const result = await updateDatabase((mutable) => {
+    const project = mutable.projects.find((candidate) => candidate.id === projectId)
+    const dataset = mutable.datasets.find((candidate) => candidate.id === datasetId && candidate.projectId === projectId)
 
-  if (!project || !dataset) return apiError(404, "NOT_FOUND", "数据集不存在。")
-  if (!canEditProject(database, auth.user, project)) return apiError(403, "FORBIDDEN", "无权触发同步。")
+    if (!project || !dataset) return { status: "not_found" as const }
+    if (!canEditProject(mutable, auth.user, project)) return { status: "forbidden" as const }
 
-  const history = await updateDatabase((mutable) => runDatasetSync(mutable, { projectId, datasetId, userId: auth.user.id }))
-
-  return created({
-    sync_id: history.id,
-    status: history.status,
-    started_at: history.startedAt,
-    completed_at: history.completedAt,
-    rows_synced: history.rowsSynced,
+    const job = enqueueSyncJob(mutable, {
+      projectId,
+      datasetId,
+      organizationId: project.organizationId,
+      trigger: "manual",
+      requestedBy: auth.user.id,
+    })
+    return { status: "queued" as const, job }
   })
+
+  if (result.status === "not_found") return apiError(404, "NOT_FOUND", "数据集不存在。")
+  if (result.status === "forbidden") return apiError(403, "FORBIDDEN", "无权触发同步。")
+
+  return ok(
+    {
+      job_id: result.job.id,
+      status: result.job.status,
+    },
+    { status: 202 }
+  )
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { ExternalLink, Settings2, X } from "lucide-react"
+import { ExternalLink, RefreshCw, Settings2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 
@@ -18,6 +18,7 @@ export default function ProjectPreviewPage() {
   const params = useParams<{ projectId: string }>()
   const router = useRouter()
   const [project, setProject] = useState<ProjectDetail | null>(null)
+  const [iframeSrc, setIframeSrc] = useState("")
   const [error, setError] = useState("")
 
   useEffect(() => {
@@ -30,7 +31,11 @@ export default function ProjectPreviewPage() {
         }
         return response.json()
       })
-      .then((payload) => mounted && setProject(payload))
+      .then((payload) => {
+        if (!mounted) return
+        setProject(payload)
+        setIframeSrc(payload.html_url)
+      })
       .catch((reason) => mounted && setError(reason instanceof Error ? reason.message : "无法访问该看板。"))
     return () => {
       mounted = false
@@ -65,6 +70,19 @@ export default function ProjectPreviewPage() {
           <Badge variant="outline" className="text-xs">{project.visibility}</Badge>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 text-xs"
+            onClick={() => {
+              const url = new URL(project.html_url, window.location.origin)
+              url.searchParams.set("_t", String(Date.now()))
+              setIframeSrc(url.toString())
+            }}
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            刷新数据
+          </Button>
           <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => router.push(`/dashboards?selected=${project.id}`)}>
             <Settings2 className="h-3.5 w-3.5" />
             设置
@@ -80,7 +98,7 @@ export default function ProjectPreviewPage() {
       <iframe
         title={project.name}
         className="w-full flex-1 border-0 bg-white"
-        src={project.html_url}
+        src={iframeSrc || project.html_url}
         sandbox="allow-scripts allow-forms allow-popups allow-downloads"
       />
     </div>

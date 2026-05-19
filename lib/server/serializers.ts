@@ -94,6 +94,7 @@ export function serializeDataset(dataset: Dataset) {
     columns: dataset.columns,
     schema: dataset.schema,
     version: dataset.version,
+    origin: dataset.origin,
     sync_config: serializeSyncConfig(dataset),
     created_at: dataset.createdAt,
     updated_at: dataset.updatedAt,

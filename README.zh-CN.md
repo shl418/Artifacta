@@ -1,8 +1,8 @@
 # Artifacta
 
-Artifacta 是一个面向企业团队的开源 BI 看板托管平台，核心场景是：你在本地用 coding agent、Python、SQL 或任意前端工具生成一个 HTML 看板，然后把它上传到 Artifacta，团队成员就可以通过权限受控的链接直接查看。
+Artifacta 是面向 AI 生成数据应用的开放协议与托管平台。它让本地 AI 工具、脚本和分析师可以发布 HTML/JS 产物，绑定数据源，并把可更新的数据应用共享给团队。
 
-它不是想取代所有 BI 工具，而是补齐 AI 时代看板生产方式里的最后一公里：托管、分享、权限、数据集、API Key、CLI 和自动化更新。
+项目面向新的工作流：在本地用你熟悉的工具构建数据应用，再借助 Artifacta 完成协议化发布、托管、权限、数据集、API Key 和可重复的交付。
 
 [English README](README.md)
 

@@ -3,6 +3,7 @@ import path from "node:path"
 import AdmZip from "adm-zip"
 import type { DashboardArtifact, Project } from "@/lib/types"
 import { absoluteUploadPath } from "@/lib/server/config"
+import { normalizeBundleEntry, validateZipBundle } from "@/lib/server/artifacts/zip-security"
 
 const safeNamePattern = /[^a-zA-Z0-9._-]/g
 
@@ -97,8 +98,8 @@ export async function readDashboardHtml(project: Project) {
 export async function readDashboardAsset(project: Project, assetPath: string[]) {
   if (project.htmlArtifact.kind !== "zip" || !project.htmlArtifact.assetRoot) return null
 
-  const safePath = normalizeZipEntry(assetPath.join("/"))
-  if (!safePath || safePath.endsWith(".html")) return null
+  const safePath = normalizeBundleEntry(assetPath.join("/"))
+  if (!safePath || safePath.toLowerCase().endsWith(".html")) return null
 
   const absolutePath = absoluteUploadPath(path.posix.join(project.htmlArtifact.assetRoot, safePath))
   const buffer = await fs.readFile(absolutePath).catch(() => null)
@@ -130,20 +131,51 @@ function escapeHtml(value: string) {
   })
 }
 
-async function extractProjectZip(projectId: string, buffer: Buffer) {
+async function listFilesRecursive(root: string) {
+  try {
+    const entries = await fs.readdir(root, { withFileTypes: true })
+    const files: string[] = []
+    for (const entry of entries) {
+      const absolutePath = path.join(root, entry.name)
+      if (entry.isDirectory()) {
+        files.push(...(await listFilesRecursive(absolutePath)))
+      } else if (entry.isFile()) {
+        files.push(absolutePath)
+      }
+    }
+    return files
+  } catch {
+    return []
+  }
+}
+
+export async function extractProjectZip(projectId: string, buffer: Buffer, skipPaths?: Set<string>) {
   const zip = new AdmZip(buffer)
+  validateZipBundle(zip)
+
   const assetRoot = `projects/${projectId}/bundle`
   const absoluteRoot = absoluteUploadPath(assetRoot)
   let entryPath: string | null = null
 
-  await fs.rm(absoluteRoot, { recursive: true, force: true })
+  if (skipPaths && skipPaths.size > 0) {
+    const existingFiles = await listFilesRecursive(absoluteRoot)
+    for (const existingFile of existingFiles) {
+      const relative = path.relative(absoluteRoot, existingFile).split(path.sep).join("/")
+      if (!skipPaths.has(relative)) {
+        await fs.rm(existingFile, { force: true })
+      }
+    }
+  } else {
+    await fs.rm(absoluteRoot, { recursive: true, force: true })
+  }
   await fs.mkdir(absoluteRoot, { recursive: true })
 
   for (const entry of zip.getEntries()) {
     if (entry.isDirectory) continue
 
-    const safePath = normalizeZipEntry(entry.entryName)
-    if (!safePath || safePath.startsWith("__MACOSX/")) continue
+    const safePath = normalizeBundleEntry(entry.entryName)
+    if (!safePath) continue
+    if (skipPaths?.has(safePath)) continue
 
     const targetPath = absoluteUploadPath(path.posix.join(assetRoot, safePath))
     await fs.mkdir(path.dirname(targetPath), { recursive: true })
@@ -160,14 +192,6 @@ async function extractProjectZip(projectId: string, buffer: Buffer) {
   }
 
   return { assetRoot, entryPath }
-}
-
-function normalizeZipEntry(entryName: string) {
-  const cleanPath = entryName.replace(/\\/g, "/")
-  const normalized = path.posix.normalize(cleanPath)
-  if (!normalized || normalized === "." || normalized.startsWith("/") || normalized.startsWith("../")) return null
-  if (normalized.split("/").includes("..")) return null
-  return normalized
 }
 
 function injectBaseHref(html: string, baseHref: string) {

@@ -48,6 +48,8 @@ Do not store these paths in an ephemeral container filesystem unless you are onl
 | `DATA_DIR` | Recommended | Persistent metadata directory. |
 | `SQLITE_PATH` | When SQLite | Path to the SQLite file. Defaults inside `DATA_DIR`. |
 | `UPLOAD_DIR` | Recommended | Persistent uploaded artifact directory. |
+| `SYNC_URL_ALLOWLIST` | Recommended for sync | Comma-separated host allowlist for dataset sync URL sources. Leave empty to disable remote URL sync in shared production deployments. |
+| `SYNC_LOCAL_BASE_DIR` | Recommended for sync | Base directory for local file sync sources. Paths outside this directory are rejected. Leave empty only for local development. |
 | `ARTIFACTA_API_KEY` | Worker only | API key used by `scripts/sync-worker.mjs`. |
 
 ## Container Shape
@@ -89,6 +91,26 @@ node scripts/sync-worker.mjs --interval 300
 ```
 
 Current sync runners support local files, already-uploaded artifact paths, URL fetches, and `mock_rows`. Add COS/S3 and Presto/Trino clients behind `lib/server/sync-runner.ts` when you are ready for real external data connectors.
+
+## Dataset Sync Source Safety
+
+Dataset sync jobs can read from local file paths or remote URLs, so shared deployments should explicitly constrain both source types before enabling scheduled workers.
+
+### Remote URLs
+
+Set `SYNC_URL_ALLOWLIST` to a comma-separated list of lower-case hostnames that dataset sync jobs may fetch, for example `data.example.com,warehouse.example.com`. Artifacta only allows `http:` and `https:` URLs, rejects `localhost` and `.localhost`, and blocks private or link-local IP ranges such as `127.*`, `10.*`, `192.168.*`, `172.16-31.*`, `169.254.*`, and `::1`.
+
+When `SYNC_URL_ALLOWLIST` is empty, remote URL sync is rejected in production. In development, Artifacta DNS-resolves non-IP hostnames and rejects the URL if any resolved address is private or link-local.
+
+### Local File Paths
+
+Set `SYNC_LOCAL_BASE_DIR` to the directory that contains files workers are allowed to read, for example `/var/lib/Artifacta/sync-sources`. Relative paths are resolved from the process working directory, and configured local paths must equal or stay inside the base directory. Artifacta also rejects restricted system locations such as `/etc`, `/proc`, `/sys`, `/dev`, and `C:\Windows\System32`.
+
+When `SYNC_LOCAL_BASE_DIR` is empty, local file sync is rejected in production. Leaving it empty should be treated as a development-only convenience.
+
+### Known Limitation: DNS Rebinding
+
+The built-in remote URL checks validate the hostname and DNS answers before the request starts, but they do not pin the resolved address for the outbound `fetch`. A hostile DNS setup could change answers between validation and connection time. For shared or high-trust deployments, keep `SYNC_URL_ALLOWLIST` narrow and enforce equivalent egress controls at the network layer.
 
 ## Production Hardening Checklist
 
