@@ -24,3 +24,4 @@ npm-debug.log*
 pnpm-debug.log*
 *.tsbuildinfo
 .DS_Store
+.worktrees/
