@@ -1,9 +1,19 @@
 import { promises as fs } from "node:fs"
+import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
 import type { Database, Dataset, SyncHistory } from "@/lib/types"
 import { inspectDataset } from "@/lib/server/datasets"
+import {
+  s3AccessKeyId,
+  s3Endpoint,
+  s3ForcePathStyle,
+  s3Region,
+  s3SecretAccessKey,
+} from "@/lib/server/config"
 import { addActivity, now } from "@/lib/server/db"
 import { assertAllowedLocalPath, assertAllowedSyncUrl, assertAllowedUploadPath } from "@/lib/server/sync/source-policy"
 import { writeDatasetBuffer } from "@/lib/server/storage"
+import { recordDatasetVersion } from "@/lib/server/versions"
+import { emitWebhooks } from "@/lib/server/webhooks"
 
 interface RunDatasetSyncInput {
   projectId: string
@@ -41,6 +51,7 @@ export async function runDatasetSync(database: Database, input: RunDatasetSyncIn
       dataset.schema = inspection.schema
       dataset.version += 1
       rowsSynced = source.rowsSynced ?? inspection.rows ?? rowsSynced
+      recordDatasetVersion(database, dataset, input.userId ?? null)
     }
   } catch (caughtError) {
     status = "failed"
@@ -76,12 +87,29 @@ export async function runDatasetSync(database: Database, input: RunDatasetSyncIn
       target: dataset.name,
     })
   }
+  emitWebhooks(database, project.organizationId, status === "success" ? "sync.success" : "sync.failed", {
+    project_id: input.projectId,
+    dataset_id: input.datasetId,
+    sync_id: history.id,
+    rows_synced: rowsSynced,
+    error,
+  })
 
   return history
 }
 
 async function loadDatasetSource(dataset: Dataset): Promise<LoadedDatasetSource | null> {
   const config = dataset.syncConfig.sourceConfig
+  if (dataset.syncConfig.sourceType === "presto") {
+    const querySource = await loadPrestoOrTrinoSource(config)
+    if (querySource) return querySource
+  }
+
+  if (dataset.syncConfig.sourceType === "cos") {
+    const objectSource = await loadObjectStorageSource(config)
+    if (objectSource) return objectSource
+  }
+
   const localPath = firstString(config, ["local_path", "localPath", "path", "file_path"])
   if (localPath) {
     return { buffer: await fs.readFile(assertAllowedLocalPath(localPath)) }
@@ -108,6 +136,70 @@ async function loadDatasetSource(dataset: Dataset): Promise<LoadedDatasetSource 
   return null
 }
 
+async function loadObjectStorageSource(config: Record<string, unknown>): Promise<LoadedDatasetSource | null> {
+  const bucket = firstString(config, ["bucket", "s3_bucket", "cos_bucket"])
+  const key = firstString(config, ["key", "object_key", "s3_key", "cos_key"])
+  if (!bucket || !key) return null
+
+  const client = new S3Client({
+    region: firstString(config, ["region"]) ?? s3Region,
+    endpoint: firstString(config, ["endpoint"]) ?? s3Endpoint,
+    forcePathStyle: typeof config.force_path_style === "boolean" ? config.force_path_style : s3ForcePathStyle,
+    credentials:
+      firstString(config, ["access_key_id", "accessKeyId"]) || s3AccessKeyId
+        ? {
+            accessKeyId: firstString(config, ["access_key_id", "accessKeyId"]) ?? s3AccessKeyId ?? "",
+            secretAccessKey: firstString(config, ["secret_access_key", "secretAccessKey"]) ?? s3SecretAccessKey ?? "",
+          }
+        : undefined,
+  })
+  const response = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }))
+  const bytes = await response.Body?.transformToByteArray()
+  if (!bytes) throw new Error("Object storage source returned an empty body.")
+  return { buffer: Buffer.from(bytes) }
+}
+
+async function loadPrestoOrTrinoSource(config: Record<string, unknown>): Promise<LoadedDatasetSource | null> {
+  const endpoint = firstString(config, ["endpoint", "trino_endpoint", "presto_endpoint"])
+  const query = firstString(config, ["query", "sql"])
+  if (!endpoint || !query) return null
+
+  const statementUrl = await assertAllowedSyncUrl(new URL("/v1/statement", endpoint).toString())
+  let response = await fetch(statementUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "X-Trino-User": firstString(config, ["user", "username"]) ?? "artifacta",
+      "X-Presto-User": firstString(config, ["user", "username"]) ?? "artifacta",
+      ...(firstString(config, ["catalog"]) ? { "X-Trino-Catalog": firstString(config, ["catalog"])!, "X-Presto-Catalog": firstString(config, ["catalog"])! } : {}),
+      ...(firstString(config, ["schema"]) ? { "X-Trino-Schema": firstString(config, ["schema"])!, "X-Presto-Schema": firstString(config, ["schema"])! } : {}),
+    },
+    body: query,
+  })
+
+  const rows: unknown[] = []
+  let columns: string[] = []
+  for (let attempts = 0; attempts < 50; attempts += 1) {
+    if (!response.ok) throw new Error(`Presto/Trino query failed with ${response.status}.`)
+    const payload = (await response.json()) as {
+      columns?: Array<{ name: string }>
+      data?: unknown[][]
+      nextUri?: string
+      error?: { message?: string }
+    }
+    if (payload.error?.message) throw new Error(payload.error.message)
+    if (payload.columns?.length) columns = payload.columns.map((column) => column.name)
+    if (Array.isArray(payload.data)) {
+      for (const row of payload.data) rows.push(rowArrayToRecord(columns, row))
+    }
+    if (!payload.nextUri) break
+    const nextUri = await assertAllowedSyncUrl(payload.nextUri)
+    response = await fetch(nextUri)
+  }
+
+  return { buffer: Buffer.from(rowsToCsv(rows), "utf8"), rowsSynced: rows.length }
+}
+
 function firstString(config: Record<string, unknown>, keys: string[]) {
   for (const key of keys) {
     const value = config[key]
@@ -130,6 +222,11 @@ function rowsToCsv(rows: unknown[]) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function rowArrayToRecord(columns: string[], row: unknown[]) {
+  if (columns.length === 0) return Object.fromEntries(row.map((value, index) => [`column_${index + 1}`, value]))
+  return Object.fromEntries(columns.map((column, index) => [column, row[index]]))
 }
 
 function escapeCsvCell(value: unknown) {

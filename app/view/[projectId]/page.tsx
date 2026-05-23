@@ -83,7 +83,7 @@ export default function ProjectPreviewPage() {
             <RefreshCw className="h-3.5 w-3.5" />
             刷新数据
           </Button>
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => router.push(`/dashboards?selected=${project.id}`)}>
+          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => router.push(`/projects/${project.id}`)}>
             <Settings2 className="h-3.5 w-3.5" />
             设置
           </Button>

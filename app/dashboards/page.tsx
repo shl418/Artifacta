@@ -9,12 +9,25 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   ChevronLeft,
   ChevronRight,
+  AlertCircle,
   Eye,
   FileBarChart,
   Folder,
@@ -24,6 +37,7 @@ import {
   Home,
   Lock,
   MoreHorizontal,
+  RefreshCw,
   Search,
   Settings2,
   Trash2,
@@ -81,6 +95,8 @@ export default function DashboardsPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [createFolderOpen, setCreateFolderOpen] = useState(false)
   const [newFolderName, setNewFolderName] = useState("")
+  const [error, setError] = useState("")
+  const [pendingDelete, setPendingDelete] = useState<ProjectSummary | null>(null)
 
   const currentFolder = useMemo(
     () => payload?.folders.find((folder) => folder.id === currentFolderId) ?? null,
@@ -92,11 +108,20 @@ export default function DashboardsPage() {
     if (searchQuery) params.set("search", searchQuery)
     if (visibilityFilter !== "all") params.set("visibility", visibilityFilter)
     const response = await fetch(`/api/v1/projects?${params.toString()}`)
-    if (response.ok) setPayload(await response.json())
+    const nextPayload = await response.json().catch(() => null)
+    if (!response.ok) {
+      setError(nextPayload?.error?.message ?? "无法加载看板列表。")
+      return
+    }
+    setError("")
+    setPayload(nextPayload)
   }, [currentFolderId, currentPage, searchQuery, visibilityFilter])
 
   useEffect(() => {
-    loadProjects().catch(() => setPayload(null))
+    loadProjects().catch(() => {
+      setPayload(null)
+      setError("网络异常，无法加载看板列表。")
+    })
   }, [loadProjects])
 
   const createFolder = async () => {
@@ -110,29 +135,49 @@ export default function DashboardsPage() {
       setNewFolderName("")
       setCreateFolderOpen(false)
       await loadProjects()
+    } else {
+      const payload = await response.json().catch(() => null)
+      setError(payload?.error?.message ?? "创建文件夹失败。")
     }
   }
 
   const moveProject = async (projectId: string, folderId: string | null) => {
-    await fetch(`/api/v1/projects/${projectId}/folder`, {
+    const response = await fetch(`/api/v1/projects/${projectId}/folder`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ folder_id: folderId }),
     })
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null)
+      setError(payload?.error?.message ?? "移动项目失败。")
+      return
+    }
     await loadProjects()
   }
 
   const updateVisibility = async (projectId: string, visibility: Visibility) => {
-    await fetch(`/api/v1/projects/${projectId}`, {
+    const response = await fetch(`/api/v1/projects/${projectId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ visibility }),
     })
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null)
+      setError(payload?.error?.message ?? "更新可见性失败。")
+      return
+    }
     await loadProjects()
   }
 
-  const deleteProject = async (projectId: string) => {
-    await fetch(`/api/v1/projects/${projectId}`, { method: "DELETE" })
+  const deleteProject = async () => {
+    if (!pendingDelete) return
+    const response = await fetch(`/api/v1/projects/${pendingDelete.id}`, { method: "DELETE" })
+    setPendingDelete(null)
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null)
+      setError(payload?.error?.message ?? "删除项目失败。")
+      return
+    }
     await loadProjects()
   }
 
@@ -206,6 +251,20 @@ export default function DashboardsPage() {
                 新建文件夹
               </Button>
             </div>
+
+            {error && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>操作失败</AlertTitle>
+                <AlertDescription>
+                  <p>{error}</p>
+                  <Button variant="outline" size="sm" className="mt-2" onClick={() => loadProjects()}>
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    重试
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
 
             <div className="rounded-lg border border-border bg-card overflow-hidden">
               <Table>
@@ -297,6 +356,12 @@ export default function DashboardsPage() {
                                   ))}
                                 </DropdownMenuSubContent>
                               </DropdownMenuSub>
+                              <DropdownMenuItem asChild>
+                                <Link href={`/projects/${project.id}`}>
+                                  <Settings2 className="h-4 w-4 mr-2" />
+                                  管理项目
+                                </Link>
+                              </DropdownMenuItem>
                               <DropdownMenuSub>
                                 <DropdownMenuSubTrigger>
                                   <Settings2 className="h-4 w-4 mr-2" />
@@ -309,7 +374,7 @@ export default function DashboardsPage() {
                                 </DropdownMenuSubContent>
                               </DropdownMenuSub>
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem className="text-destructive" onClick={() => deleteProject(project.id)}>
+                              <DropdownMenuItem className="text-destructive" onClick={() => setPendingDelete(project)}>
                                 <Trash2 className="h-4 w-4 mr-2" />
                                 删除
                               </DropdownMenuItem>
@@ -321,6 +386,19 @@ export default function DashboardsPage() {
                   })}
                 </TableBody>
               </Table>
+
+              {!error && payload && payload.data.length === 0 && currentFolderId === null && payload.folders.length === 0 && (
+                <Empty className="border-0 py-16">
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon"><FileBarChart /></EmptyMedia>
+                    <EmptyTitle>还没有看板</EmptyTitle>
+                    <EmptyDescription>上传 HTML 或 ZIP 应用后，团队会在这里看到可预览、可分享的项目。</EmptyDescription>
+                  </EmptyHeader>
+                  <EmptyContent>
+                    <Button asChild><Link href="/upload">创建第一个项目</Link></Button>
+                  </EmptyContent>
+                </Empty>
+              )}
 
               <div className="flex items-center justify-between px-4 py-3 border-t border-border">
                 <div className="text-sm text-muted-foreground">共 {payload?.pagination.total ?? 0} 个看板</div>
@@ -357,6 +435,23 @@ export default function DashboardsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!pendingDelete} onOpenChange={(open) => !open && setPendingDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>删除项目</AlertDialogTitle>
+            <AlertDialogDescription>
+              这会删除 “{pendingDelete?.name}” 及其数据集、权限和同步历史，操作完成后不可恢复。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={deleteProject}>
+              删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

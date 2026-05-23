@@ -1,15 +1,22 @@
 import { authenticateRequest } from "@/lib/server/auth"
 import { canEditProject } from "@/lib/server/access"
+import { recordAudit } from "@/lib/server/audit"
 import { addActivity, now, readDatabase, updateDatabase } from "@/lib/server/db"
+import { rateLimitResponse } from "@/lib/server/rate-limit"
 import { apiError, ok } from "@/lib/server/responses"
 import { serializeProjectDetail } from "@/lib/server/serializers"
 import { saveProjectArtifact } from "@/lib/server/storage"
+import { recordDashboardVersion } from "@/lib/server/versions"
+import { emitWebhooks } from "@/lib/server/webhooks"
 
 export const runtime = "nodejs"
 
 type RouteContext = { params: Promise<{ projectId: string }> }
 
 export async function PUT(request: Request, context: RouteContext) {
+  const limited = rateLimitResponse(request, "html-upload", 30)
+  if (limited) return limited
+
   const { projectId } = await context.params
   const auth = await authenticateRequest(request)
   if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
@@ -34,6 +41,7 @@ export async function PUT(request: Request, context: RouteContext) {
 
   const updated = await updateDatabase((mutable) => {
     const record = mutable.projects.find((candidate) => candidate.id === projectId)!
+    recordDashboardVersion(mutable, record, auth.user.id, "Before dashboard artifact replacement")
     record.htmlArtifact = artifact
     record.updatedAt = now()
     addActivity(mutable, {
@@ -43,6 +51,17 @@ export async function PUT(request: Request, context: RouteContext) {
       action: "更新了看板文件",
       target: record.name,
     })
+    recordDashboardVersion(mutable, record, auth.user.id, "Dashboard artifact replaced")
+    recordAudit(mutable, {
+      organizationId: auth.user.organizationId,
+      actorUserId: auth.user.id,
+      action: "project.html.update",
+      targetType: "project",
+      targetId: record.id,
+      summary: `Updated dashboard artifact for ${record.name}`,
+      metadata: { artifact_kind: artifact.kind, original_name: artifact.originalName },
+    })
+    emitWebhooks(mutable, auth.user.organizationId, "project.updated", { project_id: record.id, name: record.name })
     return record
   })
 

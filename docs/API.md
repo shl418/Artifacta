@@ -17,18 +17,50 @@ Authorization: Bearer <API_KEY>
 
 - 已实现：登录、当前用户、项目 CRUD、HTML 上传/替换、HTML 预览渲染、文件夹、数据集上传/替换/删除、同步配置/触发/状态/历史、项目成员权限、团队成员、API Key。
 - 已实现：ZIP 看板包解包、入口 HTML 渲染、CSS/JS/图片等静态资源托管。
-- 已实现：`DATA_DRIVER=json|sqlite` 元数据持久化，SQLite adapter 带幂等迁移。
-- 已实现：轻量 CLI、API-driven 同步 Worker、API smoke test。
-- 已接入同步执行器：本地文件、上传目录文件、URL 拉取、`mock_rows`。COS/S3 和真实 Presto/Trino 客户端保留为 connector adapter。
+- 已实现：`DATA_DRIVER=json|sqlite|postgres` 元数据持久化，SQLite adapter 带幂等迁移，Postgres adapter 适合多实例元数据存储。
+- 已实现：`STORAGE_DRIVER=local|s3`，可使用 S3/COS/R2/MinIO 兼容对象存储保存看板和数据集文件。
+- 已实现：轻量 CLI、`--json` 输出、`artifacta doctor`、API-driven 同步 Worker、API smoke test。
+- 已接入同步执行器：本地文件、上传目录文件、URL 拉取、`mock_rows`、S3/COS 对象、Presto/Trino HTTP 查询。
+- 已实现：审计日志、Webhook、数据集预览、版本记录、嵌入 token 和 OIDC 登录入口。
 - API 错误响应统一使用本文档底部的错误 envelope。
 
 ### OpenAPI
 
-OpenAPI 3.1 描述文件位于 [`docs/openapi/artifacta.v1.yaml`](./openapi/artifacta.v1.yaml)，覆盖核心发布、项目、数据集和同步 Worker API。添加契约测试前，Next.js route handlers 仍是接口行为的最终来源。
+OpenAPI 3.1 描述文件位于 [`docs/openapi/artifacta.v1.yaml`](./openapi/artifacta.v1.yaml)，覆盖当前公开 API。`pnpm test:api-contract` 会检查实现清单中的公开路由是否出现在 OpenAPI 中。
 
 ---
 
 ## 认证相关
+
+### 登录并创建 Web Session
+
+```
+POST /auth/login
+```
+
+**请求体:**
+```json
+{
+  "email": "admin@artifacta.local",
+  "name": "Admin"
+}
+```
+
+当前开源版本使用开发友好的邮箱登录：若邮箱不存在，会在默认组织中创建用户；第一个用户为 `admin`，后续用户默认为 `member`。成功后响应会设置 `artifacta_session` HTTP-only Cookie。
+
+**响应示例:**
+```json
+{
+  "user": {
+    "id": "user_abc123",
+    "email": "admin@artifacta.local",
+    "name": "Admin",
+    "role": "admin",
+    "status": "active",
+    "organization_id": "org_xyz789"
+  }
+}
+```
 
 ### 获取当前用户信息
 
@@ -47,6 +79,16 @@ GET /auth/me
   "created_at": "2024-01-15T08:00:00Z"
 }
 ```
+
+响应包含 `auth_type`，取值为 `session` 或 `api_key`。
+
+### 退出登录
+
+```
+POST /auth/logout
+```
+
+清空 `artifacta_session` Cookie，响应 `{ "ok": true }`。
 
 ---
 
@@ -70,6 +112,8 @@ POST /projects
 | html_file | file | 是 | HTML 看板文件（单个 .html）或 ZIP 包 |
 | data_files | file[] | 否 | 数据文件，支持多个。当前会对 CSV/JSON 做行列和字段解析，其他类型会按文件保存但不做结构化检查。 |
 | visibility | string | 否 | 可见性: `private`, `team`, `public`，默认 `private` |
+
+也支持 `data_files[]` 和 `data` 作为数据文件字段别名。高级上传流程可以改用 `upload_session_id` 与 `datasets`，详见“上传会话”。
 
 **支持的文件格式:**
 
@@ -117,8 +161,8 @@ curl -X POST http://localhost:3000/api/v1/projects \
   "name": "销售月报",
   "description": "2024年1月销售数据看板",
   "visibility": "team",
-  "html_url": "https://cdn.artifacta.io/projects/proj_abc123/index.html",
-  "preview_url": "https://app.artifacta.io/view/proj_abc123",
+      "html_url": "http://localhost:3000/api/v1/projects/proj_abc123/html/render",
+      "preview_url": "http://localhost:3000/view/proj_abc123",
   "datasets": [
     {
       "id": "ds_001",
@@ -172,7 +216,7 @@ GET /projects
       "description": "2024年1月销售数据看板",
       "visibility": "team",
       "folder_id": "folder_001",
-      "preview_url": "https://app.artifacta.io/view/proj_abc123",
+      "preview_url": "http://localhost:3000/view/proj_abc123",
       "owner": {
         "id": "user_abc123",
         "name": "张三",
@@ -223,8 +267,8 @@ GET /projects/:project_id
   "name": "销售月报",
   "description": "2024年1月销售数据看板",
   "visibility": "team",
-  "html_url": "https://cdn.artifacta.io/projects/proj_abc123/index.html",
-  "preview_url": "https://app.artifacta.io/view/proj_abc123",
+  "html_url": "http://localhost:3000/api/v1/projects/proj_abc123/html/render",
+  "preview_url": "http://localhost:3000/view/proj_abc123",
   "datasets": [...],
   "permissions": [
     {
@@ -284,6 +328,14 @@ GET /projects/:project_id/html/render
 **响应:** `text/html; charset=utf-8`
 
 > 当前实现会对响应附加 CSP sandbox。单 HTML 文件直接渲染；ZIP 包会在上传时解包，入口 `index.html` 通过本接口渲染，相对路径 CSS/JS/图片资源会从 `/projects/:project_id/html/*` 受控路由加载。
+
+### 读取 ZIP 看板静态资源
+
+```
+GET /projects/:project_id/html/:asset_path
+```
+
+该接口为 ZIP 看板包中的 CSS、JS、图片、字体等静态资源提供受权限保护的访问。公开项目可匿名读取；私有/团队项目需要 Cookie Session 或 Bearer Token。响应会带原始资源的 `Content-Type` 和 `Cache-Control: public, max-age=300`。
 
 ### 删除项目
 
@@ -376,11 +428,60 @@ DELETE /folders/:folder_id
 
 ## 数据集管理
 
+### 获取当前组织可见数据集列表
+
+```
+GET /datasets
+```
+
+**查询参数:**
+
+| 参数 | 类型 | 描述 |
+|------|------|------|
+| source | string | 按同步来源筛选：`manual`, `cos`, `presto`，或 `all` |
+| search | string | 搜索数据集名称和描述 |
+
+**响应示例:**
+```json
+{
+  "data": [
+    {
+      "id": "ds_001",
+      "project_id": "proj_abc123",
+      "name": "sales.csv",
+      "file_type": "csv",
+      "rows": 1500,
+      "columns": 8,
+      "origin": "upload",
+      "sync_config": {
+        "enabled": false,
+        "source_type": "manual",
+        "source_config": {},
+        "update_mode": "full",
+        "schedule": null
+      },
+      "project": {
+        "id": "proj_abc123",
+        "name": "销售月报"
+      }
+    }
+  ]
+}
+```
+
 ### 获取项目数据集列表
 
 ```
 GET /projects/:project_id/datasets
 ```
+
+### 获取单个数据集
+
+```
+GET /projects/:project_id/datasets/:dataset_id
+```
+
+公开项目的数据集可匿名读取；私有/团队项目需要有查看权限。
 
 ### 上传/替换数据集
 
@@ -392,7 +493,7 @@ PUT /projects/:project_id/datasets/:dataset_id
 
 | 字段 | 类型 | 必填 | 描述 |
 |------|------|------|------|
-| file | file | 是 | 数据文件 (CSV/Excel/JSON) |
+| file | file | 是 | 数据文件。当前会解析 CSV/JSON 元数据，其他类型按文件保存。 |
 
 ### 添加数据集
 
@@ -414,6 +515,65 @@ DELETE /projects/:project_id/datasets/:dataset_id
 ```
 
 ---
+
+## 上传会话
+
+上传会话用于 Web 端先上传 ZIP 包、读取包内文件树，再选择哪些包内数据文件要转成 Artifacta 数据集。普通 API/CLI 上传可以直接使用 `POST /projects` 的 `html_file`。
+
+### 创建上传会话
+
+```
+POST /upload-sessions
+```
+
+**请求体 (multipart/form-data):**
+
+| 字段 | 类型 | 必填 | 描述 |
+|------|------|------|------|
+| file | file | 是 | ZIP 看板包 |
+| project_id | string | 否 | 更新已有项目时传入，用于标注已存在的数据集匹配关系 |
+
+**响应示例:**
+```json
+{
+  "session_id": "upload_abc123",
+  "file_tree": [
+    {
+      "path": "index.html",
+      "size": 1024,
+      "extension": "html",
+      "inferred_dataset": false
+    },
+    {
+      "path": "data/sales.csv",
+      "size": 2048,
+      "extension": "csv",
+      "inferred_dataset": true,
+      "existing_dataset_id": "ds_001",
+      "current_refresh": "manual"
+    }
+  ],
+  "expires_at": "2026-05-21T12:30:00.000Z"
+}
+```
+
+### 使用上传会话创建项目
+
+```
+POST /projects
+```
+
+传 `upload_session_id` 替代 `html_file`，并用 `datasets` 指定需要从 ZIP 包内提取的数据集：
+
+```json
+[
+  {
+    "bundle_path": "data/sales.csv",
+    "name": "Sales",
+    "refresh": "manual"
+  }
+]
+```
 
 ## 数据同步配置
 
@@ -450,7 +610,22 @@ PUT /projects/:project_id/datasets/:dataset_id/sync
 
 当前 CLI 会把本地 JSON 文件直接传到 `source_config`，因此最适合和本地 skill / CI 一起使用。
 
-**方式一：COS 对象存储**
+**方式一：已实现的本地文件/URL/mock 数据**
+```json
+{
+  "enabled": true,
+  "source_type": "presto",
+  "source_config": {
+    "url": "https://data.example.com/sales.csv"
+  },
+  "update_mode": "full",
+  "schedule": "0 8 * * *"
+}
+```
+
+也可以使用 `local_path` / `file_path` / `path` 读取允许目录中的本地文件、使用 `upload_path` 读取上传目录中的文件，或使用 `mock_rows` / `sample_rows` 生成 CSV。
+
+**方式二：预留 COS 对象存储配置**
 ```json
 {
   "enabled": true,
@@ -467,7 +642,9 @@ PUT /projects/:project_id/datasets/:dataset_id/sync
 }
 ```
 
-**方式二：Presto SQL**
+> 当前 `source_type` 支持 `manual`、`cos`、`presto` 三类枚举。同步执行器已经实现的是通用 `source_config` 读取能力：`local_path` / `file_path` / `path` 本地文件、`upload_path` 上传目录文件、`url` / `endpoint` 远程 URL、`mock_rows` / `sample_rows` 生成 CSV。真实 COS/S3 与 Presto/Trino 客户端仍是后续 connector adapter。
+
+**方式三：预留 Presto SQL 配置**
 ```json
 {
   "enabled": true,
@@ -484,7 +661,7 @@ PUT /projects/:project_id/datasets/:dataset_id/sync
 }
 ```
 
-**方式三：手动上传 (禁用自动同步)**
+**方式四：手动上传 (禁用自动同步)**
 ```json
 {
   "enabled": false,
@@ -516,6 +693,31 @@ POST /projects/:project_id/datasets/:dataset_id/sync/trigger
 ```
 
 该接口只负责入队并返回 HTTP `202`。同步 Worker 通过 `POST /sync/jobs/claim` 领取队列任务并执行实际同步。
+
+### Worker 领取同步任务
+
+```
+POST /sync/jobs/claim
+```
+
+Worker 使用 Bearer API Key 调用该接口。若有排队任务，接口会把任务标记为运行、执行同步并返回结果；若没有任务，返回 `{ "job": null }`。
+
+**响应示例:**
+```json
+{
+  "job": {
+    "job_id": "job_abc123",
+    "project_id": "proj_abc123",
+    "dataset_id": "ds_001",
+    "status": "success",
+    "trigger": "manual",
+    "created_at": "2024-01-20T14:29:59Z",
+    "started_at": "2024-01-20T14:30:00Z",
+    "completed_at": "2024-01-20T14:30:01Z",
+    "error": null
+  }
+}
+```
 
 ### 查询同步状态
 
@@ -568,7 +770,7 @@ GET /projects/:project_id/datasets/:dataset_id/sync/history
       "completed_at": "2024-01-19T14:30:10Z",
       "rows_synced": 0,
       "update_mode": "full",
-      "error": "Connection timeout: Unable to connect to COS bucket"
+      "error": "拉取远程数据失败：500"
     }
   ],
   "pagination": {...},
@@ -695,6 +897,8 @@ GET /team/members
 POST /team/invitations
 ```
 
+`POST /team/members` 也支持相同请求体；两者都会创建或重新激活成员。仅管理员可调用。
+
 **请求体:**
 ```json
 {
@@ -716,9 +920,12 @@ PATCH /team/members/:user_id
 **请求体:**
 ```json
 {
-  "role": "admin"
+  "role": "admin",
+  "status": "active"
 }
 ```
+
+`role` 可选 `admin` 或 `member`；`status` 可选 `active`、`pending`、`disabled`。
 
 ### 移除成员
 
@@ -771,6 +978,32 @@ DELETE /api-keys/:key_id
 
 ---
 
+## 控制台统计
+
+### 获取首页统计
+
+```
+GET /stats
+```
+
+**响应示例:**
+```json
+{
+  "stats": {
+    "projects": 8,
+    "datasets": 12,
+    "members": 3,
+    "views": 156
+  },
+  "recent_projects": [],
+  "popular_projects": []
+}
+```
+
+`recent_projects` 和 `popular_projects` 使用项目摘要格式，分别返回最多 5 条。
+
+---
+
 ## 错误响应
 
 所有错误响应遵循以下格式：
@@ -797,72 +1030,13 @@ DELETE /api-keys/:key_id
 | 403 | FORBIDDEN | 无权限访问该资源 |
 | 404 | NOT_FOUND | 资源不存在 |
 | 409 | CONFLICT | 资源冲突（如名称重复） |
-| 413 | PAYLOAD_TOO_LARGE | 上传文件过大 |
-| 429 | RATE_LIMITED | 请求频率超限 |
 | 500 | INTERNAL_ERROR | 服务器内部错误 |
 
 ---
 
-## 速率限制
+## 尚未实现但预留的能力
 
-- 默认: 100 请求/分钟
-- 上传接口: 10 请求/分钟
-- 同步触发: 5 请求/分钟
-
-超出限制后返回 `429 Too Many Requests`，响应头包含：
-- `X-RateLimit-Limit`: 限制数量
-- `X-RateLimit-Remaining`: 剩余数量
-- `X-RateLimit-Reset`: 重置时间戳
-
----
-
-## Webhook (可选)
-
-支持配置 Webhook 接收事件通知。
-
-### 配置 Webhook
-
-```
-POST /webhooks
-```
-
-**请求体:**
-```json
-{
-  "url": "https://your-server.com/webhook",
-  "events": ["project.created", "sync.completed", "sync.failed"],
-  "secret": "your-webhook-secret"
-}
-```
-
-### 事件类型
-
-- `project.created` - 项目创建
-- `project.updated` - 项目更新
-- `project.deleted` - 项目删除
-- `sync.started` - 同步开始
-- `sync.completed` - 同步完成
-- `sync.failed` - 同步失败
-
-### Webhook 请求格式
-
-```json
-{
-  "event": "sync.completed",
-  "timestamp": "2024-01-20T14:30:45Z",
-  "data": {
-    "project_id": "proj_abc123",
-    "dataset_id": "ds_001",
-    "sync_id": "sync_abc123",
-    "rows_synced": 1500
-  }
-}
-```
-
-请求头包含签名用于验证：
-```
-X-Artifacta-Signature: sha256=xxxxxx
-```
+以下能力不在当前 route handlers 中，属于后续生产化扩展点：请求速率限制、Webhook、OIDC/SAML SSO、Postgres/MySQL、对象存储、真实 COS/S3 与 Presto/Trino connector。
 
 ---
 
@@ -902,6 +1076,7 @@ pnpm cli -- projects upload \
   --file ./dashboard.zip \
   --name "AI 生成的销售分析" \
   --description "由 coding agent 生成" \
+  --folder-id folder_001 \
   --data-file ./sales-data.csv \
   --visibility team
 
@@ -936,11 +1111,23 @@ pnpm cli -- datasets sync set \
   --dataset-id ds_001 \
   --source-type presto \
   --config-file ./sync.json
+
+pnpm cli -- datasets sync set \
+  --project-id proj_abc123 \
+  --dataset-id ds_001 \
+  --source-type presto \
+  --config-json '{"mock_rows":[{"region":"华东","revenue":1000}]}'
 ```
 
 **触发数据同步**
 ```bash
 pnpm cli -- sync trigger --project-id proj_abc123 --dataset-id ds_001
+```
+
+**Doctor 与 JSON 输出**
+```bash
+pnpm cli -- doctor
+pnpm cli -- --json projects list
 ```
 
 ### 同步 Worker
@@ -983,9 +1170,49 @@ pnpm cli -- datasets sync set \
   --config-file ./sync.json
 ```
 
+## 生产化与运维 API
+
+### 数据集预览与版本
+
+```http
+GET /projects/:project_id/datasets/:dataset_id/preview
+GET /projects/:project_id/datasets/:dataset_id/versions
+```
+
+预览会返回 `parsed`、`schema`、`rows` 和 `sample_size`。CSV、TSV、JSON、JSONL 会结构化展示样例；XLSX、Parquet 等文件会明确返回 `parsed: false`，表示已保存但不结构化解析。
+
+### 项目版本与回滚
+
+```http
+GET /projects/:project_id/versions
+POST /projects/:project_id/versions/:version_id/rollback
+```
+
+版本响应包含 `version`、`artifact`、`created_by`、`created_at` 和 `notes`。
+
+### 嵌入 Token
+
+```http
+POST /projects/:project_id/embed-token
+```
+
+需要项目编辑权限。响应包含 `token`、`embed_url` 和 `expires_in_seconds`。嵌入页继续使用 sandboxed iframe，私有项目必须通过 token 或正常登录访问。
+
+### Webhook 与审计日志
+
+```http
+GET /webhooks
+POST /webhooks
+PATCH /webhooks/:webhook_id
+DELETE /webhooks/:webhook_id
+GET /audit-logs
+```
+
+Webhook 支持 `project.created`、`project.updated`、`project.deleted`、`permission.changed`、`sync.success`、`sync.failed`。投递签名位于 `X-Artifacta-Signature`，格式为 `sha256=<hex>`。
+
 ## OpenAPI
 
-The first checked-in OpenAPI contract lives at `docs/openapi/artifacta.v1.yaml`. Treat route handlers as the source of truth until contract tests are added, then use the OpenAPI file as the compatibility gate for CLI, client, and agent integrations.
+The checked OpenAPI contract lives at `docs/openapi/artifacta.v1.yaml`. Use `pnpm test:api-contract` as the compatibility gate for CLI, client, and agent integrations.
 
 ### CI/CD 集成示例
 

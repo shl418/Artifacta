@@ -1,6 +1,6 @@
 import crypto from "node:crypto"
 import type { User } from "@/lib/types"
-import { authSecret, sessionCookieName, sessionMaxAgeSeconds } from "@/lib/server/config"
+import { assertProductionSecrets, authSecret, sessionCookieName, sessionMaxAgeSeconds } from "@/lib/server/config"
 import { readDatabase, updateDatabase, now } from "@/lib/server/db"
 
 interface SessionPayload {
@@ -15,6 +15,7 @@ export interface AuthContext {
 }
 
 export function createSessionToken(userId: string) {
+  assertProductionSecrets()
   const payload: SessionPayload = {
     userId,
     exp: Math.floor(Date.now() / 1000) + sessionMaxAgeSeconds,
@@ -25,6 +26,7 @@ export function createSessionToken(userId: string) {
 }
 
 export function verifySessionToken(token: string | undefined): SessionPayload | null {
+  assertProductionSecrets()
   if (!token) return null
 
   const [encoded, signature] = token.split(".")

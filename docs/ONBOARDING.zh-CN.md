@@ -11,6 +11,8 @@
 - 这个站点上的 API Key
 - 本地可以生成 HTML / ZIP / CSV / JSON 的工作流
 
+ZIP 看板建议遵循稳定协议 `docs/protocol/manifest-v1.md`。
+
 ## 先澄清一件事
 
 用户不需要先在本地创建 Artifacta project。

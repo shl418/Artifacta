@@ -1,10 +1,12 @@
 import type { ProjectVisibility } from "@/lib/types"
 import { authenticateRequest } from "@/lib/server/auth"
 import { canEditProject, canViewProject } from "@/lib/server/access"
+import { recordAudit } from "@/lib/server/audit"
 import { addActivity, now, readDatabase, updateDatabase } from "@/lib/server/db"
 import { apiError, noContent, ok } from "@/lib/server/responses"
 import { serializeProjectDetail } from "@/lib/server/serializers"
 import { removeProjectArtifacts } from "@/lib/server/storage"
+import { emitWebhooks } from "@/lib/server/webhooks"
 
 export const runtime = "nodejs"
 
@@ -54,6 +56,16 @@ export async function PATCH(request: Request, context: RouteContext) {
       action: "更新了看板",
       target: record.name,
     })
+    recordAudit(mutable, {
+      organizationId: auth.user.organizationId,
+      actorUserId: auth.user.id,
+      action: "project.update",
+      targetType: "project",
+      targetId: record.id,
+      summary: `Updated project ${record.name}`,
+      metadata: { visibility: record.visibility },
+    })
+    emitWebhooks(mutable, auth.user.organizationId, "project.updated", { project_id: record.id, name: record.name })
     return record
   }).catch((error) => {
     if (error instanceof Error && error.message === "INVALID_VISIBILITY") return null
@@ -89,6 +101,16 @@ export async function DELETE(request: Request, context: RouteContext) {
       action: "删除了看板",
       target: project.name,
     })
+    recordAudit(mutable, {
+      organizationId: auth.user.organizationId,
+      actorUserId: auth.user.id,
+      action: "project.delete",
+      targetType: "project",
+      targetId: project.id,
+      summary: `Deleted project ${project.name}`,
+      metadata: {},
+    })
+    emitWebhooks(mutable, auth.user.organizationId, "project.deleted", { project_id: project.id, name: project.name })
   })
 
   await removeProjectArtifacts(projectId)

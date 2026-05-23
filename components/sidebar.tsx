@@ -66,7 +66,7 @@ export function Sidebar() {
   return (
     <TooltipProvider delayDuration={0}>
       {/* Sidebar Island */}
-      <aside className="w-64 h-screen p-2 shrink-0">
+      <aside className="w-16 md:w-64 h-screen p-2 shrink-0">
         <div className="flex flex-col h-full bg-sidebar rounded-xl shadow-sm">
           {/* Logo */}
           <div className="flex items-center h-14 px-4">
@@ -74,7 +74,7 @@ export function Sidebar() {
               <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
                 <span className="text-primary-foreground font-bold text-sm">DV</span>
               </div>
-              <span className="font-semibold text-sidebar-foreground">
+              <span className="hidden font-semibold text-sidebar-foreground md:inline">
                 Artifacta
               </span>
             </div>
@@ -99,7 +99,7 @@ export function Sidebar() {
                   )}
                 >
                   <Icon className="h-5 w-5 shrink-0" />
-                  <span>{item.name}</span>
+                  <span className="hidden md:inline">{item.name}</span>
                 </Link>
               )
             })}
@@ -117,15 +117,16 @@ export function Sidebar() {
                 >
                   <div className="flex items-center gap-3">
                     <Settings className="h-5 w-5 shrink-0" />
-                    <span>系统设置</span>
+                    <span className="hidden md:inline">系统设置</span>
                   </div>
                   <ChevronDown className={cn(
+                    "hidden md:block",
                     "h-4 w-4 transition-transform",
                     settingsOpen && "rotate-180"
                   )} />
                 </button>
               </CollapsibleTrigger>
-              <CollapsibleContent className="pl-8 mt-1 space-y-0.5">
+              <CollapsibleContent className="hidden pl-8 mt-1 space-y-0.5 md:block">
                 {settingsNavigation.map((item) => {
                   const isActive = pathname === item.href
                   return (
@@ -156,7 +157,7 @@ export function Sidebar() {
                   {user?.initials ?? "DV"}
                 </AvatarFallback>
               </Avatar>
-              <div className="flex-1 min-w-0">
+              <div className="hidden flex-1 min-w-0 md:block">
                 <p className="text-sm font-medium text-sidebar-foreground truncate">
                   {user?.name ?? "Artifacta"}
                 </p>

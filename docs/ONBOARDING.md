@@ -9,6 +9,8 @@ They only need:
 - Claude Code or another local agent workflow
 - a way to generate HTML, ZIP, CSV, or JSON files locally
 
+For ZIP dashboards, use the stable bundle contract in `docs/protocol/manifest-v1.md`.
+
 ## What "No Local Project" Means
 
 There is no requirement to create an Artifacta project locally first.

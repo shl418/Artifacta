@@ -2,11 +2,15 @@ import { authenticateRequest } from "@/lib/server/auth"
 import { canEditProject } from "@/lib/server/access"
 import { annotateFileTreeWithExistingDatasets, cleanExpiredSessions, createUploadSession } from "@/lib/server/artifacts/upload-session"
 import { readDatabase, updateDatabase } from "@/lib/server/db"
+import { rateLimitResponse } from "@/lib/server/rate-limit"
 import { apiError, created } from "@/lib/server/responses"
 
 export const runtime = "nodejs"
 
 export async function POST(request: Request) {
+  const limited = rateLimitResponse(request, "upload-sessions", 30)
+  if (limited) return limited
+
   const auth = await authenticateRequest(request)
   if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
 

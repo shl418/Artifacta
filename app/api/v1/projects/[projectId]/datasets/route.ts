@@ -1,9 +1,12 @@
 import { authenticateRequest } from "@/lib/server/auth"
 import { canEditProject, canViewProject } from "@/lib/server/access"
+import { recordAudit } from "@/lib/server/audit"
 import { buildDatasetRecord } from "@/lib/server/dataset-records"
 import { addActivity, readDatabase, updateDatabase } from "@/lib/server/db"
+import { rateLimitResponse } from "@/lib/server/rate-limit"
 import { apiError, created, ok } from "@/lib/server/responses"
 import { serializeDataset } from "@/lib/server/serializers"
+import { recordDatasetVersion } from "@/lib/server/versions"
 
 export const runtime = "nodejs"
 
@@ -22,6 +25,9 @@ export async function GET(request: Request, context: RouteContext) {
 }
 
 export async function POST(request: Request, context: RouteContext) {
+  const limited = rateLimitResponse(request, "dataset-upload", 60)
+  if (limited) return limited
+
   const { projectId } = await context.params
   const auth = await authenticateRequest(request)
   if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
@@ -42,10 +48,15 @@ export async function POST(request: Request, context: RouteContext) {
     organizationId: auth.user.organizationId,
     file: datasetFile,
     name: String(form?.get("name") ?? ""),
+  }).catch((error) => {
+    if (error instanceof Error) return error
+    return new Error("数据集保存失败。")
   })
+  if (dataset instanceof Error) return apiError(400, "INVALID_DATASET", dataset.message, { field: "file" })
 
   await updateDatabase((mutable) => {
     mutable.datasets.push(dataset)
+    recordDatasetVersion(mutable, dataset, auth.user.id)
     const record = mutable.projects.find((candidate) => candidate.id === projectId)
     if (record) record.updatedAt = dataset.updatedAt
     addActivity(mutable, {
@@ -54,6 +65,15 @@ export async function POST(request: Request, context: RouteContext) {
       userId: auth.user.id,
       action: "添加了数据集",
       target: dataset.name,
+    })
+    recordAudit(mutable, {
+      organizationId: auth.user.organizationId,
+      actorUserId: auth.user.id,
+      action: "dataset.create",
+      targetType: "dataset",
+      targetId: dataset.id,
+      summary: `Added dataset ${dataset.name}`,
+      metadata: { project_id: projectId, file_type: dataset.fileType },
     })
   })
 

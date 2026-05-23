@@ -1,5 +1,6 @@
 import type { DatasetColumn } from "@/lib/types"
 import { fileExtension } from "@/lib/server/storage"
+import { parse as parseCsv } from "csv-parse/sync"
 
 export interface DatasetInspection {
   fileType: string
@@ -11,11 +12,11 @@ export interface DatasetInspection {
 export function inspectDataset(fileName: string, buffer: Buffer): DatasetInspection {
   const fileType = fileExtension(fileName)
 
-  if (fileType === "csv") {
-    return inspectCsv(buffer.toString("utf8"), fileType)
+  if (fileType === "csv" || fileType === "tsv") {
+    return inspectDelimitedText(buffer.toString("utf8"), fileType)
   }
 
-  if (fileType === "json") {
+  if (fileType === "json" || fileType === "jsonl") {
     return inspectJson(buffer.toString("utf8"), fileType)
   }
 
@@ -27,26 +28,29 @@ export function inspectDataset(fileName: string, buffer: Buffer): DatasetInspect
   }
 }
 
-function inspectCsv(content: string, fileType: string): DatasetInspection {
-  const lines = content
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
+function inspectDelimitedText(content: string, fileType: string): DatasetInspection {
+  const delimiter = fileType === "tsv" ? "\t" : ","
+  const records = parseCsv(content, {
+    bom: true,
+    columns: true,
+    delimiter,
+    relax_column_count: true,
+    skip_empty_lines: true,
+    trim: true,
+  }) as Array<Record<string, string>>
 
-  if (lines.length === 0) {
-    return { fileType, rows: 0, columns: 0, schema: [] }
-  }
+  const headers = records.length > 0 ? Object.keys(records[0]) : parseCsvHeaders(content, delimiter)
+  if (headers.length === 0) return { fileType, rows: 0, columns: 0, schema: [] }
 
-  const headers = parseCsvLine(lines[0])
-  const sampleRows = lines.slice(1, 26).map(parseCsvLine)
+  const sampleRows = records.slice(0, 25)
   const schema = headers.map((name, index) => ({
     name: name || `column_${index + 1}`,
-    type: inferType(sampleRows.map((row) => row[index])),
+    type: inferType(sampleRows.map((row) => row[name])),
   }))
 
   return {
     fileType,
-    rows: Math.max(lines.length - 1, 0),
+    rows: records.length,
     columns: headers.length,
     schema,
   }
@@ -54,7 +58,7 @@ function inspectCsv(content: string, fileType: string): DatasetInspection {
 
 function inspectJson(content: string, fileType: string): DatasetInspection {
   try {
-    const parsed = JSON.parse(content) as unknown
+    const parsed = fileType === "jsonl" ? parseJsonLines(content) : (JSON.parse(content) as unknown)
     const records: unknown[] = Array.isArray(parsed)
       ? parsed
       : isObjectRecord(parsed) && Array.isArray(parsed.data)
@@ -82,39 +86,6 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value)
 }
 
-function parseCsvLine(line: string) {
-  const result: string[] = []
-  let current = ""
-  let inQuotes = false
-
-  for (let index = 0; index < line.length; index += 1) {
-    const char = line[index]
-    const next = line[index + 1]
-
-    if (char === '"' && inQuotes && next === '"') {
-      current += '"'
-      index += 1
-      continue
-    }
-
-    if (char === '"') {
-      inQuotes = !inQuotes
-      continue
-    }
-
-    if (char === "," && !inQuotes) {
-      result.push(current.trim())
-      current = ""
-      continue
-    }
-
-    current += char
-  }
-
-  result.push(current.trim())
-  return result
-}
-
 function inferType(values: unknown[]): DatasetColumn["type"] {
   const present = values.filter((value) => value !== undefined && value !== null && String(value).trim() !== "")
 
@@ -124,4 +95,24 @@ function inferType(values: unknown[]): DatasetColumn["type"] {
   if (present.every((value) => !Number.isNaN(Date.parse(String(value))) && /\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(String(value)))) return "date"
 
   return "string"
+}
+
+function parseCsvHeaders(content: string, delimiter: string) {
+  const rows = parseCsv(content, {
+    bom: true,
+    delimiter,
+    relax_column_count: true,
+    skip_empty_lines: true,
+    to_line: 1,
+    trim: true,
+  }) as string[][]
+  return rows[0] ?? []
+}
+
+function parseJsonLines(content: string) {
+  return content
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as unknown)
 }

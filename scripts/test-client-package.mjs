@@ -17,7 +17,7 @@ const tempDir = await mkdtemp(join(tmpdir(), "artifacta-client-"))
 const compiledPath = join(tempDir, "client.mjs")
 await writeFile(compiledPath, compiled)
 
-const { ArtifactaClient } = await import(`file://${compiledPath.replaceAll("\\", "/")}`)
+const { ArtifactaApiError, ArtifactaClient } = await import(`file://${compiledPath.replaceAll("\\", "/")}`)
 
 const calls = []
 globalThis.fetch = async (url, init = {}) => {
@@ -32,6 +32,20 @@ globalThis.fetch = async (url, init = {}) => {
 
   if (String(url).endsWith("/api/v1/projects/proj_1/datasets/ds_1/sync/trigger")) {
     return Response.json({ job_id: "job_1", status: "queued" }, { status: 202 })
+  }
+
+  if (String(url).endsWith("/api/v1/datasets?source=manual")) {
+    return Response.json({ data: [] })
+  }
+
+  if (String(url).endsWith("/api/v1/projects/proj_1/datasets/ds_1/sync")) {
+    return Response.json({
+      enabled: true,
+      source_type: "presto",
+      source_config: { mock_rows: [] },
+      update_mode: "full",
+      schedule: "0 8 * * *",
+    })
   }
 
   return Response.json({ error: { code: "NOT_FOUND", message: "No route" } }, { status: 404 })
@@ -52,8 +66,24 @@ assert.deepEqual(queued, { job_id: "job_1", status: "queued" })
 assert.equal(calls[1].url, "https://artifacta.test/api/v1/projects/proj_1/datasets/ds_1/sync/trigger")
 assert.equal(calls[1].init.method, "POST")
 
+const datasets = await client.listDatasets({ source: "manual" })
+assert.deepEqual(datasets, { data: [] })
+
+const syncConfig = await client.setSyncConfig({
+  projectId: "proj_1",
+  datasetId: "ds_1",
+  enabled: true,
+  sourceType: "presto",
+  sourceConfig: { mock_rows: [] },
+  schedule: "0 8 * * *",
+})
+assert.equal(syncConfig.source_type, "presto")
+
 globalThis.fetch = async () => Response.json({ error: { code: "NOPE", message: "Denied" } }, { status: 403 })
-await assert.rejects(
-  () => client.triggerSync("proj_1", "ds_1"),
-  /Artifacta request failed: 403/
-)
+await assert.rejects(async () => client.triggerSync("proj_1", "ds_1"), (error) => {
+  assert(error instanceof ArtifactaApiError)
+  assert.equal(error.status, 403)
+  assert.equal(error.code, "NOPE")
+  assert.equal(error.message, "Denied")
+  return true
+})
