@@ -1,5 +1,5 @@
 import type { Project, ProjectVisibility } from "@/lib/types"
-import { authenticateRequest } from "@/lib/server/auth"
+import { requireRequestAuth } from "@/lib/server/auth"
 import { canViewProject } from "@/lib/server/access"
 import { recordAudit } from "@/lib/server/audit"
 import { buildDatasetRecord } from "@/lib/server/dataset-records"
@@ -18,8 +18,8 @@ export const runtime = "nodejs"
 const visibilityValues = new Set(["private", "team", "public"])
 
 export async function GET(request: Request) {
-  const auth = await authenticateRequest(request)
-  if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
+  const auth = await requireRequestAuth(request, "projects:read")
+  if (auth instanceof Response) return auth
 
   const database = await readDatabase()
   const url = new URL(request.url)
@@ -71,8 +71,8 @@ export async function POST(request: Request) {
   const tooLarge = requestPayloadTooLarge(request)
   if (tooLarge) return tooLarge
 
-  const auth = await authenticateRequest(request)
-  if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
+  const auth = await requireRequestAuth(request, "projects:write")
+  if (auth instanceof Response) return auth
 
   const form = await request.formData().catch(() => null)
   if (!form) return apiError(400, "INVALID_REQUEST", "请求体必须是 multipart/form-data。")

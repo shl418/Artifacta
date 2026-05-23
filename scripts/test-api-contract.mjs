@@ -32,6 +32,7 @@ const requiredPaths = [
   "/api/v1/projects/{projectId}/datasets/{datasetId}/sync/status",
   "/api/v1/projects/{projectId}/datasets/{datasetId}/sync/history",
   "/api/v1/projects/{projectId}/datasets/{datasetId}/sync/trigger",
+  "/api/v1/projects/{projectId}/datasets/{datasetId}/sync/test",
   "/api/v1/projects/{projectId}/permissions",
   "/api/v1/projects/{projectId}/permissions/{userId}",
   "/api/v1/team/members",

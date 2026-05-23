@@ -142,6 +142,18 @@ The built-in remote URL checks validate the hostname and DNS answers before the 
 - Configure audit retention, webhook destinations, and observability for sync failures.
 - Keep `NODE_ENV=production` and serve only through HTTPS.
 
+## Migrating Artifacts To S3-Compatible Storage
+
+Use this path when moving from a single-node disk deployment to shared object storage:
+
+1. Configure `STORAGE_DRIVER=s3`, bucket credentials, and `DATA_DRIVER=postgres` (recommended) or keep SQLite for a single writer.
+2. Copy `UPLOAD_DIR/projects/**` into the bucket using your provider CLI, preserving the `projects/<projectId>/...` key layout.
+3. Start Artifacta with the new environment variables and verify one HTML preview, one ZIP asset route, and one dataset download.
+4. Keep the old `UPLOAD_DIR` volume read-only until you confirm sync jobs and uploads write to object storage.
+5. Update backup jobs to snapshot the bucket and metadata database instead of local upload paths.
+
+Artifacta reads and writes artifacts exclusively through `lib/server/object-storage.ts`, so no route-handler changes are required after migration.
+
 ## Suggested Growth Topology
 
 - Web: one or more Next.js app containers.

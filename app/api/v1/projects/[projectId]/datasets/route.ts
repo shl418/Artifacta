@@ -1,4 +1,4 @@
-import { authenticateRequest } from "@/lib/server/auth"
+import { requireRequestAuth } from "@/lib/server/auth"
 import { canEditProject, canViewProject } from "@/lib/server/access"
 import { recordAudit } from "@/lib/server/audit"
 import { buildDatasetRecord } from "@/lib/server/dataset-records"
@@ -15,7 +15,8 @@ type RouteContext = { params: Promise<{ projectId: string }> }
 
 export async function GET(request: Request, context: RouteContext) {
   const { projectId } = await context.params
-  const auth = await authenticateRequest(request)
+  const auth = await requireRequestAuth(request, "datasets:read")
+  if (auth instanceof Response) return auth
   const database = await readDatabase()
   const project = database.projects.find((candidate) => candidate.id === projectId)
 
@@ -33,8 +34,8 @@ export async function POST(request: Request, context: RouteContext) {
   if (tooLarge) return tooLarge
 
   const { projectId } = await context.params
-  const auth = await authenticateRequest(request)
-  if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
+  const auth = await requireRequestAuth(request, "datasets:write")
+  if (auth instanceof Response) return auth
 
   const database = await readDatabase()
   const project = database.projects.find((candidate) => candidate.id === projectId)

@@ -28,10 +28,22 @@ interface ApiKeyRecord {
   name: string
   prefix: string
   last4: string
+  scopes: string[]
   created_at: string
   expires_at: string | null
   last_used_at: string | null
 }
+
+const scopeOptions = [
+  { value: "projects:read", label: "读取项目" },
+  { value: "projects:write", label: "写入项目" },
+  { value: "datasets:read", label: "读取数据集" },
+  { value: "datasets:write", label: "写入数据集" },
+  { value: "sync:run", label: "触发同步" },
+  { value: "team:read", label: "读取团队" },
+  { value: "team:write", label: "管理团队" },
+  { value: "admin:read", label: "运维只读" },
+] as const
 
 const cliInstallExample = `# 仓库内开发者
 pnpm cli -- projects list
@@ -74,6 +86,7 @@ const apiExample = `curl -X POST http://localhost:3000/api/v1/projects \
 export default function ApiDocsPage() {
   const [apiKeys, setApiKeys] = useState<ApiKeyRecord[]>([])
   const [newKeyName, setNewKeyName] = useState("CI/CD Pipeline")
+  const [selectedScopes, setSelectedScopes] = useState<string[]>([])
   const [latestSecret, setLatestSecret] = useState("")
   const [error, setError] = useState("")
   const [pendingDelete, setPendingDelete] = useState<ApiKeyRecord | null>(null)
@@ -100,7 +113,10 @@ export default function ApiDocsPage() {
     const response = await fetch("/api/v1/api-keys", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newKeyName }),
+      body: JSON.stringify({
+        name: newKeyName,
+        scopes: selectedScopes.length > 0 ? selectedScopes : undefined,
+      }),
     })
     if (response.ok) {
       const payload = await response.json()
@@ -141,12 +157,37 @@ export default function ApiDocsPage() {
                   <CardDescription>创建 Bearer Token，用于 Coding Agent、CI/CD 和未来 CLI 调用 REST API。</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="flex gap-2">
-                    <Input value={newKeyName} onChange={(event) => setNewKeyName(event.target.value)} placeholder="Key 名称" />
-                    <Button onClick={createKey} disabled={!newKeyName.trim()}>
-                      <Plus className="h-4 w-4" />
-                      创建
-                    </Button>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex gap-2">
+                      <Input value={newKeyName} onChange={(event) => setNewKeyName(event.target.value)} placeholder="Key 名称" />
+                      <Button onClick={createKey} disabled={!newKeyName.trim()}>
+                        <Plus className="h-4 w-4" />
+                        创建
+                      </Button>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs text-muted-foreground">权限范围（留空表示全部权限）</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {scopeOptions.map((scope) => {
+                          const active = selectedScopes.includes(scope.value)
+                          return (
+                            <Button
+                              key={scope.value}
+                              type="button"
+                              size="sm"
+                              variant={active ? "default" : "outline"}
+                              onClick={() =>
+                                setSelectedScopes((current) =>
+                                  active ? current.filter((item) => item !== scope.value) : [...current, scope.value],
+                                )
+                              }
+                            >
+                              {scope.label}
+                            </Button>
+                          )
+                        })}
+                      </div>
+                    </div>
                   </div>
 
                   {error && (
@@ -184,7 +225,15 @@ export default function ApiDocsPage() {
                             <p className="text-sm font-medium text-foreground">{apiKey.name}</p>
                             <Badge variant="secondary" className="font-mono text-xs">{apiKey.prefix}...{apiKey.last4}</Badge>
                           </div>
-                          <p className="text-xs text-muted-foreground mt-1">创建于 {new Date(apiKey.created_at).toLocaleDateString("zh-CN")}</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            创建于 {new Date(apiKey.created_at).toLocaleDateString("zh-CN")}
+                            {apiKey.expires_at ? ` · 到期 ${new Date(apiKey.expires_at).toLocaleDateString("zh-CN")}` : ""}
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {(apiKey.scopes ?? ["*"]).map((scope) => (
+                              <Badge key={scope} variant="outline" className="text-[10px] font-mono">{scope}</Badge>
+                            ))}
+                          </div>
                         </div>
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => setPendingDelete(apiKey)}>
                           <Trash2 className="h-4 w-4" />

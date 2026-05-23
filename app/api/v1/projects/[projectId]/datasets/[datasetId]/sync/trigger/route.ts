@@ -1,4 +1,4 @@
-import { authenticateRequest } from "@/lib/server/auth"
+import { requireRequestAuth } from "@/lib/server/auth"
 import { canEditProject } from "@/lib/server/access"
 import { updateDatabase } from "@/lib/server/db"
 import { rateLimitResponse } from "@/lib/server/rate-limit"
@@ -14,8 +14,8 @@ export async function POST(request: Request, context: RouteContext) {
   if (limited) return limited
 
   const { projectId, datasetId } = await context.params
-  const auth = await authenticateRequest(request)
-  if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
+  const auth = await requireRequestAuth(request, "sync:run")
+  if (auth instanceof Response) return auth
 
   const result = await updateDatabase((mutable) => {
     const project = mutable.projects.find((candidate) => candidate.id === projectId)

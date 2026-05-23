@@ -36,6 +36,7 @@ interface ProjectDetail {
     sync_config: { enabled: boolean; source_type: string; last_sync_status: string | null; next_sync_at: string | null }
   }>
   permissions: Array<{ user_id: string; user_name: string; user_email: string; permission: string }>
+  recent_activity: Array<{ id: string; type: string; action: string; target: string; created_at: string; user?: { name: string } }>
 }
 
 export default function ProjectDetailPage() {
@@ -43,6 +44,8 @@ export default function ProjectDetailPage() {
   const [project, setProject] = useState<ProjectDetail | null>(null)
   const [versions, setVersions] = useState<Array<{ id: string; version: number; notes: string; created_at: string }>>([])
   const [error, setError] = useState("")
+  const [embedUrl, setEmbedUrl] = useState("")
+  const [actionMessage, setActionMessage] = useState("")
 
   const loadProject = useCallback(async () => {
     const [projectResponse, versionsResponse] = await Promise.all([
@@ -63,6 +66,32 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     loadProject().catch(() => setError("网络异常，无法加载项目详情。"))
   }, [loadProject])
+
+  const createEmbedLink = async () => {
+    const response = await fetch(`/api/v1/projects/${params.projectId}/embed-token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ expires_in_seconds: 3600 }),
+    })
+    const payload = await response.json().catch(() => null)
+    if (!response.ok) {
+      setActionMessage(payload?.error?.message ?? "无法创建嵌入链接。")
+      return
+    }
+    setEmbedUrl(payload.embed_url)
+    setActionMessage("嵌入链接已生成，1 小时内有效。")
+  }
+
+  const rollbackVersion = async (versionId: string) => {
+    const response = await fetch(`/api/v1/projects/${params.projectId}/versions/${versionId}/rollback`, { method: "POST" })
+    const payload = await response.json().catch(() => null)
+    if (!response.ok) {
+      setActionMessage(payload?.error?.message ?? "回滚失败。")
+      return
+    }
+    setActionMessage("看板已回滚到所选版本。")
+    await loadProject()
+  }
 
   const updateVisibility = async (visibility: Visibility) => {
     const response = await fetch(`/api/v1/projects/${params.projectId}`, {
@@ -110,8 +139,15 @@ export default function ProjectDetailPage() {
                     </div>
                     <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{project.description || "暂无描述"}</p>
                   </div>
+                  {actionMessage && <p className="text-sm text-muted-foreground">{actionMessage}</p>}
+                  {embedUrl && (
+                    <p className="text-xs text-muted-foreground break-all">
+                      嵌入链接：<a className="text-primary underline" href={embedUrl} target="_blank" rel="noreferrer">{embedUrl}</a>
+                    </p>
+                  )}
                   <div className="flex flex-wrap gap-2">
                     <Button asChild variant="outline" size="sm"><Link href={`/view/${project.id}`}>预览</Link></Button>
+                    <Button variant="outline" size="sm" onClick={createEmbedLink}>嵌入链接</Button>
                     <Select value={project.visibility} onValueChange={(value) => updateVisibility(value as Visibility)}>
                       <SelectTrigger className="h-9 w-32"><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -136,6 +172,7 @@ export default function ProjectDetailPage() {
                     <TabsTrigger value="datasets">数据集</TabsTrigger>
                     <TabsTrigger value="permissions">协作</TabsTrigger>
                     <TabsTrigger value="versions">版本</TabsTrigger>
+                    <TabsTrigger value="activity">动态</TabsTrigger>
                   </TabsList>
                   <TabsContent value="overview" className="mt-4">
                     <Card>
@@ -204,12 +241,33 @@ export default function ProjectDetailPage() {
                     )}
                     {versions.map((version) => (
                       <Card key={version.id}>
-                        <CardContent className="flex items-center justify-between p-4 text-sm">
+                        <CardContent className="flex flex-col gap-3 p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
                           <div>
                             <p className="font-medium">v{version.version}</p>
                             <p className="text-muted-foreground">{version.notes}</p>
                           </div>
-                          <p className="text-xs text-muted-foreground">{new Date(version.created_at).toLocaleString("zh-CN")}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs text-muted-foreground">{new Date(version.created_at).toLocaleString("zh-CN")}</p>
+                            <Button variant="outline" size="sm" onClick={() => rollbackVersion(version.id)}>回滚</Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </TabsContent>
+                  <TabsContent value="activity" className="mt-4 space-y-3">
+                    {(project.recent_activity ?? []).length === 0 && (
+                      <Card>
+                        <CardContent className="p-6 text-sm text-muted-foreground">还没有项目相关动态。</CardContent>
+                      </Card>
+                    )}
+                    {(project.recent_activity ?? []).map((item) => (
+                      <Card key={item.id}>
+                        <CardContent className="flex items-center justify-between p-4 text-sm">
+                          <div>
+                            <p className="font-medium">{item.action}</p>
+                            <p className="text-muted-foreground">{item.target}</p>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{new Date(item.created_at).toLocaleString("zh-CN")}</p>
                         </CardContent>
                       </Card>
                     ))}

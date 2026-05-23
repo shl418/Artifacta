@@ -35,7 +35,7 @@ const mainNavigation = [
   { name: "数据集", href: "/datasets", icon: Database },
 ]
 
-const settingsNavigation = [
+const baseSettingsNavigation = [
   { name: "基本设置", href: "/settings" },
   { name: "团队成员", href: "/settings/team" },
   { name: "权限管理", href: "/settings/permissions" },
@@ -49,6 +49,9 @@ export function Sidebar() {
   const [user, setUser] = useState<{ name: string; role: string; initials: string } | null>(null)
 
   const isSettingsActive = pathname.startsWith("/settings")
+  const settingsNavigation = user?.role === "admin"
+    ? [...baseSettingsNavigation, { name: "运维", href: "/settings/operations" }]
+    : baseSettingsNavigation
 
   useEffect(() => {
     fetch("/api/v1/auth/me")

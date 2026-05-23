@@ -137,6 +137,7 @@ export interface ApiKey {
   prefix: string
   last4: string
   keyHash: string
+  scopes?: string[]
   createdAt: string
   updatedAt: string
   expiresAt: string | null

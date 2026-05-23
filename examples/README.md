@@ -4,6 +4,8 @@
 - `zip-dashboard/`: a multi-file dashboard. Zip the folder contents so `index.html` is at the bundle root.
 - `datasets/sales.csv` and `datasets/growth.json`: small files for dataset preview and schema inspection.
 - `sync/mock-rows.json`: sync config for `artifacta datasets sync set --config-file`.
+- `sync/url-source.json`: remote URL fetch example (requires `SYNC_URL_ALLOWLIST` in production).
+- `sync/local-file-source.json`: local file refresh example (requires `SYNC_LOCAL_BASE_DIR` in production).
 - `publish-example.sh`: repo-local CLI upload example.
 
 ```bash

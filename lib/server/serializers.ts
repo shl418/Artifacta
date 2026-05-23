@@ -62,12 +62,25 @@ export function serializeProject(database: Database, project: Project) {
 }
 
 export function serializeProjectDetail(database: Database, project: Project) {
+  const datasetNames = new Set(
+    database.datasets.filter((dataset) => dataset.projectId === project.id).map((dataset) => dataset.name)
+  )
+
   return {
     ...serializeProject(database, project),
     datasets: database.datasets.filter((dataset) => dataset.projectId === project.id).map(serializeDataset),
     permissions: database.projectMembers
       .filter((member) => member.projectId === project.id)
       .map((member) => serializeProjectMember(database, member)),
+    recent_activity: database.activities
+      .filter(
+        (activity) =>
+          activity.organizationId === project.organizationId &&
+          (activity.target === project.name || datasetNames.has(activity.target))
+      )
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+      .slice(0, 20)
+      .map((activity) => serializeActivity(database, activity)),
   }
 }
 

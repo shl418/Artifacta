@@ -48,6 +48,7 @@ interface DatasetSummary {
     schedule: string | null
     last_sync_status: "pending" | "running" | "success" | "failed" | null
     last_sync_at: string | null
+    next_sync_at: string | null
   }
 }
 
@@ -122,6 +123,14 @@ export default function DatasetsPage() {
     }
     setQueuedSyncIds((current) => new Set(current).add(dataset.id))
     await loadDatasets()
+    window.setTimeout(() => {
+      loadDatasets().catch(() => null)
+      setQueuedSyncIds((current) => {
+        const next = new Set(current)
+        next.delete(dataset.id)
+        return next
+      })
+    }, 4000)
   }
 
   const deleteDataset = async () => {
@@ -227,6 +236,9 @@ export default function DatasetsPage() {
                               <span>{sourceInfo.label}</span>
                             </div>
                             <div className="text-xs text-muted-foreground mt-0.5">{dataset.sync_config.schedule || "手动"}</div>
+                            {dataset.sync_config.next_sync_at && (
+                              <div className="text-xs text-muted-foreground">下次：{new Date(dataset.sync_config.next_sync_at).toLocaleString("zh-CN")}</div>
+                            )}
                           </div>
 
                           <div className={cn("flex items-center gap-1.5 text-sm min-w-24", syncState.color)}>
@@ -309,6 +321,17 @@ function DatasetConfigDialog({ dataset, open, onOpenChange, onSaved }: { dataset
   const [dialogError, setDialogError] = useState("")
   const [preview, setPreview] = useState<DatasetPreviewPayload | null>(null)
   const [versions, setVersions] = useState<DatasetVersionPayload["data"]>([])
+  const [syncHistory, setSyncHistory] = useState<Array<{
+    sync_id: string
+    status: string
+    started_at: string
+    completed_at: string | null
+    rows_synced: number
+    error: string | null
+  }>>([])
+  const [syncJobs, setSyncJobs] = useState<Array<{ job_id: string; status: string; error: string | null; created_at: string }>>([])
+  const [testMessage, setTestMessage] = useState("")
+  const [isTesting, setIsTesting] = useState(false)
 
   useEffect(() => {
     if (!dataset) return
@@ -319,14 +342,41 @@ function DatasetConfigDialog({ dataset, open, onOpenChange, onSaved }: { dataset
     Promise.all([
       fetch(`/api/v1/projects/${dataset.project_id}/datasets/${dataset.id}/preview`).then((response) => response.json()),
       fetch(`/api/v1/projects/${dataset.project_id}/datasets/${dataset.id}/versions`).then((response) => response.json()),
+      fetch(`/api/v1/projects/${dataset.project_id}/datasets/${dataset.id}/sync/history?per_page=10`).then((response) => response.json()),
     ])
-      .then(([previewPayload, versionPayload]) => {
+      .then(([previewPayload, versionPayload, historyPayload]) => {
         if (previewPayload?.error) setDialogError(previewPayload.error.message)
         else setPreview(previewPayload)
         if (versionPayload?.data) setVersions(versionPayload.data)
+        setSyncHistory(historyPayload?.data ?? [])
+        setSyncJobs(historyPayload?.jobs ?? [])
       })
-      .catch(() => setDialogError("无法加载数据集预览。"))
+      .catch(() => setDialogError("无法加载数据集详情。"))
   }, [dataset])
+
+  const testSource = async () => {
+    if (!dataset) return
+    setIsTesting(true)
+    setTestMessage("")
+    let parsedConfig: Record<string, unknown> = {}
+    try {
+      parsedConfig = sourceConfig ? JSON.parse(sourceConfig) : {}
+    } catch {
+      parsedConfig = { raw: sourceConfig }
+    }
+    const response = await fetch(`/api/v1/projects/${dataset.project_id}/datasets/${dataset.id}/sync/test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source_type: sourceType, source_config: parsedConfig }),
+    })
+    const payload = await response.json().catch(() => null)
+    setIsTesting(false)
+    if (!response.ok) {
+      setTestMessage(payload?.error?.message ?? "同步来源测试失败。")
+      return
+    }
+    setTestMessage(payload.ok ? payload.message : payload.message)
+  }
 
   const save = async () => {
     if (!dataset) return
@@ -370,8 +420,9 @@ function DatasetConfigDialog({ dataset, open, onOpenChange, onSaved }: { dataset
           </Alert>
         )}
         <Tabs defaultValue="sync" className="py-4">
-          <TabsList>
+          <TabsList className="flex-wrap h-auto">
             <TabsTrigger value="sync">同步</TabsTrigger>
+            <TabsTrigger value="runs">运行记录</TabsTrigger>
             <TabsTrigger value="preview">预览</TabsTrigger>
             <TabsTrigger value="history">版本</TabsTrigger>
           </TabsList>
@@ -400,8 +451,41 @@ function DatasetConfigDialog({ dataset, open, onOpenChange, onSaved }: { dataset
                 <Label>来源配置 JSON</Label>
                 <Textarea className="font-mono text-sm" rows={6} value={sourceConfig} onChange={(event) => setSourceConfig(event.target.value)} />
               </div>
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" size="sm" disabled={isTesting} onClick={testSource}>
+                    {isTesting ? <Loader2 className="h-4 w-4 animate-spin" /> : "测试来源"}
+                  </Button>
+                </div>
+                {testMessage && <p className="text-sm text-muted-foreground">{testMessage}</p>}
               </>
             )}
+          </TabsContent>
+          <TabsContent value="runs" className="pt-4 space-y-4">
+            {syncJobs.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium">队列任务</p>
+                {syncJobs.map((job) => (
+                  <div key={job.job_id} className="flex items-center justify-between rounded-lg border p-3 text-sm">
+                    <span>{job.status}</span>
+                    <span className="text-xs text-muted-foreground">{new Date(job.created_at).toLocaleString("zh-CN")}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="space-y-2">
+              <p className="text-sm font-medium">同步历史</p>
+              {syncHistory.length === 0 && <p className="text-sm text-muted-foreground">还没有同步运行记录。</p>}
+              {syncHistory.map((run) => (
+                <div key={run.sync_id} className="rounded-lg border p-3 text-sm space-y-1">
+                  <div className="flex items-center justify-between">
+                    <Badge variant={run.status === "success" ? "secondary" : run.status === "failed" ? "destructive" : "outline"}>{run.status}</Badge>
+                    <span className="text-xs text-muted-foreground">{new Date(run.started_at).toLocaleString("zh-CN")}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">同步 {run.rows_synced} 行</p>
+                  {run.error && <p className="text-xs text-destructive">{run.error}</p>}
+                </div>
+              ))}
+            </div>
           </TabsContent>
           <TabsContent value="preview" className="pt-4">
             {preview?.parsed === false && <p className="text-sm text-muted-foreground">{preview.message}</p>}

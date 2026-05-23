@@ -10,7 +10,7 @@ This file is the maintenance checklist for keeping code and documentation in syn
 | Project management surface | `app/projects/[projectId]/page.tsx` | `README.md`, `docs/API.md` |
 | Dashboard preview | `app/view/[projectId]/page.tsx`, `app/api/v1/projects/[projectId]/html/render/route.ts`, `app/api/v1/projects/[projectId]/html/[...assetPath]/route.ts` | `docs/API.md`, `docs/DEPLOYMENT.md` |
 | API key and CLI onboarding | `app/settings/api/page.tsx`, `app/api/v1/api-keys/**`, `packages/cli/bin/artifacta.mjs` | `docs/API.md`, `docs/ONBOARDING.md`, `docs/ONBOARDING.zh-CN.md`, `packages/cli/README.md` |
-| Team and project permissions | `app/settings/team/page.tsx`, `app/settings/permissions/page.tsx`, `app/api/v1/team/**`, `app/api/v1/projects/[projectId]/permissions/**` | `docs/API.md`, `docs/PRODUCT.md` |
+| Team and project permissions | `app/settings/team/page.tsx`, `app/settings/permissions/page.tsx`, `app/settings/operations/page.tsx`, `app/api/v1/team/**`, `app/api/v1/projects/[projectId]/permissions/**`, `app/api/v1/webhooks/**`, `app/api/v1/audit-logs` | `docs/API.md`, `docs/PRODUCT.md` |
 
 ## API Routes
 
@@ -24,10 +24,10 @@ This file is the maintenance checklist for keeping code and documentation in syn
 | Upload sessions | `POST /api/v1/upload-sessions` | Used by the Web upload flow to inspect ZIP bundles before committing them. |
 | Folders | `GET/POST /api/v1/folders`, `PATCH/DELETE /api/v1/folders/:folderId` | Deleting a folder moves projects to root or `move_to`. |
 | Datasets | `GET /api/v1/datasets`, `GET/POST /api/v1/projects/:projectId/datasets`, `GET/PUT/DELETE /api/v1/projects/:projectId/datasets/:datasetId`, `GET /api/v1/projects/:projectId/datasets/:datasetId/preview`, `GET /api/v1/projects/:projectId/datasets/:datasetId/versions` | CSV/TSV/JSON/JSONL get schema and sample preview; XLSX and other files are stored without structured parsing. |
-| Dataset sync | `GET/PUT /api/v1/projects/:projectId/datasets/:datasetId/sync`, `POST /api/v1/projects/:projectId/datasets/:datasetId/sync/trigger`, `GET /api/v1/projects/:projectId/datasets/:datasetId/sync/status`, `GET /api/v1/projects/:projectId/datasets/:datasetId/sync/history`, `POST /api/v1/sync/jobs/claim` | Worker executes local file, upload path, URL, and `mock_rows` sources. |
+| Dataset sync | `GET/PUT /api/v1/projects/:projectId/datasets/:datasetId/sync`, `POST /api/v1/projects/:projectId/datasets/:datasetId/sync/test`, `POST /api/v1/projects/:projectId/datasets/:datasetId/sync/trigger`, `GET /api/v1/projects/:projectId/datasets/:datasetId/sync/status`, `GET /api/v1/projects/:projectId/datasets/:datasetId/sync/history`, `POST /api/v1/sync/jobs/claim` | Worker executes local file, upload path, URL, S3/COS objects, Presto/Trino queries, and `mock_rows` sources. |
 | Permissions | `GET/POST /api/v1/projects/:projectId/permissions`, `PATCH/DELETE /api/v1/projects/:projectId/permissions/:userId` | Project member permissions are `view` or `edit`. |
 | Team | `GET/POST /api/v1/team/members`, `PATCH/DELETE /api/v1/team/members/:userId`, `POST /api/v1/team/invitations` | Admin-only writes. |
-| API keys | `GET/POST /api/v1/api-keys`, `DELETE /api/v1/api-keys/:keyId` | Secret value is returned only on create. |
+| API keys | `GET/POST /api/v1/api-keys`, `DELETE /api/v1/api-keys/:keyId` | Secret value is returned only on create. Optional `scopes` restrict API key access. |
 | Stats | `GET /api/v1/stats` | Returns summary counts plus recent and popular projects. |
 | Webhooks and audit logs | `GET/POST /api/v1/webhooks`, `PATCH/DELETE /api/v1/webhooks/:webhookId`, `GET /api/v1/audit-logs` | Admin-only operator endpoints. |
 

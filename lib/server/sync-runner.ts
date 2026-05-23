@@ -136,6 +136,28 @@ async function loadDatasetSource(dataset: Dataset): Promise<LoadedDatasetSource 
   return null
 }
 
+export async function probeDatasetSyncSource(dataset: Dataset) {
+  if (!dataset.syncConfig.enabled || dataset.syncConfig.sourceType === "manual") {
+    return { ok: false as const, message: "同步未启用或来源为手动上传。" }
+  }
+
+  try {
+    const source = await loadDatasetSource(dataset)
+    if (!source) return { ok: false as const, message: "未找到可执行的同步来源配置。" }
+    return {
+      ok: true as const,
+      message: "同步来源可用。",
+      bytes: source.buffer.byteLength,
+      rows_preview: source.rowsSynced ?? null,
+    }
+  } catch (error) {
+    return {
+      ok: false as const,
+      message: error instanceof Error ? error.message : "同步来源测试失败。",
+    }
+  }
+}
+
 async function loadObjectStorageSource(config: Record<string, unknown>): Promise<LoadedDatasetSource | null> {
   const bucket = firstString(config, ["bucket", "s3_bucket", "cos_bucket"])
   const key = firstString(config, ["key", "object_key", "s3_key", "cos_key"])

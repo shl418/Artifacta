@@ -1,4 +1,4 @@
-import { authenticateRequest } from "@/lib/server/auth"
+import { requireRequestAuth } from "@/lib/server/auth"
 import { canEditProject } from "@/lib/server/access"
 import { recordAudit } from "@/lib/server/audit"
 import { addActivity, now, readDatabase, updateDatabase } from "@/lib/server/db"
@@ -22,8 +22,8 @@ export async function PUT(request: Request, context: RouteContext) {
   if (tooLarge) return tooLarge
 
   const { projectId } = await context.params
-  const auth = await authenticateRequest(request)
-  if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
+  const auth = await requireRequestAuth(request, "projects:write")
+  if (auth instanceof Response) return auth
 
   const database = await readDatabase()
   const project = database.projects.find((candidate) => candidate.id === projectId)

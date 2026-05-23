@@ -23,6 +23,10 @@ const calls = []
 globalThis.fetch = async (url, init = {}) => {
   calls.push({ url: String(url), init })
 
+  if (String(url).endsWith("/api/v1/projects") && init.method === "POST") {
+    return Response.json({ id: "proj_new", name: "Uploaded", visibility: "team" })
+  }
+
   if (String(url).endsWith("/api/v1/projects")) {
     return Response.json({
       data: [{ id: "proj_1", name: "Demo", visibility: "team", preview_url: "/view/proj_1" }],
@@ -46,6 +50,10 @@ globalThis.fetch = async (url, init = {}) => {
       update_mode: "full",
       schedule: "0 8 * * *",
     })
+  }
+
+  if (String(url).endsWith("/api/v1/projects/proj_1/html") && init.method === "PUT") {
+    return Response.json({ id: "proj_1", name: "Updated HTML" })
   }
 
   return Response.json({ error: { code: "NOT_FOUND", message: "No route" } }, { status: 404 })
@@ -78,6 +86,18 @@ const syncConfig = await client.setSyncConfig({
   schedule: "0 8 * * *",
 })
 assert.equal(syncConfig.source_type, "presto")
+
+const uploaded = await client.uploadProject({
+  name: "Smoke",
+  htmlFile: new Blob(["<html></html>"], { type: "text/html" }),
+  htmlFileName: "index.html",
+})
+assert.equal(uploaded.id, "proj_new")
+assert(calls.some((call) => call.init.method === "POST" && call.url.endsWith("/api/v1/projects")))
+
+const updated = await client.updateHtml("proj_1", new Blob(["<html></html>"], { type: "text/html" }), "index.html")
+assert.equal(updated.id, "proj_1")
+assert(calls.some((call) => call.init.method === "PUT" && call.url.endsWith("/api/v1/projects/proj_1/html")))
 
 globalThis.fetch = async () => Response.json({ error: { code: "NOPE", message: "Denied" } }, { status: 403 })
 await assert.rejects(async () => client.triggerSync("proj_1", "ds_1"), (error) => {
