@@ -9,4 +9,5 @@
 - Added Postgres metadata, S3-compatible artifact storage, OIDC login entry points, embed tokens, and S3/COS plus Presto/Trino sync connector branches.
 - Marked `docs/PLAN.md` as archived and promoted the manifest v1 protocol contract from README and onboarding docs.
 - Wired unit tests for CSV parsing, rate limiting, embed tokens, and version history into `pnpm test:unit`, and added a CI smoke job for end-to-end API flows.
+- Enforced upload `Content-Length` limits via `requestPayloadTooLarge`, rate-limited API key creation, and improved overview/preview responsive UX with empty and retry states.
 

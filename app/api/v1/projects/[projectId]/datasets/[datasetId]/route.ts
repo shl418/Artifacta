@@ -4,6 +4,7 @@ import { recordAudit } from "@/lib/server/audit"
 import { inspectDataset } from "@/lib/server/datasets"
 import { addActivity, now, readDatabase, updateDatabase } from "@/lib/server/db"
 import { rateLimitResponse } from "@/lib/server/rate-limit"
+import { requestPayloadTooLarge } from "@/lib/server/request-size"
 import { apiError, noContent, ok } from "@/lib/server/responses"
 import { serializeDataset } from "@/lib/server/serializers"
 import { removeDatasetArtifacts, replaceDatasetArtifact, sanitizeFileName } from "@/lib/server/storage"
@@ -16,6 +17,9 @@ type RouteContext = { params: Promise<{ projectId: string; datasetId: string }> 
 export async function PUT(request: Request, context: RouteContext) {
   const limited = rateLimitResponse(request, "dataset-upload", 60)
   if (limited) return limited
+
+  const tooLarge = requestPayloadTooLarge(request)
+  if (tooLarge) return tooLarge
 
   const { projectId, datasetId } = await context.params
   const auth = await authenticateRequest(request)

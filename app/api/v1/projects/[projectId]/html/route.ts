@@ -3,6 +3,7 @@ import { canEditProject } from "@/lib/server/access"
 import { recordAudit } from "@/lib/server/audit"
 import { addActivity, now, readDatabase, updateDatabase } from "@/lib/server/db"
 import { rateLimitResponse } from "@/lib/server/rate-limit"
+import { requestPayloadTooLarge } from "@/lib/server/request-size"
 import { apiError, ok } from "@/lib/server/responses"
 import { serializeProjectDetail } from "@/lib/server/serializers"
 import { saveProjectArtifact } from "@/lib/server/storage"
@@ -16,6 +17,9 @@ type RouteContext = { params: Promise<{ projectId: string }> }
 export async function PUT(request: Request, context: RouteContext) {
   const limited = rateLimitResponse(request, "html-upload", 30)
   if (limited) return limited
+
+  const tooLarge = requestPayloadTooLarge(request)
+  if (tooLarge) return tooLarge
 
   const { projectId } = await context.params
   const auth = await authenticateRequest(request)

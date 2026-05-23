@@ -4,6 +4,7 @@ import { recordAudit } from "@/lib/server/audit"
 import { buildDatasetRecord } from "@/lib/server/dataset-records"
 import { addActivity, readDatabase, updateDatabase } from "@/lib/server/db"
 import { rateLimitResponse } from "@/lib/server/rate-limit"
+import { requestPayloadTooLarge } from "@/lib/server/request-size"
 import { apiError, created, ok } from "@/lib/server/responses"
 import { serializeDataset } from "@/lib/server/serializers"
 import { recordDatasetVersion } from "@/lib/server/versions"
@@ -27,6 +28,9 @@ export async function GET(request: Request, context: RouteContext) {
 export async function POST(request: Request, context: RouteContext) {
   const limited = rateLimitResponse(request, "dataset-upload", 60)
   if (limited) return limited
+
+  const tooLarge = requestPayloadTooLarge(request)
+  if (tooLarge) return tooLarge
 
   const { projectId } = await context.params
   const auth = await authenticateRequest(request)

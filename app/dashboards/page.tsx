@@ -266,8 +266,8 @@ export default function DashboardsPage() {
               </Alert>
             )}
 
-            <div className="rounded-lg border border-border bg-card overflow-hidden">
-              <Table>
+            <div className="rounded-lg border border-border bg-card overflow-hidden overflow-x-auto">
+              <Table className="min-w-[720px]">
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
                     <TableHead className="w-[40%]">名称</TableHead>

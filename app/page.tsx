@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
@@ -9,10 +9,13 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 import {
+  AlertCircle,
   ArrowRight,
   Clock,
   Database,
@@ -20,7 +23,9 @@ import {
   FileBarChart,
   Globe,
   Lock,
+  RefreshCw,
   TrendingUp,
+  Upload,
   Users,
 } from "lucide-react"
 
@@ -55,13 +60,26 @@ const permissionConfig = {
 export default function HomePage() {
   const [payload, setPayload] = useState<OverviewPayload | null>(null)
   const [activeTab, setActiveTab] = useState("recent")
+  const [error, setError] = useState("")
+
+  const loadOverview = useCallback(async () => {
+    const response = await fetch("/api/v1/stats")
+    const nextPayload = await response.json().catch(() => null)
+    if (!response.ok) {
+      setError(nextPayload?.error?.message ?? "无法加载概览数据。")
+      setPayload(null)
+      return
+    }
+    setError("")
+    setPayload(nextPayload)
+  }, [])
 
   useEffect(() => {
-    fetch("/api/v1/stats")
-      .then((response) => (response.ok ? response.json() : null))
-      .then(setPayload)
-      .catch(() => setPayload(null))
-  }, [])
+    loadOverview().catch(() => {
+      setPayload(null)
+      setError("网络异常，无法加载概览数据。")
+    })
+  }, [loadOverview])
 
   const projects = activeTab === "recent" ? payload?.recent_projects ?? [] : payload?.popular_projects ?? []
   const stats = [
@@ -84,8 +102,22 @@ export default function HomePage() {
               ))}
             </div>
 
+            {error && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>概览加载失败</AlertTitle>
+                <AlertDescription>
+                  <p>{error}</p>
+                  <Button variant="outline" size="sm" className="mt-2" onClick={loadOverview}>
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    重试
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
+
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <TabsList className="bg-secondary/50">
                   <TabsTrigger value="recent" className="gap-2">
                     <Clock className="h-4 w-4" />
@@ -105,8 +137,22 @@ export default function HomePage() {
               </div>
 
               <TabsContent value={activeTab} className="mt-3">
+                {!error && projects.length === 0 && (
+                  <Empty className="border py-16">
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon"><FileBarChart /></EmptyMedia>
+                      <EmptyTitle>还没有看板</EmptyTitle>
+                      <EmptyDescription>上传第一个 HTML 或 ZIP 看板后，这里会显示最近更新和热门项目。</EmptyDescription>
+                    </EmptyHeader>
+                    <Button asChild className="mt-4">
+                      <Link href="/upload"><Upload className="h-4 w-4" />创建项目</Link>
+                    </Button>
+                  </Empty>
+                )}
+                {projects.length > 0 && (
                 <Card className="border-border bg-card p-0 overflow-hidden">
-                  <Table className="table-fixed">
+                  <div className="overflow-x-auto">
+                  <Table className="table-fixed min-w-[520px]">
                     <TableBody>
                       {projects.map((project) => {
                         const PermIcon = permissionConfig[project.visibility].icon
@@ -150,7 +196,9 @@ export default function HomePage() {
                       })}
                     </TableBody>
                   </Table>
+                  </div>
                 </Card>
+                )}
               </TabsContent>
             </Tabs>
           </div>

@@ -60,8 +60,8 @@ export default function ProjectPreviewPage() {
 
   return (
     <div className="fixed inset-0 z-50 bg-background flex flex-col">
-      <header className="h-12 border-b border-border bg-card flex items-center justify-between px-4 shrink-0">
-        <div className="flex items-center gap-3 min-w-0">
+      <header className="min-h-12 border-b border-border bg-card flex flex-wrap items-center justify-between gap-2 px-3 py-2 sm:px-4 shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           <Button variant="ghost" size="icon" onClick={() => router.push("/dashboards")} className="h-8 w-8">
             <X className="h-5 w-5" />
           </Button>
@@ -69,11 +69,11 @@ export default function ProjectPreviewPage() {
           <h1 className="font-medium text-sm truncate">{project.name}</h1>
           <Badge variant="outline" className="text-xs">{project.visibility}</Badge>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full sm:w-auto items-center justify-end gap-1.5 sm:gap-2">
           <Button
             variant="outline"
             size="sm"
-            className="h-8 gap-1.5 text-xs"
+            className="h-8 gap-1.5 text-xs px-2 sm:px-3"
             onClick={() => {
               const url = new URL(project.html_url, window.location.origin)
               url.searchParams.set("_t", String(Date.now()))
@@ -81,16 +81,16 @@ export default function ProjectPreviewPage() {
             }}
           >
             <RefreshCw className="h-3.5 w-3.5" />
-            刷新数据
+            <span className="hidden sm:inline">刷新数据</span>
           </Button>
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => router.push(`/projects/${project.id}`)}>
+          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs px-2 sm:px-3" onClick={() => router.push(`/projects/${project.id}`)}>
             <Settings2 className="h-3.5 w-3.5" />
-            设置
+            <span className="hidden sm:inline">设置</span>
           </Button>
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" asChild>
+          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs px-2 sm:px-3" asChild>
             <a href={project.html_url} target="_blank" rel="noreferrer">
               <ExternalLink className="h-3.5 w-3.5" />
-              新窗口
+              <span className="hidden sm:inline">新窗口</span>
             </a>
           </Button>
         </div>

@@ -6,6 +6,7 @@ import { buildDatasetRecord } from "@/lib/server/dataset-records"
 import { addActivity, now, readDatabase, updateDatabase } from "@/lib/server/db"
 import { apiError, created, ok, paginate, parsePagination } from "@/lib/server/responses"
 import { rateLimitResponse } from "@/lib/server/rate-limit"
+import { requestPayloadTooLarge } from "@/lib/server/request-size"
 import { serializeFolder, serializeProject, serializeProjectDetail } from "@/lib/server/serializers"
 import { commitUploadSession } from "@/lib/server/artifacts/upload-session"
 import { saveProjectArtifact } from "@/lib/server/storage"
@@ -66,6 +67,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const limited = rateLimitResponse(request, "projects-upload", 30)
   if (limited) return limited
+
+  const tooLarge = requestPayloadTooLarge(request)
+  if (tooLarge) return tooLarge
 
   const auth = await authenticateRequest(request)
   if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
