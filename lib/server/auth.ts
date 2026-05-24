@@ -1,7 +1,10 @@
 import crypto from "node:crypto"
 import type { User } from "@/lib/types"
-import { authSecret, sessionCookieName, sessionMaxAgeSeconds } from "@/lib/server/config"
+import { normalizeApiKeyScopes, type ApiKeyScope, apiKeyAllowsScope } from "@/lib/server/api-key-scopes"
+import { assertProductionSecrets, authSecret, sessionCookieName, sessionMaxAgeSeconds } from "@/lib/server/config"
 import { readDatabase, updateDatabase, now } from "@/lib/server/db"
+import { rateLimitResponse } from "@/lib/server/rate-limit"
+import { apiError } from "@/lib/server/responses"
 
 interface SessionPayload {
   userId: string
@@ -12,9 +15,19 @@ export interface AuthContext {
   user: User
   authType: "session" | "api-key"
   apiKeyId?: string
+  apiKeyScopes?: ApiKeyScope[]
+}
+
+let pendingAuthRateLimit: Response | null = null
+
+export function takeAuthRateLimitResponse() {
+  const response = pendingAuthRateLimit
+  pendingAuthRateLimit = null
+  return response
 }
 
 export function createSessionToken(userId: string) {
+  assertProductionSecrets()
   const payload: SessionPayload = {
     userId,
     exp: Math.floor(Date.now() / 1000) + sessionMaxAgeSeconds,
@@ -25,6 +38,7 @@ export function createSessionToken(userId: string) {
 }
 
 export function verifySessionToken(token: string | undefined): SessionPayload | null {
+  assertProductionSecrets()
   if (!token) return null
 
   const [encoded, signature] = token.split(".")
@@ -52,6 +66,12 @@ export async function authenticateRequest(request: Request): Promise<AuthContext
 
     if (!apiKey || expired || !user || user.status !== "active") return null
 
+    const limited = rateLimitResponse(request, `api-key:${apiKey.id}`, 300)
+    if (limited) {
+      pendingAuthRateLimit = limited
+      return null
+    }
+
     await updateDatabase((mutable) => {
       const mutableKey = mutable.apiKeys.find((candidate) => candidate.id === apiKey.id)
       if (mutableKey) {
@@ -60,7 +80,12 @@ export async function authenticateRequest(request: Request): Promise<AuthContext
       }
     })
 
-    return { user, authType: "api-key", apiKeyId: apiKey.id }
+    return {
+      user,
+      authType: "api-key",
+      apiKeyId: apiKey.id,
+      apiKeyScopes: normalizeApiKeyScopes(apiKey.scopes),
+    }
   }
 
   const payload = verifySessionToken(getCookie(request.headers.get("cookie"), sessionCookieName))
@@ -108,6 +133,21 @@ export function createApiKeySecret() {
 
 function sign(value: string) {
   return crypto.createHmac("sha256", authSecret).update(value).digest("base64url")
+}
+
+export function assertApiKeyScope(auth: AuthContext, scope: ApiKeyScope) {
+  return apiKeyAllowsScope(auth, scope)
+}
+
+export async function requireRequestAuth(request: Request, scope?: ApiKeyScope): Promise<AuthContext | Response> {
+  const auth = await authenticateRequest(request)
+  const rateLimited = takeAuthRateLimitResponse()
+  if (rateLimited) return rateLimited
+  if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
+  if (scope && !apiKeyAllowsScope(auth, scope)) {
+    return apiError(403, "FORBIDDEN", "当前 API Key 没有执行此操作的权限。", { required_scope: scope })
+  }
+  return auth
 }
 
 export { sessionCookieName }

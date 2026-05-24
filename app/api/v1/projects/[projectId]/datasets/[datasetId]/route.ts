@@ -1,19 +1,29 @@
-import { authenticateRequest } from "@/lib/server/auth"
+import { authenticateRequest, requireRequestAuth } from "@/lib/server/auth"
 import { canEditProject, canViewProject } from "@/lib/server/access"
+import { recordAudit } from "@/lib/server/audit"
 import { inspectDataset } from "@/lib/server/datasets"
 import { addActivity, now, readDatabase, updateDatabase } from "@/lib/server/db"
+import { rateLimitResponse } from "@/lib/server/rate-limit"
+import { requestPayloadTooLarge } from "@/lib/server/request-size"
 import { apiError, noContent, ok } from "@/lib/server/responses"
 import { serializeDataset } from "@/lib/server/serializers"
 import { removeDatasetArtifacts, replaceDatasetArtifact, sanitizeFileName } from "@/lib/server/storage"
+import { recordDatasetVersion } from "@/lib/server/versions"
 
 export const runtime = "nodejs"
 
 type RouteContext = { params: Promise<{ projectId: string; datasetId: string }> }
 
 export async function PUT(request: Request, context: RouteContext) {
+  const limited = rateLimitResponse(request, "dataset-upload", 60)
+  if (limited) return limited
+
+  const tooLarge = requestPayloadTooLarge(request)
+  if (tooLarge) return tooLarge
+
   const { projectId, datasetId } = await context.params
-  const auth = await authenticateRequest(request)
-  if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
+  const auth = await requireRequestAuth(request, "datasets:write")
+  if (auth instanceof Response) return auth
 
   const database = await readDatabase()
   const project = database.projects.find((candidate) => candidate.id === projectId)
@@ -28,7 +38,11 @@ export async function PUT(request: Request, context: RouteContext) {
   if (!datasetFile) return apiError(400, "INVALID_REQUEST", "请上传 file。", { field: "file" })
 
   const fileName = sanitizeFileName(datasetFile.name)
-  const artifact = await replaceDatasetArtifact(dataset.filePath, datasetFile)
+  const artifact = await replaceDatasetArtifact(dataset.filePath, datasetFile).catch((error) => {
+    if (error instanceof Error) return error
+    return new Error("数据集保存失败。")
+  })
+  if (artifact instanceof Error) return apiError(400, "INVALID_DATASET", artifact.message, { field: "file" })
   const inspection = inspectDataset(fileName, artifact.buffer)
   const updated = await updateDatabase((mutable) => {
     const record = mutable.datasets.find((candidate) => candidate.id === datasetId)!
@@ -49,6 +63,16 @@ export async function PUT(request: Request, context: RouteContext) {
       action: "更新了数据集",
       target: record.name,
     })
+    recordDatasetVersion(mutable, record, auth.user.id)
+    recordAudit(mutable, {
+      organizationId: auth.user.organizationId,
+      actorUserId: auth.user.id,
+      action: "dataset.replace",
+      targetType: "dataset",
+      targetId: record.id,
+      summary: `Replaced dataset ${record.name}`,
+      metadata: { project_id: projectId, version: record.version },
+    })
     return record
   })
 
@@ -57,8 +81,8 @@ export async function PUT(request: Request, context: RouteContext) {
 
 export async function DELETE(request: Request, context: RouteContext) {
   const { projectId, datasetId } = await context.params
-  const auth = await authenticateRequest(request)
-  if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
+  const auth = await requireRequestAuth(request, "datasets:write")
+  if (auth instanceof Response) return auth
 
   const database = await readDatabase()
   const project = database.projects.find((candidate) => candidate.id === projectId)
@@ -72,6 +96,15 @@ export async function DELETE(request: Request, context: RouteContext) {
     mutable.syncHistory = mutable.syncHistory.filter((history) => history.datasetId !== datasetId)
     const record = mutable.projects.find((candidate) => candidate.id === projectId)
     if (record) record.updatedAt = now()
+    recordAudit(mutable, {
+      organizationId: auth.user.organizationId,
+      actorUserId: auth.user.id,
+      action: "dataset.delete",
+      targetType: "dataset",
+      targetId: datasetId,
+      summary: `Deleted dataset ${dataset.name}`,
+      metadata: { project_id: projectId },
+    })
   })
 
   await removeDatasetArtifacts(projectId, datasetId)

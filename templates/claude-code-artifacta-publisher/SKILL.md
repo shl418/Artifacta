@@ -35,9 +35,9 @@ This skill is specifically for the zero-repo case:
 
 Prefer these command paths in order:
 
-1. `artifacta ...` when the standalone CLI is already installed
-2. `pnpm cli -- ...` when the current working directory is the Artifacta repository
-3. `npx @artifacta/cli@latest ...` after the maintainer has published the npm package
+1. `npx @artifacta/cli@latest ...` for zero-repo users (published on npm)
+2. `artifacta ...` when `@artifacta/cli` is installed globally
+3. `pnpm cli -- ...` when the current working directory is the Artifacta repository
 
 ## Command Templates
 

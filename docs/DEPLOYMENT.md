@@ -1,6 +1,6 @@
 # Deployment Guide
 
-Artifacta can run as a single Next.js service for small self-hosted teams. The current open-source shape keeps metadata and uploaded artifacts local, with a SQLite adapter available when you want a more realistic persistent setup.
+Artifacta can run as a single Next.js service for small self-hosted teams. The open-source build supports local JSON, SQLite, and Postgres metadata, plus local disk or S3-compatible artifact storage.
 
 ## Local Production Run
 
@@ -26,12 +26,26 @@ UPLOAD_DIR=/var/lib/Artifacta/uploads
 
 Mount `/var/lib/Artifacta` to durable storage. The app stores uploaded dashboard HTML, extracted ZIP assets, uploaded datasets, and SQLite metadata there.
 
+For multi-instance deployments, use Postgres and S3-compatible storage:
+
+```bash
+DATA_DRIVER=postgres
+POSTGRES_URL=postgres://artifacta:secret@postgres:5432/artifacta
+STORAGE_DRIVER=s3
+S3_BUCKET=artifacta-artifacts
+S3_REGION=auto
+S3_ENDPOINT=https://s3.example.com
+S3_ACCESS_KEY_ID=...
+S3_SECRET_ACCESS_KEY=...
+```
+
 ## Runtime Data
 
 | Path | Purpose |
 | --- | --- |
 | `DATA_DIR/artifacta.json` | JSON metadata database when `DATA_DRIVER=json`. |
 | `SQLITE_PATH` | SQLite metadata database when `DATA_DRIVER=sqlite`. |
+| `POSTGRES_URL` / `DATABASE_URL` | Postgres metadata database when `DATA_DRIVER=postgres`. |
 | `UPLOAD_DIR/projects/:projectId/index.html` | Single-file dashboard uploads. |
 | `UPLOAD_DIR/projects/:projectId/bundle/...` | Extracted ZIP dashboard assets. |
 | `UPLOAD_DIR/projects/:projectId/datasets/...` | Uploaded or synced dataset files. |
@@ -44,10 +58,15 @@ Do not store these paths in an ephemeral container filesystem unless you are onl
 | --- | --- | --- |
 | `NEXT_PUBLIC_APP_URL` | Yes | Public URL used to generate preview and API URLs. |
 | `AUTH_SECRET` | Yes | Long random string for signing sessions. Rotating it invalidates existing sessions. |
-| `DATA_DRIVER` | Recommended | `json` for demos, `sqlite` for persistent self-hosting. |
+| `DATA_DRIVER` | Recommended | `json` for demos, `sqlite` for single-node self-hosting, `postgres` for multi-instance metadata. |
 | `DATA_DIR` | Recommended | Persistent metadata directory. |
 | `SQLITE_PATH` | When SQLite | Path to the SQLite file. Defaults inside `DATA_DIR`. |
 | `UPLOAD_DIR` | Recommended | Persistent uploaded artifact directory. |
+| `STORAGE_DRIVER` | Recommended | `local` or `s3`. |
+| `S3_BUCKET`, `S3_REGION`, `S3_ENDPOINT` | When S3 | S3/COS/R2/MinIO-compatible artifact storage. |
+| `ARTIFACTA_MAX_ARTIFACT_BYTES`, `ARTIFACTA_MAX_DATASET_BYTES` | Recommended | Upload limits surfaced in API errors and the UI. |
+| `ARTIFACTA_RATE_LIMIT_WINDOW_MS`, `ARTIFACTA_RATE_LIMIT_MAX` | Recommended | In-process rate limiting for auth, uploads, and sync triggers. |
+| `OIDC_ISSUER_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | Optional | OIDC login configuration. |
 | `SYNC_URL_ALLOWLIST` | Recommended for sync | Comma-separated host allowlist for dataset sync URL sources. Leave empty to disable remote URL sync in shared production deployments. |
 | `SYNC_LOCAL_BASE_DIR` | Recommended for sync | Base directory for local file sync sources. Paths outside this directory are rejected. Leave empty only for local development. |
 | `ARTIFACTA_API_KEY` | Worker only | API key used by `scripts/sync-worker.mjs`. |
@@ -90,7 +109,7 @@ ARTIFACTA_API_KEY=art_... \
 node scripts/sync-worker.mjs --interval 300
 ```
 
-Current sync runners support local files, already-uploaded artifact paths, URL fetches, and `mock_rows`. Add COS/S3 and Presto/Trino clients behind `lib/server/sync-runner.ts` when you are ready for real external data connectors.
+Current sync runners support local files, already-uploaded artifact paths, URL fetches, `mock_rows`, S3/COS objects, and Presto/Trino HTTP queries.
 
 ## Dataset Sync Source Safety
 
@@ -114,14 +133,26 @@ The built-in remote URL checks validate the hostname and DNS answers before the 
 
 ## Production Hardening Checklist
 
-- Replace development email login with OIDC/SAML SSO.
-- Add Postgres metadata storage if you need multi-instance writes beyond SQLite.
-- Replace local artifact storage with S3/COS/R2/MinIO for multi-instance deployments.
+- Configure OIDC for shared deployments; add SAML if your identity provider requires it.
+- Use Postgres metadata storage for multi-instance writes beyond SQLite.
+- Use S3/COS/R2/MinIO artifact storage for multi-instance deployments.
 - Add backup jobs for SQLite and uploaded artifacts.
-- Add upload size limits and malware scanning if accepting files from many users.
+- Tune upload size limits and add malware scanning if accepting files from many users.
 - Run dashboard previews on a separate domain for stronger browser isolation.
-- Add audit retention, webhook notifications, and observability for sync failures.
+- Configure audit retention, webhook destinations, and observability for sync failures.
 - Keep `NODE_ENV=production` and serve only through HTTPS.
+
+## Migrating Artifacts To S3-Compatible Storage
+
+Use this path when moving from a single-node disk deployment to shared object storage:
+
+1. Configure `STORAGE_DRIVER=s3`, bucket credentials, and `DATA_DRIVER=postgres` (recommended) or keep SQLite for a single writer.
+2. Copy `UPLOAD_DIR/projects/**` into the bucket using your provider CLI, preserving the `projects/<projectId>/...` key layout.
+3. Start Artifacta with the new environment variables and verify one HTML preview, one ZIP asset route, and one dataset download.
+4. Keep the old `UPLOAD_DIR` volume read-only until you confirm sync jobs and uploads write to object storage.
+5. Update backup jobs to snapshot the bucket and metadata database instead of local upload paths.
+
+Artifacta reads and writes artifacts exclusively through `lib/server/object-storage.ts`, so no route-handler changes are required after migration.
 
 ## Suggested Growth Topology
 
@@ -129,4 +160,4 @@ The built-in remote URL checks validate the hostname and DNS answers before the 
 - Metadata: SQLite for single-node self-hosting, Postgres for multi-node deployments.
 - Artifacts: local volume for single-node, S3-compatible object storage for multi-node.
 - Worker: separate process using API key authentication.
-- Identity: enterprise OIDC/SAML provider.
+- Identity: enterprise OIDC provider, with SAML as an extension point.

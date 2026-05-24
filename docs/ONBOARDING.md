@@ -9,6 +9,8 @@ They only need:
 - Claude Code or another local agent workflow
 - a way to generate HTML, ZIP, CSV, or JSON files locally
 
+For ZIP dashboards, use the stable bundle contract in `docs/protocol/manifest-v1.md`.
+
 ## What "No Local Project" Means
 
 There is no requirement to create an Artifacta project locally first.
@@ -25,13 +27,7 @@ In the Artifacta web app:
 
 ## Step 2: Install the CLI
 
-Repo contributors can use:
-
-```bash
-pnpm cli -- --help
-```
-
-External users should use the standalone published package after release:
+Use the published npm package (default path for zero-repo users):
 
 ```bash
 npx @artifacta/cli@latest --help
@@ -41,9 +37,14 @@ Or install it globally:
 
 ```bash
 npm install -g @artifacta/cli
+artifacta --help
 ```
 
-If npm publish has not happened yet, a maintainer can distribute the packed tarball described in `docs/CLI-RELEASE.md`.
+If you are developing inside the Artifacta repository, you can also use:
+
+```bash
+pnpm cli -- --help
+```
 
 ## Step 3: Export Environment Variables
 

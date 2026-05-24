@@ -7,28 +7,52 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Check, Code2, Copy, Key, Plus, Terminal, Trash2 } from "lucide-react"
+import { AlertCircle, Check, Code2, Copy, Key, Plus, Terminal, Trash2 } from "lucide-react"
 
 interface ApiKeyRecord {
   id: string
   name: string
   prefix: string
   last4: string
+  scopes: string[]
   created_at: string
   expires_at: string | null
   last_used_at: string | null
 }
 
-const cliInstallExample = `# 仓库内开发者
-pnpm cli -- projects list
+const scopeOptions = [
+  { value: "projects:read", label: "读取项目" },
+  { value: "projects:write", label: "写入项目" },
+  { value: "datasets:read", label: "读取数据集" },
+  { value: "datasets:write", label: "写入数据集" },
+  { value: "sync:run", label: "触发同步" },
+  { value: "team:read", label: "读取团队" },
+  { value: "team:write", label: "管理团队" },
+  { value: "admin:read", label: "运维只读" },
+] as const
 
-# 独立发布包发布后，外部用户可直接使用
+const cliInstallExample = `# 外部用户（推荐）
 npx @artifacta/cli@latest projects list
 
 # 或全局安装
-npm install -g @artifacta/cli`
+npm install -g @artifacta/cli
+
+# 仓库内开发者
+pnpm cli -- projects list`
 
 const cliExample = `# 创建项目并上传 HTML + 数据文件
 artifacta projects upload \
@@ -62,35 +86,57 @@ const apiExample = `curl -X POST http://localhost:3000/api/v1/projects \
 export default function ApiDocsPage() {
   const [apiKeys, setApiKeys] = useState<ApiKeyRecord[]>([])
   const [newKeyName, setNewKeyName] = useState("CI/CD Pipeline")
+  const [selectedScopes, setSelectedScopes] = useState<string[]>([])
   const [latestSecret, setLatestSecret] = useState("")
+  const [error, setError] = useState("")
+  const [pendingDelete, setPendingDelete] = useState<ApiKeyRecord | null>(null)
 
   const loadKeys = async () => {
     const response = await fetch("/api/v1/api-keys")
-    if (response.ok) {
-      const payload = await response.json()
-      setApiKeys(payload.data)
+    const payload = await response.json().catch(() => null)
+    if (!response.ok) {
+      setError(payload?.error?.message ?? "无法加载 API Key。")
+      return
     }
+    setError("")
+    setApiKeys(payload.data)
   }
 
   useEffect(() => {
-    loadKeys().catch(() => setApiKeys([]))
+    loadKeys().catch(() => {
+      setApiKeys([])
+      setError("网络异常，无法加载 API Key。")
+    })
   }, [])
 
   const createKey = async () => {
     const response = await fetch("/api/v1/api-keys", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newKeyName }),
+      body: JSON.stringify({
+        name: newKeyName,
+        scopes: selectedScopes.length > 0 ? selectedScopes : undefined,
+      }),
     })
     if (response.ok) {
       const payload = await response.json()
       setLatestSecret(payload.key)
       await loadKeys()
+    } else {
+      const payload = await response.json().catch(() => null)
+      setError(payload?.error?.message ?? "创建 API Key 失败。")
     }
   }
 
-  const deleteKey = async (keyId: string) => {
-    await fetch(`/api/v1/api-keys/${keyId}`, { method: "DELETE" })
+  const deleteKey = async () => {
+    if (!pendingDelete) return
+    const response = await fetch(`/api/v1/api-keys/${pendingDelete.id}`, { method: "DELETE" })
+    setPendingDelete(null)
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null)
+      setError(payload?.error?.message ?? "删除 API Key 失败。")
+      return
+    }
     await loadKeys()
   }
 
@@ -111,13 +157,46 @@ export default function ApiDocsPage() {
                   <CardDescription>创建 Bearer Token，用于 Coding Agent、CI/CD 和未来 CLI 调用 REST API。</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="flex gap-2">
-                    <Input value={newKeyName} onChange={(event) => setNewKeyName(event.target.value)} placeholder="Key 名称" />
-                    <Button onClick={createKey} disabled={!newKeyName.trim()}>
-                      <Plus className="h-4 w-4" />
-                      创建
-                    </Button>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex gap-2">
+                      <Input value={newKeyName} onChange={(event) => setNewKeyName(event.target.value)} placeholder="Key 名称" />
+                      <Button onClick={createKey} disabled={!newKeyName.trim()}>
+                        <Plus className="h-4 w-4" />
+                        创建
+                      </Button>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs text-muted-foreground">权限范围（留空表示全部权限）</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {scopeOptions.map((scope) => {
+                          const active = selectedScopes.includes(scope.value)
+                          return (
+                            <Button
+                              key={scope.value}
+                              type="button"
+                              size="sm"
+                              variant={active ? "default" : "outline"}
+                              onClick={() =>
+                                setSelectedScopes((current) =>
+                                  active ? current.filter((item) => item !== scope.value) : [...current, scope.value],
+                                )
+                              }
+                            >
+                              {scope.label}
+                            </Button>
+                          )
+                        })}
+                      </div>
+                    </div>
                   </div>
+
+                  {error && (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertTitle>API Key 操作失败</AlertTitle>
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                  )}
 
                   {latestSecret && (
                     <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
@@ -130,6 +209,15 @@ export default function ApiDocsPage() {
                   )}
 
                   <div className="space-y-2">
+                    {apiKeys.length === 0 && (
+                      <Empty className="border py-10">
+                        <EmptyHeader>
+                          <EmptyMedia variant="icon"><Key /></EmptyMedia>
+                          <EmptyTitle>还没有 API Key</EmptyTitle>
+                          <EmptyDescription>创建后可用于 CLI、CI、同步 Worker 和外部 agent。</EmptyDescription>
+                        </EmptyHeader>
+                      </Empty>
+                    )}
                     {apiKeys.map((apiKey) => (
                       <div key={apiKey.id} className="flex items-center justify-between rounded-lg bg-secondary/30 p-3">
                         <div>
@@ -137,9 +225,17 @@ export default function ApiDocsPage() {
                             <p className="text-sm font-medium text-foreground">{apiKey.name}</p>
                             <Badge variant="secondary" className="font-mono text-xs">{apiKey.prefix}...{apiKey.last4}</Badge>
                           </div>
-                          <p className="text-xs text-muted-foreground mt-1">创建于 {new Date(apiKey.created_at).toLocaleDateString("zh-CN")}</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            创建于 {new Date(apiKey.created_at).toLocaleDateString("zh-CN")}
+                            {apiKey.expires_at ? ` · 到期 ${new Date(apiKey.expires_at).toLocaleDateString("zh-CN")}` : ""}
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {(apiKey.scopes ?? ["*"]).map((scope) => (
+                              <Badge key={scope} variant="outline" className="text-[10px] font-mono">{scope}</Badge>
+                            ))}
+                          </div>
                         </div>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => deleteKey(apiKey.id)}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => setPendingDelete(apiKey)}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
@@ -164,7 +260,7 @@ export default function ApiDocsPage() {
                   <Card className="border-border bg-card">
                     <CardHeader>
                       <CardTitle className="text-lg">安装方式</CardTitle>
-                      <CardDescription>仓库内可以继续用 `pnpm cli -- ...`，对外用户走独立发布包 `@artifacta/cli`。</CardDescription>
+                      <CardDescription>对外用户推荐 `npx @artifacta/cli@latest`；仓库内开发者可继续用 `pnpm cli -- ...`。</CardDescription>
                     </CardHeader>
                     <CardContent>
                       <CodeBlock code={cliInstallExample} />
@@ -198,6 +294,22 @@ export default function ApiDocsPage() {
           </div>
         </main>
       </div>
+      <AlertDialog open={!!pendingDelete} onOpenChange={(open) => !open && setPendingDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>删除 API Key</AlertDialogTitle>
+            <AlertDialogDescription>
+              删除 “{pendingDelete?.name}” 后，使用这个 Bearer Token 的 CLI、CI 和 Worker 会立即失效。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={deleteKey}>
+              删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

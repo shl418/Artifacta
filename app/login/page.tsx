@@ -2,7 +2,8 @@
 
 import { FormEvent, Suspense, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { BarChart3, LogIn, ShieldCheck } from "lucide-react"
+import { LogIn, ShieldCheck } from "lucide-react"
+import { Logo } from "@/components/logo"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -56,9 +57,7 @@ function LoginForm() {
     <main className="min-h-screen bg-background grid place-items-center p-6">
       <div className="w-full max-w-md space-y-5">
         <div className="flex items-center gap-3">
-          <div className="size-10 rounded-lg bg-primary flex items-center justify-center text-primary-foreground">
-            <BarChart3 className="size-5" />
-          </div>
+          <Logo size={40} />
           <div>
             <h1 className="text-xl font-semibold text-foreground">Artifacta</h1>
             <p className="text-sm text-muted-foreground">AI 时代的数据应用托管与分发</p>

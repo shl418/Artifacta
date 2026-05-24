@@ -1,4 +1,6 @@
-# Artifacta Fullstack Implementation Plan
+# Artifacta Fullstack Implementation Plan (Archived)
+
+This historical plan is archived. It describes the first MVP implementation path, much of which is now complete. Use `docs/IMPLEMENTED-FEATURES.md` for the current code-to-doc source of truth and `docs/plans/2026-05-21-open-source-excellence-roadmap.md` for the current roadmap.
 
 ## Goal
 

@@ -9,6 +9,7 @@ export type SyncStatus = "pending" | "running" | "success" | "failed"
 export type SyncJobStatus = "queued" | "running" | "success" | "failed"
 export type ActivityType = "dashboard" | "dataset" | "team" | "upload" | "permission"
 export type DatasetOrigin = "bundle" | "upload" | "sync"
+export type WebhookEvent = "project.created" | "project.updated" | "project.deleted" | "permission.changed" | "sync.success" | "sync.failed"
 
 export interface Organization {
   id: string
@@ -136,6 +137,7 @@ export interface ApiKey {
   prefix: string
   last4: string
   keyHash: string
+  scopes?: string[]
   createdAt: string
   updatedAt: string
   expiresAt: string | null
@@ -168,6 +170,59 @@ export interface SyncJob {
   completedAt: string | null
 }
 
+export interface DashboardVersion {
+  id: string
+  projectId: string
+  organizationId: string
+  htmlArtifact: DashboardArtifact
+  version: number
+  createdBy: string
+  createdAt: string
+  notes: string
+}
+
+export interface DatasetVersion {
+  id: string
+  datasetId: string
+  projectId: string
+  organizationId: string
+  fileName: string
+  filePath: string
+  fileType: string
+  size: number
+  rows: number | null
+  columns: number | null
+  schema: DatasetColumn[]
+  version: number
+  createdBy: string | null
+  createdAt: string
+}
+
+export interface WebhookEndpoint {
+  id: string
+  organizationId: string
+  url: string
+  events: WebhookEvent[]
+  secret: string
+  enabled: boolean
+  createdAt: string
+  updatedAt: string
+  lastDeliveryAt: string | null
+  lastDeliveryStatus: "success" | "failed" | null
+}
+
+export interface AuditLog {
+  id: string
+  organizationId: string
+  actorUserId: string | null
+  action: string
+  targetType: string
+  targetId: string
+  summary: string
+  metadata: Record<string, unknown>
+  createdAt: string
+}
+
 export interface Activity {
   id: string
   organizationId: string
@@ -190,5 +245,9 @@ export interface Database {
   syncHistory: SyncHistory[]
   syncJobs: SyncJob[]
   uploadSessions: UploadSession[]
+  dashboardVersions: DashboardVersion[]
+  datasetVersions: DatasetVersion[]
+  webhookEndpoints: WebhookEndpoint[]
+  auditLogs: AuditLog[]
   activities: Activity[]
 }

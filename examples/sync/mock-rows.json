@@ -1,0 +1,6 @@
+{
+  "mock_rows": [
+    { "day": "2026-05-21", "active_users": 1200, "paid_users": 42 },
+    { "day": "2026-05-22", "active_users": 1310, "paid_users": 48 }
+  ]
+}

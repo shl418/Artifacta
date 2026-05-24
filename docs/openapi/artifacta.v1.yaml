@@ -8,6 +8,98 @@ servers:
 security:
   - bearerAuth: []
 paths:
+  /api/v1/auth/login:
+    post:
+      summary: Login with local email auth
+      security: []
+      responses:
+        "200":
+          description: Session cookie and user
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/v1/auth/me:
+    get:
+      summary: Get current user
+      responses:
+        "200":
+          description: Current user
+        "401":
+          $ref: "#/components/responses/Error"
+  /api/v1/auth/logout:
+    post:
+      summary: Clear session cookie
+      security: []
+      responses:
+        "200":
+          description: Logged out
+  /api/v1/auth/oidc/login:
+    get:
+      summary: Start OIDC login
+      security: []
+      responses:
+        "302":
+          description: Redirect to provider
+        "501":
+          $ref: "#/components/responses/Error"
+  /api/v1/auth/oidc/callback:
+    get:
+      summary: Complete OIDC login
+      security: []
+      responses:
+        "302":
+          description: Redirect to app with session cookie
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/v1/stats:
+    get:
+      summary: Get overview stats
+      responses:
+        "200":
+          description: Stats, recent projects, and popular projects
+        "401":
+          $ref: "#/components/responses/Error"
+  /api/v1/folders:
+    get:
+      summary: List folders
+      responses:
+        "200":
+          description: Folder list
+    post:
+      summary: Create folder
+      responses:
+        "201":
+          description: Created folder
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/v1/folders/{folderId}:
+    patch:
+      summary: Rename folder
+      parameters:
+        - $ref: "#/components/parameters/FolderId"
+      responses:
+        "200":
+          description: Updated folder
+    delete:
+      summary: Delete folder
+      parameters:
+        - $ref: "#/components/parameters/FolderId"
+      responses:
+        "204":
+          description: Deleted folder
+  /api/v1/upload-sessions:
+    post:
+      summary: Inspect ZIP upload session
+      responses:
+        "201":
+          description: Upload session with file tree
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/v1/datasets:
+    get:
+      summary: List visible datasets
+      responses:
+        "200":
+          description: Dataset list
   /api/v1/projects:
     get:
       summary: List projects
@@ -123,6 +215,70 @@ paths:
           $ref: "#/components/responses/Error"
         "404":
           $ref: "#/components/responses/Error"
+  /api/v1/projects/{projectId}/folder:
+    patch:
+      summary: Move project to folder
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Updated project
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/projects/{projectId}/html/render:
+    get:
+      summary: Render protected dashboard HTML
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Dashboard HTML
+          content:
+            text/html:
+              schema:
+                type: string
+        "403":
+          $ref: "#/components/responses/Error"
+  /api/v1/projects/{projectId}/html/{assetPath}:
+    get:
+      summary: Serve protected ZIP dashboard asset
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: assetPath
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Static asset
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/projects/{projectId}/versions:
+    get:
+      summary: List dashboard versions
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Dashboard versions
+  /api/v1/projects/{projectId}/versions/{versionId}/rollback:
+    post:
+      summary: Roll back dashboard artifact metadata to a recorded version
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/VersionId"
+      responses:
+        "200":
+          description: Updated project
+  /api/v1/projects/{projectId}/embed-token:
+    post:
+      summary: Create signed embed token
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "201":
+          description: Embed token and URL
   /api/v1/projects/{projectId}/datasets:
     get:
       summary: List project datasets
@@ -177,6 +333,84 @@ paths:
           $ref: "#/components/responses/Error"
         "404":
           $ref: "#/components/responses/Error"
+  /api/v1/projects/{projectId}/datasets/{datasetId}:
+    get:
+      summary: Get dataset metadata
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetId"
+      responses:
+        "200":
+          description: Dataset
+    put:
+      summary: Replace dataset file
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetId"
+      responses:
+        "200":
+          description: Updated dataset
+    delete:
+      summary: Delete dataset
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetId"
+      responses:
+        "204":
+          description: Deleted dataset
+  /api/v1/projects/{projectId}/datasets/{datasetId}/preview:
+    get:
+      summary: Preview parsed dataset rows
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetId"
+      responses:
+        "200":
+          description: Parsed preview or stored-only message
+  /api/v1/projects/{projectId}/datasets/{datasetId}/versions:
+    get:
+      summary: List dataset versions
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetId"
+      responses:
+        "200":
+          description: Dataset versions
+  /api/v1/projects/{projectId}/datasets/{datasetId}/sync:
+    get:
+      summary: Get dataset sync config
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetId"
+      responses:
+        "200":
+          description: Sync config
+    put:
+      summary: Set dataset sync config
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetId"
+      responses:
+        "200":
+          description: Sync config
+  /api/v1/projects/{projectId}/datasets/{datasetId}/sync/status:
+    get:
+      summary: Get latest sync status
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetId"
+      responses:
+        "200":
+          description: Sync status
+  /api/v1/projects/{projectId}/datasets/{datasetId}/sync/history:
+    get:
+      summary: List sync history and jobs
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetId"
+      responses:
+        "200":
+          description: Sync history
   /api/v1/projects/{projectId}/datasets/{datasetId}/sync/trigger:
     post:
       summary: Queue dataset sync
@@ -198,6 +432,108 @@ paths:
           $ref: "#/components/responses/Error"
         "404":
           $ref: "#/components/responses/Error"
+  /api/v1/projects/{projectId}/datasets/{datasetId}/sync/test:
+    post:
+      summary: Test dataset sync source
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetId"
+      responses:
+        "200":
+          description: Sync source probe result
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/projects/{projectId}/permissions:
+    get:
+      summary: List project permissions
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Project permissions
+    post:
+      summary: Add or update project member
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "201":
+          description: Project member
+  /api/v1/projects/{projectId}/permissions/{userId}:
+    patch:
+      summary: Update project member permission
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: Project member
+    delete:
+      summary: Remove project member permission
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "204":
+          description: Removed
+  /api/v1/team/members:
+    get:
+      summary: List team members
+      responses:
+        "200":
+          description: Team members
+    post:
+      summary: Create team member
+      responses:
+        "201":
+          description: Team member
+  /api/v1/team/members/{userId}:
+    patch:
+      summary: Update team member role or status
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: Team member
+    delete:
+      summary: Remove team member
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "204":
+          description: Removed
+  /api/v1/team/invitations:
+    post:
+      summary: Invite or create team member
+      responses:
+        "201":
+          description: Team member
+  /api/v1/api-keys:
+    get:
+      summary: List API keys
+      responses:
+        "200":
+          description: API keys
+    post:
+      summary: Create API key
+      responses:
+        "201":
+          description: API key with secret
+  /api/v1/api-keys/{keyId}:
+    delete:
+      summary: Delete API key
+      parameters:
+        - $ref: "#/components/parameters/KeyId"
+      responses:
+        "204":
+          description: Deleted
   /api/v1/sync/jobs/claim:
     post:
       summary: Claim next queued sync job
@@ -219,6 +555,38 @@ paths:
                       - type: "null"
         "401":
           $ref: "#/components/responses/Error"
+  /api/v1/webhooks:
+    get:
+      summary: List webhooks
+      responses:
+        "200":
+          description: Webhooks
+    post:
+      summary: Create webhook
+      responses:
+        "201":
+          description: Webhook with secret
+  /api/v1/webhooks/{webhookId}:
+    patch:
+      summary: Update webhook
+      parameters:
+        - $ref: "#/components/parameters/WebhookId"
+      responses:
+        "200":
+          description: Webhook
+    delete:
+      summary: Delete webhook
+      parameters:
+        - $ref: "#/components/parameters/WebhookId"
+      responses:
+        "204":
+          description: Deleted
+  /api/v1/audit-logs:
+    get:
+      summary: List audit logs
+      responses:
+        "200":
+          description: Audit logs
 components:
   securitySchemes:
     bearerAuth:
@@ -233,6 +601,36 @@ components:
         type: string
     DatasetId:
       name: datasetId
+      in: path
+      required: true
+      schema:
+        type: string
+    FolderId:
+      name: folderId
+      in: path
+      required: true
+      schema:
+        type: string
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+    KeyId:
+      name: keyId
+      in: path
+      required: true
+      schema:
+        type: string
+    VersionId:
+      name: versionId
+      in: path
+      required: true
+      schema:
+        type: string
+    WebhookId:
+      name: webhookId
       in: path
       required: true
       schema:
@@ -268,6 +666,8 @@ components:
       required: [id, name, visibility]
       properties:
         id:
+          type: string
+        project_id:
           type: string
         name:
           type: string
@@ -324,6 +724,8 @@ components:
           type:
             - integer
             - "null"
+        sync_config:
+          $ref: "#/components/schemas/SyncConfig"
         created_at:
           type: string
           format: date-time
@@ -339,6 +741,35 @@ components:
         status:
           type: string
           enum: [queued]
+    SyncConfig:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        source_type:
+          type: string
+          enum: [manual, cos, presto]
+        source_config:
+          type: object
+        update_mode:
+          type: string
+          enum: [full, incremental]
+        schedule:
+          type:
+            - string
+            - "null"
+        last_sync_at:
+          type:
+            - string
+            - "null"
+        last_sync_status:
+          type:
+            - string
+            - "null"
+        next_sync_at:
+          type:
+            - string
+            - "null"
     SyncJobClaim:
       type: object
       required: [job_id, status, project_id, dataset_id]

@@ -2,12 +2,16 @@ import { NextResponse } from "next/server"
 import type { User } from "@/lib/types"
 import { createSessionToken, sessionCookieName, sessionCookieOptions } from "@/lib/server/auth"
 import { addActivity, now, updateDatabase } from "@/lib/server/db"
+import { rateLimitResponse } from "@/lib/server/rate-limit"
 import { apiError } from "@/lib/server/responses"
 import { serializeUser } from "@/lib/server/serializers"
 
 export const runtime = "nodejs"
 
 export async function POST(request: Request) {
+  const limited = rateLimitResponse(request, "auth-login", 20)
+  if (limited) return limited
+
   const body = await request.json().catch(() => null)
   const email = String(body?.email ?? "").trim().toLowerCase()
   const name = String(body?.name ?? "").trim()

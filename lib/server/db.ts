@@ -2,8 +2,26 @@ import { promises as fs } from "node:fs"
 import path from "node:path"
 import Sqlite from "better-sqlite3"
 import type { Database as SqliteDatabase } from "better-sqlite3"
-import type { Activity, ApiKey, Database, Dataset, Folder, Organization, Project, ProjectMember, SyncHistory, SyncJob, UploadSession, User } from "@/lib/types"
-import { absoluteUploadPath, dataDir, dataDriver, databasePath, sqlitePath, uploadDir } from "@/lib/server/config"
+import { Pool } from "pg"
+import type {
+  Activity,
+  ApiKey,
+  AuditLog,
+  DashboardVersion,
+  Database,
+  Dataset,
+  DatasetVersion,
+  Folder,
+  Organization,
+  Project,
+  ProjectMember,
+  SyncHistory,
+  SyncJob,
+  UploadSession,
+  User,
+  WebhookEndpoint,
+} from "@/lib/types"
+import { absoluteUploadPath, dataDir, dataDriver, databasePath, postgresUrl, sqlitePath, uploadDir } from "@/lib/server/config"
 import { growthDashboardHtml, growthDatasetJson, salesDashboardHtml, salesDatasetCsv } from "@/lib/server/demo-artifacts"
 
 const now = () => new Date().toISOString()
@@ -207,6 +225,10 @@ function seedDatabase(): Database {
     ],
     syncJobs: [],
     uploadSessions: [],
+    dashboardVersions: [],
+    datasetVersions: [],
+    webhookEndpoints: [],
+    auditLogs: [],
     activities: [
       {
         id: "act_seed_upload",
@@ -254,6 +276,8 @@ async function ensureSeedArtifacts() {
 
 let sqliteDatabase: SqliteDatabase | null = null
 let sqliteReady = false
+let postgresPool: Pool | null = null
+let postgresReady = false
 let updateDatabaseQueue = Promise.resolve()
 
 async function ensureDatabase() {
@@ -263,6 +287,11 @@ async function ensureDatabase() {
 
   if (dataDriver === "sqlite") {
     await ensureSqliteDatabase()
+    return
+  }
+
+  if (dataDriver === "postgres") {
+    await ensurePostgresDatabase()
     return
   }
 
@@ -278,6 +307,7 @@ async function ensureDatabase() {
 export async function readDatabase(): Promise<Database> {
   await ensureDatabase()
   if (dataDriver === "sqlite") return normalizeDatabase(readSqliteDatabase())
+  if (dataDriver === "postgres") return normalizeDatabase(await readPostgresDatabase())
   const content = await fs.readFile(databasePath, "utf8")
   return normalizeDatabase(JSON.parse(content) as Database)
 }
@@ -287,6 +317,12 @@ export async function writeDatabase(database: Database) {
   if (dataDriver === "sqlite") {
     await ensureSqliteDatabase()
     writeSqliteDatabase(database)
+    return
+  }
+
+  if (dataDriver === "postgres") {
+    await ensurePostgresDatabase()
+    await writePostgresDatabase(database)
     return
   }
 
@@ -449,6 +485,52 @@ async function ensureSqliteDatabase() {
     `
   )
 
+  applySqliteMigration(
+    database,
+    4,
+    "production_track_tables",
+    `
+      CREATE TABLE IF NOT EXISTS dashboard_versions (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        organization_id TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        data TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS dataset_versions (
+        id TEXT PRIMARY KEY,
+        dataset_id TEXT NOT NULL,
+        project_id TEXT NOT NULL,
+        organization_id TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        data TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS webhook_endpoints (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL,
+        enabled INTEGER NOT NULL,
+        updated_at TEXT NOT NULL,
+        data TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS audit_logs (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        data TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_dashboard_versions_project ON dashboard_versions (project_id, version DESC);
+      CREATE INDEX IF NOT EXISTS idx_dataset_versions_dataset ON dataset_versions (dataset_id, version DESC);
+      CREATE INDEX IF NOT EXISTS idx_webhook_endpoints_org ON webhook_endpoints (organization_id);
+      CREATE INDEX IF NOT EXISTS idx_audit_logs_org ON audit_logs (organization_id, created_at DESC);
+    `
+  )
+
   const row = database.prepare("SELECT COUNT(1) AS count FROM organizations").get() as { count: number }
   if (row.count === 0) {
     writeSqliteDatabase(seedDatabase())
@@ -481,6 +563,10 @@ function applySeedDataUpdates(database: Database) {
 function normalizeDatabase(database: Database) {
   database.syncJobs ??= []
   database.uploadSessions ??= []
+  database.dashboardVersions ??= []
+  database.datasetVersions ??= []
+  database.webhookEndpoints ??= []
+  database.auditLogs ??= []
   for (const dataset of database.datasets) {
     dataset.origin ??= "upload"
   }
@@ -519,6 +605,10 @@ function readSqliteDatabase(): Database {
     syncHistory: readSqliteRows<SyncHistory>(database, "sync_history").sort((left, right) => right.startedAt.localeCompare(left.startedAt)),
     syncJobs: readSqliteRows<SyncJob>(database, "sync_jobs").sort((left, right) => left.createdAt.localeCompare(right.createdAt)),
     uploadSessions: readSqliteRows<UploadSession>(database, "upload_sessions").sort((left, right) => left.createdAt.localeCompare(right.createdAt)),
+    dashboardVersions: readSqliteRows<DashboardVersion>(database, "dashboard_versions").sort((left, right) => right.version - left.version),
+    datasetVersions: readSqliteRows<DatasetVersion>(database, "dataset_versions").sort((left, right) => right.version - left.version),
+    webhookEndpoints: readSqliteRows<WebhookEndpoint>(database, "webhook_endpoints"),
+    auditLogs: readSqliteRows<AuditLog>(database, "audit_logs").sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
     activities: readSqliteRows<Activity>(database, "activities").sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
   }
 }
@@ -528,6 +618,10 @@ function writeSqliteDatabase(appDatabase: Database) {
   const writeAll = database.transaction(() => {
     database.prepare("DELETE FROM project_members").run()
     database.prepare("DELETE FROM upload_sessions").run()
+    database.prepare("DELETE FROM audit_logs").run()
+    database.prepare("DELETE FROM webhook_endpoints").run()
+    database.prepare("DELETE FROM dataset_versions").run()
+    database.prepare("DELETE FROM dashboard_versions").run()
     database.prepare("DELETE FROM sync_jobs").run()
     database.prepare("DELETE FROM sync_history").run()
     database.prepare("DELETE FROM activities").run()
@@ -555,6 +649,16 @@ function writeSqliteDatabase(appDatabase: Database) {
     const insertUploadSession = database.prepare(
       "INSERT INTO upload_sessions (id, user_id, organization_id, expires_at, data) VALUES (?, ?, ?, ?, ?)"
     )
+    const insertDashboardVersion = database.prepare(
+      "INSERT INTO dashboard_versions (id, project_id, organization_id, version, created_at, data) VALUES (?, ?, ?, ?, ?, ?)"
+    )
+    const insertDatasetVersion = database.prepare(
+      "INSERT INTO dataset_versions (id, dataset_id, project_id, organization_id, version, created_at, data) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    )
+    const insertWebhookEndpoint = database.prepare(
+      "INSERT INTO webhook_endpoints (id, organization_id, enabled, updated_at, data) VALUES (?, ?, ?, ?, ?)"
+    )
+    const insertAuditLog = database.prepare("INSERT INTO audit_logs (id, organization_id, created_at, data) VALUES (?, ?, ?, ?)")
     const insertActivity = database.prepare("INSERT INTO activities (id, organization_id, created_at, data) VALUES (?, ?, ?, ?)")
 
     for (const organization of appDatabase.organizations) insertOrganization.run(organization.id, stringifySqliteRow(organization))
@@ -581,6 +685,14 @@ function writeSqliteDatabase(appDatabase: Database) {
       )
     for (const session of appDatabase.uploadSessions ?? [])
       insertUploadSession.run(session.id, session.userId, session.organizationId, session.expiresAt, stringifySqliteRow(session))
+    for (const version of appDatabase.dashboardVersions ?? [])
+      insertDashboardVersion.run(version.id, version.projectId, version.organizationId, version.version, version.createdAt, stringifySqliteRow(version))
+    for (const version of appDatabase.datasetVersions ?? [])
+      insertDatasetVersion.run(version.id, version.datasetId, version.projectId, version.organizationId, version.version, version.createdAt, stringifySqliteRow(version))
+    for (const endpoint of appDatabase.webhookEndpoints ?? [])
+      insertWebhookEndpoint.run(endpoint.id, endpoint.organizationId, endpoint.enabled ? 1 : 0, endpoint.updatedAt, stringifySqliteRow(endpoint))
+    for (const log of appDatabase.auditLogs ?? [])
+      insertAuditLog.run(log.id, log.organizationId, log.createdAt, stringifySqliteRow(log))
     for (const activity of appDatabase.activities) insertActivity.run(activity.id, activity.organizationId, activity.createdAt, stringifySqliteRow(activity))
   })
 
@@ -598,6 +710,10 @@ type SqliteTable =
   | "sync_history"
   | "sync_jobs"
   | "upload_sessions"
+  | "dashboard_versions"
+  | "dataset_versions"
+  | "webhook_endpoints"
+  | "audit_logs"
   | "activities"
 
 function readSqliteRows<T>(database: SqliteDatabase, table: SqliteTable) {
@@ -607,6 +723,59 @@ function readSqliteRows<T>(database: SqliteDatabase, table: SqliteTable) {
 
 function stringifySqliteRow(value: unknown) {
   return JSON.stringify(value)
+}
+
+async function ensurePostgresDatabase() {
+  if (postgresReady) return
+  const pool = getPostgresPool()
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS artifacta_state (
+      id TEXT PRIMARY KEY,
+      data JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `)
+
+  const result = await pool.query("SELECT data FROM artifacta_state WHERE id = $1", ["singleton"])
+  if (result.rowCount === 0) {
+    await writePostgresDatabase(seedDatabase())
+  } else {
+    const current = normalizeDatabase(decodePostgresDatabase(result.rows[0].data))
+    if (applySeedDataUpdates(current)) await writePostgresDatabase(current)
+  }
+
+  postgresReady = true
+}
+
+function getPostgresPool() {
+  if (!postgresUrl) throw new Error("POSTGRES_URL or DATABASE_URL must be set when DATA_DRIVER=postgres.")
+  postgresPool ??= new Pool({ connectionString: postgresUrl })
+  return postgresPool
+}
+
+async function readPostgresDatabase(): Promise<Database> {
+  const result = await getPostgresPool().query("SELECT data FROM artifacta_state WHERE id = $1", ["singleton"])
+  if (result.rowCount === 0) {
+    const seeded = seedDatabase()
+    await writePostgresDatabase(seeded)
+    return seeded
+  }
+  return decodePostgresDatabase(result.rows[0].data)
+}
+
+async function writePostgresDatabase(database: Database) {
+  await getPostgresPool().query(
+    `
+      INSERT INTO artifacta_state (id, data, updated_at)
+      VALUES ($1, $2::jsonb, NOW())
+      ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()
+    `,
+    ["singleton", JSON.stringify(database)]
+  )
+}
+
+function decodePostgresDatabase(value: unknown): Database {
+  return typeof value === "string" ? (JSON.parse(value) as Database) : (value as Database)
 }
 
 export async function updateDatabase<T>(updater: (database: Database) => T | Promise<T>): Promise<T> {

@@ -20,6 +20,7 @@ Artifacta is an open protocol and hosting platform for AI-generated data applica
 
 ## Development Rules
 
+- Use the `fnm` Node/`pnpm` environment documented in `docs/DEVELOPMENT-ENVIRONMENT.md`. If a non-interactive shell resolves to an old system Node or cannot find `pnpm`, explicitly load `fnm` before running project scripts.
 - Run `pnpm typecheck` before finishing backend or frontend changes.
 - Run `pnpm build` when touching route handlers, middleware, auth, or Next.js configuration.
 - Keep API response fields snake_case to match `docs/API.md`.
@@ -27,7 +28,7 @@ Artifacta is an open protocol and hosting platform for AI-generated data applica
 - Do not import Node-only modules into `proxy.ts`.
 - Treat uploaded dashboard HTML as untrusted content. Keep previews sandboxed and avoid serving them with the main app privileges.
 - Do not commit `.artifacta`, `.env`, `.next`, or generated runtime artifacts.
-- Run `pnpm test:smoke` against a running app when touching auth, upload, ZIP rendering, API keys, or sync behavior.
+- Run `pnpm test` for contract, client, security, and unit coverage. Run `pnpm test:smoke` against a running app when touching auth, upload, ZIP rendering, API keys, dataset preview, versions, embed tokens, or sync behavior.
 - Run `pnpm cli:pack` when touching `packages/cli` or external CLI onboarding docs.
 
 ## Extension Points

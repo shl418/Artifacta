@@ -1,5 +1,6 @@
 import type { DatasetSourceType, DatasetUpdateMode } from "@/lib/types"
-import { authenticateRequest } from "@/lib/server/auth"
+import { authenticateRequest, requireRequestAuth } from "@/lib/server/auth"
+import { validateSyncSourceConfig } from "@/lib/server/sync/validate-config"
 import { canEditProject, canViewProject } from "@/lib/server/access"
 import { now, readDatabase, updateDatabase } from "@/lib/server/db"
 import { apiError, ok } from "@/lib/server/responses"
@@ -27,15 +28,19 @@ export async function GET(request: Request, context: RouteContext) {
 
 export async function PUT(request: Request, context: RouteContext) {
   const { projectId, datasetId } = await context.params
-  const auth = await authenticateRequest(request)
-  if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
+  const auth = await requireRequestAuth(request, "sync:run")
+  if (auth instanceof Response) return auth
 
   const body = await request.json().catch(() => null)
   const sourceType = String(body?.source_type ?? body?.sourceType ?? "manual")
   const updateMode = String(body?.update_mode ?? body?.updateMode ?? "full")
+  const sourceConfig = (body?.source_config ?? body?.sourceConfig ?? {}) as Record<string, unknown>
 
   if (!sources.has(sourceType)) return apiError(400, "INVALID_REQUEST", "source_type 不合法。", { field: "source_type" })
   if (!modes.has(updateMode)) return apiError(400, "INVALID_REQUEST", "update_mode 不合法。", { field: "update_mode" })
+
+  const validationError = validateSyncSourceConfig(sourceType as DatasetSourceType, sourceConfig)
+  if (validationError) return apiError(400, "INVALID_REQUEST", validationError)
 
   const database = await readDatabase()
   const project = database.projects.find((candidate) => candidate.id === projectId)
@@ -49,7 +54,7 @@ export async function PUT(request: Request, context: RouteContext) {
     record.syncConfig = {
       enabled: Boolean(body?.enabled) && sourceType !== "manual",
       sourceType: sourceType as DatasetSourceType,
-      sourceConfig: body?.source_config ?? body?.sourceConfig ?? {},
+      sourceConfig,
       updateMode: updateMode as DatasetUpdateMode,
       schedule: body?.schedule ? String(body.schedule) : null,
       lastSyncAt: record.syncConfig.lastSyncAt,

@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { Button } from "@/components/ui/button"
@@ -17,8 +18,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
+  AlertCircle,
   Building2,
+  RefreshCw,
   User,
   Palette,
   HardDrive,
@@ -29,7 +33,25 @@ import {
 } from "lucide-react"
 
 export default function SettingsPage() {
-  
+  const [profile, setProfile] = useState<{ name: string; email: string; role: string; initials: string } | null>(null)
+  const [error, setError] = useState("")
+
+  const loadProfile = () =>
+    fetch("/api/v1/auth/me")
+      .then(async (response) => {
+        const payload = await response.json().catch(() => null)
+        if (!response.ok) throw new Error(payload?.error?.message ?? "无法加载个人资料。")
+        setProfile(payload)
+        setError("")
+      })
+      .catch((reason) => {
+        setProfile(null)
+        setError(reason instanceof Error ? reason.message : "无法加载个人资料。")
+      })
+
+  useEffect(() => {
+    loadProfile()
+  }, [])
 
   return (
     <div className="flex h-screen bg-background">
@@ -38,6 +60,19 @@ export default function SettingsPage() {
         <main className="flex-1 flex flex-col bg-card rounded-xl shadow-sm overflow-hidden">
           <Header title="系统设置" />
           <div className="flex-1 overflow-y-auto p-6">
+          {error && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>设置加载失败</AlertTitle>
+              <AlertDescription>
+                <p>{error}</p>
+                <Button variant="outline" size="sm" className="mt-2" onClick={loadProfile}>
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  重试
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
           <Tabs defaultValue="profile" className="space-y-6">
             <TabsList className="bg-secondary/50">
               <TabsTrigger value="profile" className="gap-2">
@@ -72,7 +107,7 @@ export default function SettingsPage() {
                     <Avatar className="h-20 w-20">
                       <AvatarImage src="/placeholder-user.jpg" />
                       <AvatarFallback className="text-2xl bg-primary/20 text-primary">
-                        张
+                        {profile?.initials ?? "U"}
                       </AvatarFallback>
                     </Avatar>
                     <div className="space-y-2">
@@ -92,7 +127,8 @@ export default function SettingsPage() {
                       <Label htmlFor="name">姓名</Label>
                       <Input
                         id="name"
-                        defaultValue="张三"
+                        defaultValue={profile?.name ?? ""}
+                        readOnly
                         className="bg-secondary/50"
                       />
                     </div>
@@ -101,7 +137,8 @@ export default function SettingsPage() {
                       <Input
                         id="email"
                         type="email"
-                        defaultValue="zhangsan@company.com"
+                        defaultValue={profile?.email ?? ""}
+                        readOnly
                         className="bg-secondary/50"
                       />
                     </div>
@@ -109,7 +146,8 @@ export default function SettingsPage() {
                       <Label htmlFor="title">职位</Label>
                       <Input
                         id="title"
-                        defaultValue="数据分析师"
+                        defaultValue={profile?.role === "admin" ? "管理员" : "成员"}
+                        readOnly
                         className="bg-secondary/50"
                       />
                     </div>

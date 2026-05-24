@@ -1,9 +1,16 @@
-import { promises as fs } from "node:fs"
 import path from "node:path"
 import AdmZip from "adm-zip"
 import type { DashboardArtifact, Project } from "@/lib/types"
-import { absoluteUploadPath } from "@/lib/server/config"
+import { maxArtifactBytes, maxDatasetBytes } from "@/lib/server/config"
 import { normalizeBundleEntry, validateZipBundle } from "@/lib/server/artifacts/zip-security"
+import {
+  listStorageEntries,
+  readStorageObject,
+  readStorageText,
+  removeStorageObject,
+  removeStoragePrefix,
+  writeStorageObject,
+} from "@/lib/server/object-storage"
 
 const safeNamePattern = /[^a-zA-Z0-9._-]/g
 
@@ -24,15 +31,16 @@ export async function saveProjectArtifact(projectId: string, file: File): Promis
   if (!isHtml && !isZip) {
     throw new Error("Dashboard artifact must be an .html file or .zip bundle")
   }
+  if (file.size > maxArtifactBytes) {
+    throw new Error(`Dashboard artifact exceeds the ${formatBytes(maxArtifactBytes)} upload limit.`)
+  }
 
   const relativePath = isHtml
     ? `projects/${projectId}/index.html`
     : `projects/${projectId}/${sanitizeFileName(file.name)}`
-  const absolutePath = absoluteUploadPath(relativePath)
   const buffer = Buffer.from(await file.arrayBuffer())
 
-  await fs.mkdir(path.dirname(absolutePath), { recursive: true })
-  await fs.writeFile(absolutePath, buffer)
+  await writeStorageObject(relativePath, buffer, file.type || (isZip ? "application/zip" : "text/html"))
 
   if (isZip) {
     const extracted = await extractProjectZip(projectId, buffer)
@@ -57,39 +65,47 @@ export async function saveProjectArtifact(projectId: string, file: File): Promis
 }
 
 export async function saveDatasetArtifact(projectId: string, datasetId: string, file: File) {
+  if (file.size > maxDatasetBytes) {
+    throw new Error(`Dataset exceeds the ${formatBytes(maxDatasetBytes)} upload limit.`)
+  }
+
   const fileName = sanitizeFileName(file.name)
   const relativePath = `projects/${projectId}/datasets/${datasetId}/${fileName}`
-  const absolutePath = absoluteUploadPath(relativePath)
   const buffer = Buffer.from(await file.arrayBuffer())
 
-  await fs.mkdir(path.dirname(absolutePath), { recursive: true })
-  await fs.writeFile(absolutePath, buffer)
+  await writeStorageObject(relativePath, buffer, contentTypeForPath(fileName))
 
   return { buffer, fileName, relativePath, size: buffer.byteLength }
 }
 
 export async function replaceDatasetArtifact(relativePath: string, file: File) {
+  if (file.size > maxDatasetBytes) {
+    throw new Error(`Dataset exceeds the ${formatBytes(maxDatasetBytes)} upload limit.`)
+  }
+
   const buffer = Buffer.from(await file.arrayBuffer())
   await writeDatasetBuffer(relativePath, buffer)
   return { buffer, size: buffer.byteLength }
 }
 
 export async function writeDatasetBuffer(relativePath: string, buffer: Buffer) {
-  const absolutePath = absoluteUploadPath(relativePath)
-  await fs.mkdir(path.dirname(absolutePath), { recursive: true })
-  await fs.writeFile(absolutePath, buffer)
+  if (buffer.byteLength > maxDatasetBytes) {
+    throw new Error(`Dataset exceeds the ${formatBytes(maxDatasetBytes)} upload limit.`)
+  }
+
+  await writeStorageObject(relativePath, buffer, contentTypeForPath(relativePath))
 }
 
 export async function readDashboardHtml(project: Project) {
   if (project.htmlArtifact.kind === "html") {
-    return fs.readFile(absoluteUploadPath(project.htmlArtifact.path), "utf8")
+    return readStorageText(project.htmlArtifact.path)
   }
 
   const entryPath = project.htmlArtifact.entryPath
   const assetRoot = project.htmlArtifact.assetRoot
   if (!entryPath || !assetRoot) return zipPlaceholderHtml(project)
 
-  const html = await fs.readFile(absoluteUploadPath(path.posix.join(assetRoot, entryPath)), "utf8")
+  const html = await readStorageText(path.posix.join(assetRoot, entryPath))
   const entryDirectory = path.posix.dirname(entryPath)
   const baseHref = `/api/v1/projects/${project.id}/html/${entryDirectory === "." ? "" : `${entryDirectory}/`}`
   return injectBaseHref(html, baseHref)
@@ -101,8 +117,7 @@ export async function readDashboardAsset(project: Project, assetPath: string[]) 
   const safePath = normalizeBundleEntry(assetPath.join("/"))
   if (!safePath || safePath.toLowerCase().endsWith(".html")) return null
 
-  const absolutePath = absoluteUploadPath(path.posix.join(project.htmlArtifact.assetRoot, safePath))
-  const buffer = await fs.readFile(absolutePath).catch(() => null)
+  const buffer = await readStorageObject(path.posix.join(project.htmlArtifact.assetRoot, safePath)).catch(() => null)
   if (!buffer) return null
 
   return {
@@ -112,11 +127,11 @@ export async function readDashboardAsset(project: Project, assetPath: string[]) 
 }
 
 export async function removeProjectArtifacts(projectId: string) {
-  await fs.rm(absoluteUploadPath(`projects/${projectId}`), { recursive: true, force: true })
+  await removeStoragePrefix(`projects/${projectId}`)
 }
 
 export async function removeDatasetArtifacts(projectId: string, datasetId: string) {
-  await fs.rm(absoluteUploadPath(`projects/${projectId}/datasets/${datasetId}`), { recursive: true, force: true })
+  await removeStoragePrefix(`projects/${projectId}/datasets/${datasetId}`)
 }
 
 function escapeHtml(value: string) {
@@ -131,44 +146,23 @@ function escapeHtml(value: string) {
   })
 }
 
-async function listFilesRecursive(root: string) {
-  try {
-    const entries = await fs.readdir(root, { withFileTypes: true })
-    const files: string[] = []
-    for (const entry of entries) {
-      const absolutePath = path.join(root, entry.name)
-      if (entry.isDirectory()) {
-        files.push(...(await listFilesRecursive(absolutePath)))
-      } else if (entry.isFile()) {
-        files.push(absolutePath)
-      }
-    }
-    return files
-  } catch {
-    return []
-  }
-}
-
 export async function extractProjectZip(projectId: string, buffer: Buffer, skipPaths?: Set<string>) {
   const zip = new AdmZip(buffer)
   validateZipBundle(zip)
 
   const assetRoot = `projects/${projectId}/bundle`
-  const absoluteRoot = absoluteUploadPath(assetRoot)
   let entryPath: string | null = null
 
   if (skipPaths && skipPaths.size > 0) {
-    const existingFiles = await listFilesRecursive(absoluteRoot)
+    const existingFiles = await listStorageEntries(assetRoot)
     for (const existingFile of existingFiles) {
-      const relative = path.relative(absoluteRoot, existingFile).split(path.sep).join("/")
-      if (!skipPaths.has(relative)) {
-        await fs.rm(existingFile, { force: true })
+      if (!skipPaths.has(existingFile)) {
+        await removeStorageObject(path.posix.join(assetRoot, existingFile))
       }
     }
   } else {
-    await fs.rm(absoluteRoot, { recursive: true, force: true })
+    await removeStoragePrefix(assetRoot)
   }
-  await fs.mkdir(absoluteRoot, { recursive: true })
 
   for (const entry of zip.getEntries()) {
     if (entry.isDirectory) continue
@@ -177,9 +171,7 @@ export async function extractProjectZip(projectId: string, buffer: Buffer, skipP
     if (!safePath) continue
     if (skipPaths?.has(safePath)) continue
 
-    const targetPath = absoluteUploadPath(path.posix.join(assetRoot, safePath))
-    await fs.mkdir(path.dirname(targetPath), { recursive: true })
-    await fs.writeFile(targetPath, entry.getData())
+    await writeStorageObject(path.posix.join(assetRoot, safePath), entry.getData(), contentTypeForPath(safePath))
 
     const lowerPath = safePath.toLowerCase()
     if (lowerPath === "index.html") entryPath = safePath
@@ -187,11 +179,15 @@ export async function extractProjectZip(projectId: string, buffer: Buffer, skipP
   }
 
   if (!entryPath) {
-    await fs.rm(absoluteRoot, { recursive: true, force: true })
+    await removeStoragePrefix(assetRoot)
     throw new Error("ZIP dashboard bundle must contain an index.html file")
   }
 
   return { assetRoot, entryPath }
+}
+
+function formatBytes(bytes: number) {
+  return `${Math.round(bytes / 1024 / 1024)} MB`
 }
 
 function injectBaseHref(html: string, baseHref: string) {

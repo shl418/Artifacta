@@ -1,20 +1,25 @@
 import type { Project, ProjectVisibility } from "@/lib/types"
-import { authenticateRequest } from "@/lib/server/auth"
+import { requireRequestAuth } from "@/lib/server/auth"
 import { canViewProject } from "@/lib/server/access"
+import { recordAudit } from "@/lib/server/audit"
 import { buildDatasetRecord } from "@/lib/server/dataset-records"
 import { addActivity, now, readDatabase, updateDatabase } from "@/lib/server/db"
 import { apiError, created, ok, paginate, parsePagination } from "@/lib/server/responses"
+import { rateLimitResponse } from "@/lib/server/rate-limit"
+import { requestPayloadTooLarge } from "@/lib/server/request-size"
 import { serializeFolder, serializeProject, serializeProjectDetail } from "@/lib/server/serializers"
 import { commitUploadSession } from "@/lib/server/artifacts/upload-session"
 import { saveProjectArtifact } from "@/lib/server/storage"
+import { recordDashboardVersion, recordDatasetVersion } from "@/lib/server/versions"
+import { emitWebhooks } from "@/lib/server/webhooks"
 
 export const runtime = "nodejs"
 
 const visibilityValues = new Set(["private", "team", "public"])
 
 export async function GET(request: Request) {
-  const auth = await authenticateRequest(request)
-  if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
+  const auth = await requireRequestAuth(request, "projects:read")
+  if (auth instanceof Response) return auth
 
   const database = await readDatabase()
   const url = new URL(request.url)
@@ -60,8 +65,14 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await authenticateRequest(request)
-  if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
+  const limited = rateLimitResponse(request, "projects-upload", 30)
+  if (limited) return limited
+
+  const tooLarge = requestPayloadTooLarge(request)
+  if (tooLarge) return tooLarge
+
+  const auth = await requireRequestAuth(request, "projects:write")
+  if (auth instanceof Response) return auth
 
   const form = await request.formData().catch(() => null)
   if (!form) return apiError(400, "INVALID_REQUEST", "请求体必须是 multipart/form-data。")
@@ -114,6 +125,18 @@ export async function POST(request: Request) {
           action: "上传了新看板",
           target: name,
         })
+        recordDashboardVersion(database, committed.project, auth.user.id, "Created from ZIP upload session")
+        for (const dataset of committed.datasets) recordDatasetVersion(database, dataset, auth.user.id)
+        recordAudit(database, {
+          organizationId: auth.user.organizationId,
+          actorUserId: auth.user.id,
+          action: "project.create",
+          targetType: "project",
+          targetId: committed.project.id,
+          summary: `Created project ${name}`,
+          metadata: { upload_session_id: uploadSessionId, datasets_count: committed.datasets.length },
+        })
+        emitWebhooks(database, auth.user.organizationId, "project.created", { project_id: committed.project.id, name })
 
         return committed.project
       } catch (error) {
@@ -154,7 +177,11 @@ export async function POST(request: Request) {
   ].map(asFile).filter(Boolean) as File[]
   const datasets = await Promise.all(
     datasetFiles.map((file) => buildDatasetRecord({ projectId, organizationId: auth.user.organizationId, file }))
-  )
+  ).catch((error) => {
+    if (error instanceof Error) return error
+    return new Error("数据集保存失败。")
+  })
+  if (datasets instanceof Error) return apiError(400, "INVALID_DATASET", datasets.message, { field: "data_files" })
 
   const project = await updateDatabase<Project>((database) => {
     if (folderId && !database.folders.some((folder) => folder.id === folderId && folder.organizationId === auth.user.organizationId)) {
@@ -178,6 +205,8 @@ export async function POST(request: Request) {
 
     database.projects.push(record)
     database.datasets.push(...datasets)
+    recordDashboardVersion(database, record, auth.user.id, "Created from direct upload")
+    for (const dataset of datasets) recordDatasetVersion(database, dataset, auth.user.id)
     addActivity(database, {
       organizationId: auth.user.organizationId,
       type: "upload",
@@ -185,6 +214,16 @@ export async function POST(request: Request) {
       action: "上传了新看板",
       target: name,
     })
+    recordAudit(database, {
+      organizationId: auth.user.organizationId,
+      actorUserId: auth.user.id,
+      action: "project.create",
+      targetType: "project",
+      targetId: record.id,
+      summary: `Created project ${name}`,
+      metadata: { datasets_count: datasets.length },
+    })
+    emitWebhooks(database, auth.user.organizationId, "project.created", { project_id: record.id, name })
 
     return record
   }).catch((error) => {

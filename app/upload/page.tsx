@@ -48,7 +48,7 @@ export default function UploadPage() {
   const [datasetSelections, setDatasetSelections] = useState<DatasetSelection[]>([])
 
   const isZipBundle = Boolean(htmlFile?.name.toLowerCase().endsWith(".zip"))
-  const selectedDatasets = useMemo(() => datasetSelections.filter((item) => item.selected), [datasetSelections])
+const selectedDatasets = useMemo(() => datasetSelections.filter((item) => item.selected), [datasetSelections])
 
   const publishHtml = async (event: FormEvent) => {
     event.preventDefault()
@@ -140,7 +140,7 @@ export default function UploadPage() {
   }
 
   const addDataFiles = (files: FileList | File[]) => {
-    const accepted = Array.from(files).filter((file) => /\.(csv|xlsx|json)$/i.test(file.name))
+    const accepted = Array.from(files).filter((file) => /\.(csv|tsv|json|jsonl|xlsx)$/i.test(file.name))
     setDataFiles((current) => [...current, ...accepted])
   }
 
@@ -188,6 +188,14 @@ export default function UploadPage() {
         <main className="flex-1 flex flex-col bg-card rounded-xl shadow-sm overflow-hidden">
           <Header title="创建项目" />
           <div className="flex-1 overflow-y-auto p-6">
+            <div className="mx-auto mb-6 max-w-3xl rounded-lg border bg-secondary/20 p-4 text-sm text-muted-foreground">
+              <div className="grid gap-2 md:grid-cols-2">
+                <p><span className="font-medium text-foreground">应用文件：</span>HTML 或 ZIP，最大 100 MB。</p>
+                <p><span className="font-medium text-foreground">ZIP 安全限制：</span>最多 500 个文件，单文件 25 MB，解压后总计 100 MB。</p>
+                <p><span className="font-medium text-foreground">数据集：</span>单文件最大 50 MB。</p>
+                <p><span className="font-medium text-foreground">结构化预览：</span>CSV、TSV、JSON、JSONL；XLSX 会保存但不解析字段。</p>
+              </div>
+            </div>
             {isZipBundle ? (
               <div className="max-w-3xl mx-auto space-y-6">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -378,7 +386,7 @@ export default function UploadPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2"><FileSpreadsheet className="h-5 w-5 text-emerald-500" />数据集</CardTitle>
-                    <CardDescription>可选上传 CSV / Excel / JSON，平台会保存并解析基础元数据。</CardDescription>
+                    <CardDescription>可选上传 CSV / TSV / JSON / JSONL / XLSX；XLSX 会保存但不做结构化解析。</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div
@@ -388,8 +396,8 @@ export default function UploadPage() {
                       onClick={() => document.getElementById("data-input")?.click()}
                       className={cn("border-2 border-dashed rounded-lg p-6 text-center transition-all cursor-pointer", isDraggingData ? "border-primary bg-primary/5" : "border-border/50 hover:border-primary/50")}
                     >
-                      <input id="data-input" type="file" accept=".csv,.xlsx,.json" multiple className="hidden" onChange={(event) => event.target.files && addDataFiles(event.target.files)} />
-                      <p className="text-sm text-muted-foreground">添加数据文件 · 支持 .csv / .xlsx / .json</p>
+                      <input id="data-input" type="file" accept=".csv,.tsv,.json,.jsonl,.xlsx" multiple className="hidden" onChange={(event) => event.target.files && addDataFiles(event.target.files)} />
+                      <p className="text-sm text-muted-foreground">添加数据文件 · CSV / TSV / JSON / JSONL 可预览，XLSX 仅存储</p>
                     </div>
                     <div className="space-y-2">
                       {dataFiles.map((file, index) => (

@@ -1,12 +1,17 @@
 import type { ApiKey } from "@/lib/types"
-import { authenticateRequest, createApiKeySecret } from "@/lib/server/auth"
+import { parseRequestedScopes } from "@/lib/server/api-key-scopes"
+import { authenticateRequest, createApiKeySecret, takeAuthRateLimitResponse } from "@/lib/server/auth"
+import { defaultApiKeyExpiryDays } from "@/lib/server/config"
 import { addActivity, now, readDatabase, updateDatabase } from "@/lib/server/db"
 import { apiError, created, ok } from "@/lib/server/responses"
+import { rateLimitResponse } from "@/lib/server/rate-limit"
 
 export const runtime = "nodejs"
 
 export async function GET(request: Request) {
   const auth = await authenticateRequest(request)
+  const rateLimited = takeAuthRateLimitResponse()
+  if (rateLimited) return rateLimited
   if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
 
   const database = await readDatabase()
@@ -16,12 +21,24 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const limited = rateLimitResponse(request, "api-keys-create", 30)
+  if (limited) return limited
+
   const auth = await authenticateRequest(request)
+  const rateLimited = takeAuthRateLimitResponse()
+  if (rateLimited) return rateLimited
   if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
 
   const body = await request.json().catch(() => null)
   const name = String(body?.name ?? "").trim()
-  const expiresAt = body?.expires_at ? String(body.expires_at) : null
+  const scopes = parseRequestedScopes(body?.scopes)
+  if (scopes === null) return apiError(400, "INVALID_REQUEST", "scopes 包含未知权限。")
+  const expiresAt =
+    body?.expires_at === null
+      ? null
+      : body?.expires_at
+        ? String(body.expires_at)
+        : new Date(Date.now() + defaultApiKeyExpiryDays * 24 * 60 * 60 * 1000).toISOString()
 
   if (!name) return apiError(400, "INVALID_REQUEST", "API Key 名称不能为空。", { field: "name" })
   if (expiresAt && Number.isNaN(Date.parse(expiresAt))) return apiError(400, "INVALID_REQUEST", "expires_at 必须是 ISO 日期。")
@@ -37,6 +54,7 @@ export async function POST(request: Request) {
       prefix: secret.prefix,
       last4: secret.last4,
       keyHash: secret.keyHash,
+      scopes,
       createdAt,
       updatedAt: createdAt,
       expiresAt,
@@ -66,5 +84,6 @@ function serializeApiKey(apiKey: ApiKey) {
     updated_at: apiKey.updatedAt,
     expires_at: apiKey.expiresAt,
     last_used_at: apiKey.lastUsedAt,
+    scopes: apiKey.scopes?.length ? apiKey.scopes : ["*"],
   }
 }

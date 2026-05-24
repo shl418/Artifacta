@@ -52,7 +52,22 @@ try {
   assert(claim.job.status === "success", "Claimed sync job should finish successfully.")
   assert(claim.job.rows_synced === 2, "Claimed sync job should write mock_rows data.")
 
-  console.log("Smoke API passed: login, API key, ZIP hosting, asset serving, sync runner, cleanup.")
+  const preview = await jsonRequest(`/projects/${project.id}/datasets/${dataset.id}/preview`)
+  assert(preview.parsed === true, "CSV preview should parse uploaded dataset.")
+  assert(Array.isArray(preview.rows) && preview.rows.length > 0, "Preview should return sample rows.")
+
+  const versionList = await jsonRequest(`/projects/${project.id}/versions`)
+  assert(Array.isArray(versionList.data) && versionList.data.length > 0, "Project versions should be recorded after upload.")
+
+  const embed = await jsonRequestWithStatus(`/projects/${project.id}/embed-token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ expires_in_seconds: 300 }),
+  })
+  assert(embed.status === 201, "Embed token creation should return 201.")
+  assert(embed.payload.embed_url?.includes(project.id), "Embed URL should target the project.")
+
+  console.log("Smoke API passed: login, API key, ZIP hosting, assets, sync, preview, versions, embed token, cleanup.")
 } finally {
   if (projectId && apiKey) await jsonRequest(`/projects/${projectId}`, { method: "DELETE" }).catch(() => null)
   if (apiKeyId && apiKey) await jsonRequest(`/api-keys/${apiKeyId}`, { method: "DELETE" }).catch(() => null)

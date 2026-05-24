@@ -5,9 +5,10 @@ import type { BundleFileEntry, Database, Project, ProjectVisibility, UploadSessi
 import { canEditProject } from "@/lib/server/access"
 import { datasetIdFromBundlePath, generateManifest } from "@/lib/server/artifacts/manifest"
 import { normalizeBundleEntry, validateZipBundle } from "@/lib/server/artifacts/zip-security"
-import { absoluteUploadPath, dataDir } from "@/lib/server/config"
+import { dataDir, maxArtifactBytes } from "@/lib/server/config"
 import { inspectDataset } from "@/lib/server/datasets"
 import { now } from "@/lib/server/db"
+import { readStorageObject, writeStorageObject } from "@/lib/server/object-storage"
 import { extractProjectZip, sanitizeFileName } from "@/lib/server/storage"
 
 const DATASET_EXTENSIONS = new Set([".csv", ".tsv", ".json", ".jsonl", ".parquet", ".xlsx"])
@@ -84,6 +85,7 @@ export async function createUploadSession(input: {
 }) {
   const extension = path.extname(input.file.name).toLowerCase()
   if (extension !== ".zip") throw new Error("Upload session requires a .zip file.")
+  if (input.file.size > maxArtifactBytes) throw new Error(`ZIP dashboard exceeds the ${Math.round(maxArtifactBytes / 1024 / 1024)} MB upload limit.`)
 
   const buffer = Buffer.from(await input.file.arrayBuffer())
   const fileTree = buildFileTreeFromZipBuffer(buffer)
@@ -147,8 +149,7 @@ async function buildBundleDatasetRecord(input: {
   assetRoot: string
 }) {
   const filePath = path.posix.join(input.assetRoot, input.bundlePath)
-  const absolutePath = absoluteUploadPath(filePath)
-  const buffer = await fs.readFile(absolutePath)
+  const buffer = await readStorageObject(filePath)
   const fileName = path.posix.basename(input.bundlePath)
   const inspection = inspectDataset(fileName, buffer)
   const createdAt = now()
@@ -206,9 +207,7 @@ export async function commitUploadSession(database: Database, input: CommitUploa
   const skipPaths = isUpdate ? buildSyncProtectedPaths(database, projectId) : undefined
 
   const relativeZipPath = `projects/${projectId}/${sanitizeFileName(session.originalName)}`
-  const absoluteZipPath = absoluteUploadPath(relativeZipPath)
-  await fs.mkdir(path.dirname(absoluteZipPath), { recursive: true })
-  await fs.writeFile(absoluteZipPath, buffer)
+  await writeStorageObject(relativeZipPath, buffer, "application/zip")
 
   const extracted = await extractProjectZip(projectId, buffer, skipPaths)
   const manifestDatasets = input.datasets.map((item) => ({
@@ -218,10 +217,10 @@ export async function commitUploadSession(database: Database, input: CommitUploa
     refresh: item.refresh,
   }))
   const manifest = generateManifest(input.name, extracted.entryPath, manifestDatasets)
-  await fs.writeFile(
-    absoluteUploadPath(path.posix.join(extracted.assetRoot, "artifacta.json")),
+  await writeStorageObject(
+    path.posix.join(extracted.assetRoot, "artifacta.json"),
     `${JSON.stringify(manifest, null, 2)}\n`,
-    "utf8"
+    "application/json; charset=utf-8"
   )
 
   const timestamp = now()

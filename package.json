@@ -4,6 +4,11 @@
   "private": false,
   "description": "Artifacta — open protocol and hosting for AI-generated data applications (HTML/JS artifacts, datasets, sync, sharing).",
   "license": "MIT",
+  "packageManager": "pnpm@11.1.3",
+  "engines": {
+    "node": ">=22 <25",
+    "pnpm": ">=11 <12"
+  },
   "bin": {
     "artifacta": "./bin/artifacta.mjs"
   },
@@ -14,12 +19,19 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "cli": "node bin/artifacta.mjs",
+    "client:build": "pnpm --filter @artifacta/client build",
+    "test": "pnpm test:api-contract && pnpm test:client && pnpm test:security && pnpm test:unit",
+    "test:api-contract": "node scripts/test-api-contract.mjs",
+    "test:client": "node scripts/test-client-package.mjs",
+    "test:unit": "node scripts/test-sync-jobs.mjs && node scripts/test-sync-job-persistence.mjs && node scripts/test-manifest-parser.mjs && node scripts/test-csv-parser.mjs && node scripts/test-rate-limit.mjs && node scripts/test-request-size.mjs && node scripts/test-embed-token.mjs && node scripts/test-versions.mjs && node scripts/test-sync-config-validation.mjs && node scripts/test-api-key-scopes.mjs",
     "cli:pack": "cd packages/cli && pnpm pack",
     "cli:publish:dry-run": "cd packages/cli && pnpm publish --dry-run --access public",
     "worker:once": "node scripts/sync-worker.mjs --once",
-    "test:smoke": "node scripts/smoke-api.mjs"
+    "test:smoke": "node scripts/smoke-api.mjs",
+    "test:security": "node scripts/test-zip-security.mjs && node scripts/test-sync-source-policy.mjs && node scripts/test-upload-session.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1050.0",
     "@hookform/resolvers": "^3.9.1",
     "@radix-ui/react-accordion": "1.2.12",
     "@radix-ui/react-alert-dialog": "1.1.15",
@@ -55,12 +67,14 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.1.1",
+    "csv-parse": "^6.2.1",
     "date-fns": "4.1.0",
     "embla-carousel-react": "8.6.0",
     "input-otp": "1.4.2",
     "lucide-react": "^0.564.0",
     "next": "16.2.4",
     "next-themes": "^0.4.6",
+    "pg": "^8.21.0",
     "react": "^19",
     "react-day-picker": "9.13.2",
     "react-dom": "^19",
@@ -78,6 +92,7 @@
     "@types/adm-zip": "^0.5.8",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22",
+    "@types/pg": "^8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9.39.4",

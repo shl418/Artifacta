@@ -12,11 +12,14 @@ __v0_jsx-dev-runtime.ts
 
 # Local Artifacta storage
 .artifacta/
+.artifacta-smoke/
+.artifacta-ci/
 # Legacy local directory (pre-rename)
 .datavision/
 
 # Common ignores
 node_modules
+packages/client/dist/
 .next/
 out/
 coverage/
