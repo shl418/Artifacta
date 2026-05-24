@@ -1,5 +1,7 @@
 # @artifacta/cli
 
+Published on npm: https://www.npmjs.com/package/@artifacta/cli
+
 Lightweight CLI for pushing locally generated HTML dashboards, datasets, and sync configuration JSON to a running Artifacta instance.
 
 ## Install

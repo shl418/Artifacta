@@ -29,13 +29,7 @@ Artifacta 里的 project 是远端资源。第一次执行上传命令时，服�
 
 ## 第二步：安装 CLI
 
-仓库内开发者可以继续使用：
-
-```bash
-pnpm cli -- --help
-```
-
-对外用户在 npm 包发布后，推荐直接使用独立 CLI 包：
+推荐直接使用已发布的 npm 包（零仓库用户默认路径）：
 
 ```bash
 npx @artifacta/cli@latest --help
@@ -45,9 +39,14 @@ npx @artifacta/cli@latest --help
 
 ```bash
 npm install -g @artifacta/cli
+artifacta --help
 ```
 
-如果 npm 还没有发布，维护者也可以先按 `docs/CLI-RELEASE.md` 里写的方式，把 tarball 发给外部用户安装。
+如果你在 Artifacta 仓库里做开发，也可以继续用：
+
+```bash
+pnpm cli -- --help
+```
 
 ## 第三步：设置环境变量
 

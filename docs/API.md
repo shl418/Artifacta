@@ -1045,7 +1045,7 @@ GET /stats
 当前仓库有两种 CLI 使用方式：
 
 - 仓库内开发：`pnpm cli -- ...`
-- 对外发布包：`packages/cli`，发布后包名为 `@artifacta/cli`
+- 对外 npm 包：[`@artifacta/cli`](https://www.npmjs.com/package/@artifacta/cli)（源码位于 `packages/cli`）
 
 零仓库终端用户接入流程见 `docs/ONBOARDING.md` / `docs/ONBOARDING.zh-CN.md`。Claude Code skill 模板见 `templates/claude-code-artifacta-publisher/SKILL.md`。
 
@@ -1056,7 +1056,7 @@ export ARTIFACTA_URL=http://localhost:3000
 export ARTIFACTA_API_KEY=art_live_xxxxxxxxxxxx
 ```
 
-发布到 npm 后，外部用户可以不克隆仓库，直接运行：
+外部用户无需克隆仓库，直接运行：
 
 ```bash
 npx @artifacta/cli@latest --help

@@ -1,8 +1,15 @@
 # Artifacta CLI Release Guide
 
-This repository now contains a standalone publishable CLI package under `packages/cli`.
+The standalone CLI is published on npm as [`@artifacta/cli`](https://www.npmjs.com/package/@artifacta/cli).
 
-Use this guide when you want external users to install `artifacta` without cloning the full Artifacta app repository.
+External users can install it without cloning this repository:
+
+```bash
+npx @artifacta/cli@latest --help
+npm install -g @artifacta/cli
+```
+
+Use this guide when you need to bump and republish a new CLI version.
 
 ## Package Layout
 
@@ -36,9 +43,9 @@ npm publish --access public
 npx @artifacta/cli@latest --help
 ```
 
-## Private Distribution Before npm Publish
+## Offline / Tarball Distribution
 
-If you are not ready to publish to npm, you can still hand off the tarball produced by `pnpm cli:pack`.
+If a user cannot reach the public npm registry, you can still hand off the tarball produced by `pnpm cli:pack`.
 
 Consumers can install that tarball directly:
 

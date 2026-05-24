@@ -92,15 +92,21 @@ pnpm cli -- doctor
 pnpm cli -- --json projects list
 ```
 
-The repo also ships a standalone publishable CLI under `packages/cli`. After publish to npm, external users can run it without cloning the app:
+The standalone CLI is published on npm as [`@artifacta/cli`](https://www.npmjs.com/package/@artifacta/cli). External users can install it without cloning the app:
 
 ```bash
 npx @artifacta/cli@latest --help
 ```
 
+Or install globally:
+
+```bash
+npm install -g @artifacta/cli
+```
+
 The CLI can create projects, replace dashboard HTML, upload or replace datasets, and submit dataset sync configuration JSON from a local skill or CI job.
 
-For the zero-repo end-user path, see [docs/ONBOARDING.md](docs/ONBOARDING.md). For a copyable Claude Code skill template, see [templates/claude-code-artifacta-publisher/SKILL.md](templates/claude-code-artifacta-publisher/SKILL.md). Maintainers can publish the CLI using [docs/CLI-RELEASE.md](docs/CLI-RELEASE.md).
+For the zero-repo end-user path, see [docs/ONBOARDING.md](docs/ONBOARDING.md). For a copyable Claude Code skill template, see [templates/claude-code-artifacta-publisher/SKILL.md](templates/claude-code-artifacta-publisher/SKILL.md). Maintainers bumping a new release should follow [docs/CLI-RELEASE.md](docs/CLI-RELEASE.md).
 
 ## REST API Example
 

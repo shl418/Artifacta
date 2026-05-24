@@ -152,10 +152,10 @@ Artifacta 不是要取代所有 BI 平台，而是补齐 AI 时代数据应用�
 
 #### 5.2 CLI 工具
 
-命令行工具 `artifacta` 现在同时支持仓库内调用和对外独立发布包：
+命令行工具 `artifacta` 现在同时支持仓库内调用和 npm 独立包：
 
 - 仓库内：`pnpm cli -- ...`
-- 对外发布后：`npx @artifacta/cli@latest ...`
+- 对外 npm 包：`npx @artifacta/cli@latest ...` 或 `npm install -g @artifacta/cli`
 
 支持项目创建、HTML 替换、数据集上传/替换、同步配置提交和同步触发。当前仓库内可通过 `pnpm cli -- ...` 调用：
 

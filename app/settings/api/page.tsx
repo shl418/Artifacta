@@ -45,14 +45,14 @@ const scopeOptions = [
   { value: "admin:read", label: "运维只读" },
 ] as const
 
-const cliInstallExample = `# 仓库内开发者
-pnpm cli -- projects list
-
-# 独立发布包发布后，外部用户可直接使用
+const cliInstallExample = `# 外部用户（推荐）
 npx @artifacta/cli@latest projects list
 
 # 或全局安装
-npm install -g @artifacta/cli`
+npm install -g @artifacta/cli
+
+# 仓库内开发者
+pnpm cli -- projects list`
 
 const cliExample = `# 创建项目并上传 HTML + 数据文件
 artifacta projects upload \
@@ -260,7 +260,7 @@ export default function ApiDocsPage() {
                   <Card className="border-border bg-card">
                     <CardHeader>
                       <CardTitle className="text-lg">安装方式</CardTitle>
-                      <CardDescription>仓库内可以继续用 `pnpm cli -- ...`，对外用户走独立发布包 `@artifacta/cli`。</CardDescription>
+                      <CardDescription>对外用户推荐 `npx @artifacta/cli@latest`；仓库内开发者可继续用 `pnpm cli -- ...`。</CardDescription>
                     </CardHeader>
                     <CardContent>
                       <CodeBlock code={cliInstallExample} />

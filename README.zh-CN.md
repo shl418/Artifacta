@@ -92,15 +92,21 @@ pnpm cli -- doctor
 pnpm cli -- --json projects list
 ```
 
-仓库里现在还包含了独立可发布的 CLI 包，位于 `packages/cli`。发布到 npm 后，外部用户无需克隆仓库，也可以直接使用：
+独立 CLI 已发布到 npm（[`@artifacta/cli`](https://www.npmjs.com/package/@artifacta/cli)），外部用户无需克隆仓库即可安装：
 
 ```bash
 npx @artifacta/cli@latest --help
 ```
 
+或全局安装：
+
+```bash
+npm install -g @artifacta/cli
+```
+
 当前 CLI 已经可以让本地 skill 或 CI 直接创建项目、替换看板 HTML、上传/替换数据集，并提交数据同步配置 JSON。
 
-零仓库用户接入流程见 [docs/ONBOARDING.zh-CN.md](docs/ONBOARDING.zh-CN.md)。可复制的 Claude Code skill 模板见 [templates/claude-code-artifacta-publisher/SKILL.md](templates/claude-code-artifacta-publisher/SKILL.md)。维护者发布 CLI 的步骤见 [docs/CLI-RELEASE.md](docs/CLI-RELEASE.md)。
+零仓库用户接入流程见 [docs/ONBOARDING.zh-CN.md](docs/ONBOARDING.zh-CN.md)。可复制的 Claude Code skill 模板见 [templates/claude-code-artifacta-publisher/SKILL.md](templates/claude-code-artifacta-publisher/SKILL.md)。维护者发新版本见 [docs/CLI-RELEASE.md](docs/CLI-RELEASE.md)。
 
 ## REST API 示例
 
