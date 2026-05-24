@@ -27,6 +27,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
+import { Logo } from "@/components/logo"
 
 const mainNavigation = [
   { name: "概览", href: "/", icon: LayoutDashboard },
@@ -74,9 +75,7 @@ export function Sidebar() {
           {/* Logo */}
           <div className="flex items-center h-14 px-4">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-sm">DV</span>
-              </div>
+              <Logo size={32} />
               <span className="hidden font-semibold text-sidebar-foreground md:inline">
                 Artifacta
               </span>
