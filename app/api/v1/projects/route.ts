@@ -101,6 +101,12 @@ export async function POST(request: Request) {
       return apiError(400, "INVALID_REQUEST", "datasets 必须是 JSON 数组。", { field: "datasets" })
     }
 
+    const manifestModeInput = String(form.get("manifest_mode") ?? "").trim()
+    const manifestMode =
+      manifestModeInput === "auto" || manifestModeInput === "wizard"
+        ? (manifestModeInput as "auto" | "wizard")
+        : undefined
+
     const project = await updateDatabase<Project | null>(async (database) => {
       if (folderId && !database.folders.some((folder) => folder.id === folderId && folder.organizationId === auth.user.organizationId)) {
         throw new Error("FOLDER_NOT_FOUND")
@@ -116,6 +122,7 @@ export async function POST(request: Request) {
           visibility: visibilityInput as ProjectVisibility,
           folderId,
           datasets: datasetsConfig,
+          manifestMode,
         })
 
         addActivity(database, {
@@ -142,15 +149,20 @@ export async function POST(request: Request) {
       } catch (error) {
         if (error instanceof Error && error.message === "UPLOAD_SESSION_NOT_FOUND") throw new Error("UPLOAD_SESSION_NOT_FOUND")
         if (error instanceof Error && error.message === "PROJECT_NOT_FOUND") throw new Error("PROJECT_NOT_FOUND")
+        if (error instanceof Error && error.message === "INVALID_BUNDLED_MANIFEST") throw new Error("INVALID_BUNDLED_MANIFEST")
         throw error
       }
     }).catch((error) => {
       if (error instanceof Error && error.message === "FOLDER_NOT_FOUND") return null
       if (error instanceof Error && error.message === "UPLOAD_SESSION_NOT_FOUND") return "UPLOAD_SESSION_NOT_FOUND"
       if (error instanceof Error && error.message === "PROJECT_NOT_FOUND") return "PROJECT_NOT_FOUND"
+      if (error instanceof Error && error.message === "INVALID_BUNDLED_MANIFEST") return "INVALID_BUNDLED_MANIFEST"
       throw error
     })
 
+    if (project === "INVALID_BUNDLED_MANIFEST") {
+      return apiError(400, "INVALID_REQUEST", "ZIP 包内的 artifacta.json 无效。", { field: "upload_session_id" })
+    }
     if (project === "UPLOAD_SESSION_NOT_FOUND") {
       return apiError(404, "NOT_FOUND", "上传会话不存在或已过期。", { field: "upload_session_id" })
     }
@@ -169,6 +181,15 @@ export async function POST(request: Request) {
     return new Error("看板文件保存失败。")
   })
   if (artifact instanceof Error) return apiError(400, "INVALID_ARTIFACT", artifact.message, { field: "html_file" })
+
+  if (artifact.kind === "zip") {
+    return apiError(
+      400,
+      "DEPRECATED",
+      "ZIP 看板包请使用 POST /upload-sessions 创建会话，再通过 upload_session_id 发布。",
+      { field: "html_file" }
+    )
+  }
 
   const datasetFiles = [
     ...form.getAll("data_files"),

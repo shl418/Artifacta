@@ -41,6 +41,7 @@ try {
           refresh: "sync",
         },
       ],
+      sync_scripts: [],
     },
   )
 
@@ -55,6 +56,7 @@ try {
       name: "No Dataset Dashboard",
       entrypoint: "index.html",
       datasets: [],
+      sync_scripts: [],
     },
   )
 
@@ -123,6 +125,49 @@ try {
       }),
     /invalid/i,
   )
+
+  const withScript = manifest.parseArtifactManifest({
+    schema_version: 1,
+    name: "Script Dashboard",
+    entrypoint: "index.html",
+    datasets: [
+      { id: "sales", name: "Sales", kind: "csv", path: "data/sales.csv", refresh: "sync" },
+      { id: "inventory", name: "Inventory", kind: "csv", path: "data/inventory.csv", refresh: "sync" },
+    ],
+    sync_scripts: [
+      {
+        id: "main",
+        path: "scripts/sync.py",
+        runtime: "python",
+        outputs: ["data/sales.csv", "data/inventory.csv"],
+        schedule: "0 8 * * *",
+      },
+    ],
+  })
+
+  assert.equal(withScript.sync_scripts.length, 1)
+  assert.equal(withScript.datasets[0].kind, "csv")
+
+  assert.throws(
+    () =>
+      manifest.parseArtifactManifest({
+        schema_version: 1,
+        name: "Bad Script Outputs",
+        entrypoint: "index.html",
+        datasets: [{ id: "sales", name: "Sales", kind: "csv", path: "data/sales.csv", refresh: "sync" }],
+        sync_scripts: [
+          {
+            id: "main",
+            path: "scripts/sync.py",
+            runtime: "python",
+            outputs: ["data/missing.csv"],
+          },
+        ],
+      }),
+    /datasets\[\]\.path/i,
+  )
+
+  assert.equal(manifest.manifestKindForPath("data/sales.parquet"), "parquet")
 
   console.log("Manifest parser tests passed.")
 } finally {

@@ -46,6 +46,7 @@ export default function UploadPage() {
   const [uploadSessionId, setUploadSessionId] = useState<string | null>(null)
   const [fileTree, setFileTree] = useState<BundleFileEntry[]>([])
   const [datasetSelections, setDatasetSelections] = useState<DatasetSelection[]>([])
+  const [manifestDetected, setManifestDetected] = useState(false)
 
   const isZipBundle = Boolean(htmlFile?.name.toLowerCase().endsWith(".zip"))
 const selectedDatasets = useMemo(() => datasetSelections.filter((item) => item.selected), [datasetSelections])
@@ -93,8 +94,10 @@ const selectedDatasets = useMemo(() => datasetSelections.filter((item) => item.s
     }
 
     const tree = (payload.file_tree ?? []) as BundleFileEntry[]
+    const detected = Boolean(payload.manifest_detected)
     setUploadSessionId(payload.session_id)
     setFileTree(tree)
+    setManifestDetected(detected)
     setDatasetSelections(
       tree.map((entry) => ({
         bundle_path: entry.path,
@@ -103,7 +106,7 @@ const selectedDatasets = useMemo(() => datasetSelections.filter((item) => item.s
         selected: entry.inferred_dataset,
       }))
     )
-    setZipStep(2)
+    setZipStep(detected ? 3 : 2)
   }
 
   const publishZipBundle = async () => {
@@ -116,6 +119,7 @@ const selectedDatasets = useMemo(() => datasetSelections.filter((item) => item.s
     form.set("description", description)
     form.set("visibility", visibility)
     form.set("upload_session_id", uploadSessionId)
+    if (manifestDetected) form.set("manifest_mode", "auto")
     form.set(
       "datasets",
       JSON.stringify(
@@ -149,6 +153,7 @@ const selectedDatasets = useMemo(() => datasetSelections.filter((item) => item.s
     setUploadSessionId(null)
     setFileTree([])
     setDatasetSelections([])
+    setManifestDetected(false)
   }
 
   if (createdProject) {
@@ -249,7 +254,11 @@ const selectedDatasets = useMemo(() => datasetSelections.filter((item) => item.s
                     <Card>
                       <CardHeader>
                         <CardTitle>数据集配置</CardTitle>
-                        <CardDescription>选择包内数据文件，并标记为静态（manual）或可同步（sync）。</CardDescription>
+                        <CardDescription>
+                          {manifestDetected
+                            ? "检测到 artifacta.json，发布时将自动导入清单中的数据集与 sync_scripts。"
+                            : "选择包内数据文件，并标记为静态（manual）或可同步（sync）。"}
+                        </CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-4">
                         <div className="flex gap-2">
@@ -324,7 +333,7 @@ const selectedDatasets = useMemo(() => datasetSelections.filter((item) => item.s
                         <p><span className="text-muted-foreground">项目：</span>{name}</p>
                         <p><span className="text-muted-foreground">可见性：</span>{visibility}</p>
                         <p><span className="text-muted-foreground">ZIP 文件：</span>{htmlFile?.name}</p>
-                        <p><span className="text-muted-foreground">绑定数据集：</span>{selectedDatasets.length}</p>
+                        <p><span className="text-muted-foreground">绑定数据集：</span>{manifestDetected ? "来自 artifacta.json" : selectedDatasets.length}</p>
                         <ul className="list-disc pl-5 text-muted-foreground">
                           {selectedDatasets.map((item) => (
                             <li key={item.bundle_path}>{item.name} ({item.refresh})</li>

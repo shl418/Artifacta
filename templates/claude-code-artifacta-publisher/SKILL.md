@@ -40,11 +40,11 @@ Example: *「部署到 Artifacta 并每天 8 点拉数据」*
 3. Add `scripts/sync.py` or `scripts/sync.mjs` that writes only declared `outputs` paths.
 4. Test locally with the env contract; confirm `index.html` reads relative data paths.
 5. Zip **bundle root** (not parent folder): `zip -r ../bundle.zip . -x "*.git*" -x "__MACOSX/*"`.
-6. `artifacta projects upload --file ../bundle.zip --name "..."` — **no** `--data-file`.
-7. Set secrets on the server (`source_config` / API); never in the ZIP.
-8. Return `preview_url`, `project_id`, and what was configured.
+6. `artifacta projects upload --file ../bundle.zip --name "..."` — **no** `--data-file` (CLI uses `POST /upload-sessions` + `manifest_mode=auto`).
+7. Set secrets on the server with `artifacta sync-scripts set --config-file ./secrets.json`; never in the ZIP.
+8. Return `preview_url`, `project_id`, script ids, and what was configured.
 
-Do not ask the user to manually pick datasets in the upload UI when manifest-driven upload exists; until then, align `datasets` in manifest with upload-session `datasets` JSON if using the API.
+The Web upload UI skips the dataset wizard when `artifacta.json` is detected. Raw API users should pass `manifest_mode=auto` and `datasets=[]` when committing the upload session.
 
 ---
 
@@ -176,6 +176,16 @@ export ARTIFACTA_OUTPUT_PATHS="data/sales.csv,data/inventory.csv"
 python3 scripts/sync.py
 ```
 
+Or use the CLI helper (same env contract):
+
+```bash
+artifacta bundle run-script \
+  --file ./scripts/sync.py \
+  --bundle-root . \
+  --outputs data/sales.csv,data/inventory.csv \
+  --config-file ./secrets.json
+```
+
 Node: same env vars; write under `path.join(process.env.ARTIFACTA_BUNDLE_ROOT, rel)`.
 
 ### ZIP re-upload behavior
@@ -259,20 +269,34 @@ artifacta sync trigger \
   --dataset-id ds_123
 ```
 
-### Secrets after bundle publish (custom script)
-
-Do not put credentials in the ZIP. After upload, set server-side config (exact API ships with script-sync implementation):
+### List and configure bundle scripts
 
 ```bash
-# PUT /api/v1/projects/:project_id/sync-scripts/:script_id
-# { "source_config": { "url": "...", "api_key": "..." } }
+artifacta sync-scripts list --project-id proj_123
+# Use the server id (sscript_...) from the list, not only manifest "main"
+
+artifacta sync-scripts set \
+  --project-id proj_123 \
+  --script-id sscript_abc123 \
+  --config-file ./secrets.json \
+  --schedule "0 8 * * *"
 ```
 
-### Trigger script sync (when implemented)
+`secrets.json` is merged into server `source_config` and injected as `ARTIFACTA_SOURCE_CONFIG` at run time.
+
+### Trigger bundle script sync
 
 ```bash
-artifacta sync trigger --project-id proj_xxx --sync-script-id main
+artifacta sync-scripts trigger \
+  --project-id proj_123 \
+  --script-id sscript_abc123
+
+artifacta sync-scripts status \
+  --project-id proj_123 \
+  --script-id sscript_abc123
 ```
+
+Requires a worker with `ARTIFACTA_API_KEY` and Python 3 on the host (`ARTIFACTA_PYTHON` optional). One queued/running script job per project at a time.
 
 ---
 
@@ -292,20 +316,32 @@ artifacta sync trigger --project-id proj_xxx --sync-script-id main
 - [ ] No secrets in repo or ZIP
 - [ ] Local script test passed
 - [ ] Single ZIP upload (no `--data-file` for bundle path)
-- [ ] Server secrets set if sync needs auth
-- [ ] User receives `preview_url` + `project_id`
+- [ ] Server secrets set if sync needs auth (`sync-scripts set` or UI)
+- [ ] User receives `preview_url` + `project_id` + `sscript_*` ids when scripts exist
 
 ---
 
-## Platform gaps (check before claiming)
+## Platform capabilities (shipped)
 
-Read `docs/IMPLEMENTED-FEATURES.md`. Planned but may not be shipped yet:
+Confirm against `docs/IMPLEMENTED-FEATURES.md` on the Artifacta version you target:
 
-| Feature | Interim |
-|---------|---------|
-| Zero-config upload from manifest | Upload session + `datasets` JSON matching manifest paths |
-| `sync_scripts` import | `artifacta datasets sync set` per dataset or UI |
-| `source_type: script` | URL/local `source_config` or manual trigger |
+| Feature | How agents use it |
+|---------|-------------------|
+| ZIP via upload session | `artifacta projects upload` / `update-html` with `.zip` (automatic) |
+| Manifest import | Root `artifacta.json`; preserved on commit when valid |
+| `sync_scripts` | Declared in manifest; configured with `sync-scripts set` |
+| Script execution | `sync-scripts trigger` + worker `POST /sync/script-jobs/claim` |
+| Re-upload protection | Synced `outputs` paths and sync-enabled bundle datasets kept |
+
+## Known limitations
+
+| Topic | Note |
+|-------|------|
+| Direct ZIP on `POST /projects` | Returns `400 DEPRECATED` — always use upload session (CLI does this) |
+| `PUT /projects/:id/html` with ZIP | Same — use upload session with `project_id` |
+| Script egress | Subprocess has no outbound network in v1 unless ops adds future allowlist |
+| Cron | Script `schedule` supports daily `M H * * *`; full cron for all dataset jobs may still fall back to worker heuristics |
+| Legacy per-dataset sync | URL/COS/Presto still use `datasets sync set` + `sync trigger`, not `sync_scripts` |
 
 ---
 

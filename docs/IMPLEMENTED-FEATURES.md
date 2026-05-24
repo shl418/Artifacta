@@ -7,7 +7,8 @@ This file is the maintenance checklist for keeping code and documentation in syn
 | Surface | Implemented Code | Primary Docs |
 | --- | --- | --- |
 | Web console shell, dashboard home, project list, upload, datasets, settings | `app/page.tsx`, `app/dashboards/page.tsx`, `app/upload/page.tsx`, `app/datasets/page.tsx`, `app/settings/**` | `README.md`, `README.zh-CN.md`, `docs/PRODUCT.md` |
-| Project management surface | `app/projects/[projectId]/page.tsx` | `README.md`, `docs/API.md` |
+| Project management surface (datasets + bundle sync scripts) | `app/projects/[projectId]/page.tsx` | `README.md`, `docs/API.md` |
+| Bundle ZIP upload wizard | `app/upload/page.tsx` | `docs/API.md`, `docs/ONBOARDING.md`, `docs/protocol/manifest-v1.md` |
 | Dashboard preview | `app/view/[projectId]/page.tsx`, `app/api/v1/projects/[projectId]/html/render/route.ts`, `app/api/v1/projects/[projectId]/html/[...assetPath]/route.ts` | `docs/API.md`, `docs/DEPLOYMENT.md` |
 | API key and CLI onboarding | `app/settings/api/page.tsx`, `app/api/v1/api-keys/**`, `packages/cli/bin/artifacta.mjs` | `docs/API.md`, `docs/ONBOARDING.md`, `docs/ONBOARDING.zh-CN.md`, `packages/cli/README.md` |
 | Team and project permissions | `app/settings/team/page.tsx`, `app/settings/permissions/page.tsx`, `app/settings/operations/page.tsx`, `app/api/v1/team/**`, `app/api/v1/projects/[projectId]/permissions/**`, `app/api/v1/webhooks/**`, `app/api/v1/audit-logs` | `docs/API.md`, `docs/PRODUCT.md` |
@@ -19,12 +20,14 @@ This file is the maintenance checklist for keeping code and documentation in syn
 | Auth | `POST /api/v1/auth/login`, `GET /api/v1/auth/me`, `POST /api/v1/auth/logout` | Email login for local/open-source use. |
 | OIDC | `GET /api/v1/auth/oidc/login`, `GET /api/v1/auth/oidc/callback` | Enabled when OIDC environment variables are configured. |
 | Projects | `GET/POST /api/v1/projects`, `GET/PATCH/DELETE /api/v1/projects/:projectId`, `PATCH /api/v1/projects/:projectId/folder` | Responses use snake_case through serializers. |
-| Dashboard artifacts | `PUT /api/v1/projects/:projectId/html`, `GET /api/v1/projects/:projectId/html/render`, `GET /api/v1/projects/:projectId/html/:assetPath` | HTML and ZIP bundles are served through protected API routes. |
+| Dashboard artifacts | `PUT /api/v1/projects/:projectId/html`, `GET /api/v1/projects/:projectId/html/render`, `GET /api/v1/projects/:projectId/html/:assetPath` | Single `.html` updates via `PUT /html`. ZIP create/update uses upload sessions only. |
 | Dashboard versions and embeds | `GET /api/v1/projects/:projectId/versions`, `POST /api/v1/projects/:projectId/versions/:versionId/rollback`, `POST /api/v1/projects/:projectId/embed-token`, `GET /embed/:projectId` | Embed access uses signed short-lived tokens and sandboxed previews. |
-| Upload sessions | `POST /api/v1/upload-sessions` | Used by the Web upload flow to inspect ZIP bundles before committing them. |
+| Upload sessions | `POST /api/v1/upload-sessions` | ZIP inspect + commit via `POST /projects` with `upload_session_id`. Returns `manifest_detected` when `artifacta.json` is present. Supports `manifest_mode=auto` and `project_id` for updates. |
+| Bundle manifest import | `lib/server/artifacts/manifest.ts`, `manifest-import.ts`, `upload-session.ts` | Bundled `artifacta.json` is preserved when valid; server generates manifest only when missing. See `docs/protocol/manifest-v1.md`. |
+| Bundle script sync | `GET/PUT /api/v1/projects/:projectId/sync-scripts`, `.../test`, `.../trigger`, `.../status`, `.../history`, `POST /api/v1/sync/script-jobs/claim` | Python/Node scripts run in extracted bundle; multi-output history; one queued/running job per project. |
 | Folders | `GET/POST /api/v1/folders`, `PATCH/DELETE /api/v1/folders/:folderId` | Deleting a folder moves projects to root or `move_to`. |
 | Datasets | `GET /api/v1/datasets`, `GET/POST /api/v1/projects/:projectId/datasets`, `GET/PUT/DELETE /api/v1/projects/:projectId/datasets/:datasetId`, `GET /api/v1/projects/:projectId/datasets/:datasetId/preview`, `GET /api/v1/projects/:projectId/datasets/:datasetId/versions` | CSV/TSV/JSON/JSONL get schema and sample preview; XLSX and other files are stored without structured parsing. |
-| Dataset sync | `GET/PUT /api/v1/projects/:projectId/datasets/:datasetId/sync`, `POST /api/v1/projects/:projectId/datasets/:datasetId/sync/test`, `POST /api/v1/projects/:projectId/datasets/:datasetId/sync/trigger`, `GET /api/v1/projects/:projectId/datasets/:datasetId/sync/status`, `GET /api/v1/projects/:projectId/datasets/:datasetId/sync/history`, `POST /api/v1/sync/jobs/claim` | Worker executes local file, upload path, URL, S3/COS objects, Presto/Trino queries, and `mock_rows` sources. |
+| Dataset sync (legacy sources) | `GET/PUT /api/v1/projects/:projectId/datasets/:datasetId/sync`, `POST .../test`, `POST .../trigger`, `GET .../status`, `GET .../history`, `POST /api/v1/sync/jobs/claim` | Per-dataset URL/COS/Presto/local file sources via `sync-runner.ts`. Parallel to bundle script sync. |
 | Permissions | `GET/POST /api/v1/projects/:projectId/permissions`, `PATCH/DELETE /api/v1/projects/:projectId/permissions/:userId` | Project member permissions are `view` or `edit`. |
 | Team | `GET/POST /api/v1/team/members`, `PATCH/DELETE /api/v1/team/members/:userId`, `POST /api/v1/team/invitations` | Admin-only writes. |
 | API keys | `GET/POST /api/v1/api-keys`, `DELETE /api/v1/api-keys/:keyId` | Secret value is returned only on create. Optional `scopes` restrict API key access. |
@@ -36,8 +39,10 @@ This file is the maintenance checklist for keeping code and documentation in syn
 | Command | API Used | Documented In |
 | --- | --- | --- |
 | `artifacta projects list [--search text]` | `GET /projects` | `docs/API.md`, `packages/cli/README.md` |
-| `artifacta projects upload --file ... --name ... [--data-file ...] [--folder-id ...] [--visibility ...]` | `POST /projects` | `README.md`, `docs/ONBOARDING.md`, `docs/API.md` |
-| `artifacta projects update-html --project-id ... --file ...` | `PUT /projects/:projectId/html` | `README.md`, `docs/API.md` |
+| `artifacta projects upload --file ...` (`.html` direct, `.zip` via upload session + `manifest_mode=auto`) | `POST /upload-sessions`, `POST /projects` | `README.md`, `docs/ONBOARDING.md`, `docs/API.md` |
+| `artifacta projects update-html --project-id ... --file ...` (`.html` → `PUT /html`; `.zip` → upload session) | `PUT /projects/:id/html` or upload session | `README.md`, `docs/API.md` |
+| `artifacta sync-scripts list|set|trigger|status --project-id ... [--script-id ...]` | `/projects/:id/sync-scripts/*` | `docs/API.md`, `packages/cli/README.md` |
+| `artifacta bundle run-script --file ... --bundle-root ...` | Local dev helper (sets `ARTIFACTA_*` env, spawns script) | `packages/cli/README.md` |
 | `artifacta datasets list [--source ...]` | `GET /datasets` | `README.md`, `docs/API.md` |
 | `artifacta datasets upload --project-id ... --file ... [--name ...]` | `POST /projects/:projectId/datasets` | `docs/API.md`, `packages/cli/README.md` |
 | `artifacta datasets replace --project-id ... --dataset-id ... --file ...` | `PUT /projects/:projectId/datasets/:datasetId` | `docs/API.md`, `packages/cli/README.md` |
@@ -55,14 +60,29 @@ This file is the maintenance checklist for keeping code and documentation in syn
 | Local artifact storage | `lib/server/storage.ts` | `README.md`, `docs/DEPLOYMENT.md` |
 | S3-compatible artifact storage | `lib/server/object-storage.ts`, `lib/server/storage.ts` | `README.md`, `docs/DEPLOYMENT.md` |
 | ZIP validation and extraction | `lib/server/artifacts/zip-security.ts`, `lib/server/storage.ts` | `docs/API.md`, `docs/DEPLOYMENT.md` |
+| Manifest parser (`sync_scripts`, widened dataset kinds) | `lib/server/artifacts/manifest.ts` | `docs/protocol/manifest-v1.md` |
+| Script sync runner | `lib/server/sync/script-runner.ts`, `script-jobs.ts`, `cron.ts` | `docs/API.md`, `docs/DEPLOYMENT.md` |
+| Re-upload path protection | `buildSyncProtectedPaths` in `upload-session.ts` | `docs/API.md`, `docs/plans/2026-05-24-custom-script-sync-and-bundle-upload.md` |
 | Sync source safety | `lib/server/sync/source-policy.ts` | `docs/DEPLOYMENT.md` |
 | Rate limiting | `lib/server/rate-limit.ts` | `docs/DEPLOYMENT.md`, `SECURITY.md` |
 | Seeded demo data and dashboards | `lib/server/demo-artifacts.ts` | `README.md`, `README.zh-CN.md` |
+
+## Bundle Upload Quick Reference
+
+| Action | Recommended path |
+| --- | --- |
+| Create ZIP project | `POST /upload-sessions` → `POST /projects` with `upload_session_id` |
+| ZIP with `artifacta.json` | Same; set `manifest_mode=auto` (CLI does this automatically) |
+| Update ZIP project | `POST /upload-sessions` with `project_id` → commit with `upload_session_id` |
+| Replace single HTML file | `PUT /projects/:id/html` with `.html` only |
+| Direct `POST /projects` with ZIP | **Rejected** (`400 DEPRECATED`) — use upload session |
 
 ## Not Implemented Yet
 
 These are intentionally documented as roadmap or extension points only:
 
+- Subprocess network egress allowlist for bundle scripts (`SCRIPT_EGRESS_ALLOWLIST` is reserved; v1 scripts have no outbound network)
+- Full 5-field cron evaluation for all dataset schedules (daily `H M * * *` style cron is supported for script `next_run_at`)
 - SAML SSO
 - MySQL metadata adapter
 - Password-protected public links

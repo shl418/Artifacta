@@ -1,7 +1,7 @@
 # Custom Script Sync & Bundle-First Upload
 
 Date: 2026-05-24  
-Status: **Design locked** — ready for implementation  
+Status: **Implemented** on branch `feature/custom-script-sync-bundle-upload` (2026-05-24). See `docs/IMPLEMENTED-FEATURES.md` and `docs/API.md` for the operator-facing summary.  
 Agent skill: `templates/claude-code-artifacta-publisher/SKILL.md`
 
 ## Summary

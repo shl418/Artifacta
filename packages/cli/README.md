@@ -29,8 +29,14 @@ export ARTIFACTA_API_KEY=art_...
 artifacta projects list [--search growth]
 artifacta --json projects list
 artifacta doctor [--app-url http://localhost:3000]
-artifacta projects upload --file ./dashboard.zip --name "Weekly Growth" --data-file ./growth.csv --visibility team [--folder-id folder_123]
+artifacta projects upload --file ./dashboard.zip --name "Weekly Growth" --visibility team [--folder-id folder_123]
+artifacta projects upload --file ./dashboard.html --name "Single Page" --data-file ./growth.csv
 artifacta projects update-html --project-id proj_123 --file ./dashboard-v2.zip
+artifacta sync-scripts list --project-id proj_123
+artifacta sync-scripts trigger --project-id proj_123 --script-id sscript_abc123
+artifacta sync-scripts status --project-id proj_123 --script-id sscript_abc123
+artifacta sync-scripts set --project-id proj_123 --script-id sscript_abc123 --config-file ./secrets.json
+artifacta bundle run-script --file ./scripts/sync.py --bundle-root ./dist --outputs data/sales.csv
 artifacta datasets list [--source manual|cos|presto]
 artifacta datasets upload --project-id proj_123 --file ./growth.csv --name "Weekly Growth Data"
 artifacta datasets replace --project-id proj_123 --dataset-id ds_123 --file ./growth-v2.csv
@@ -43,4 +49,6 @@ artifacta sync trigger --project-id proj_123 --dataset-id ds_123
 
 Use `--json` for stable agent/CI output. Without it, list commands use tables and write commands print short human summaries.
 
-See the main repository docs for onboarding, API details, `docs/protocol/manifest-v1.md`, and release guidance.
+ZIP uploads use `POST /upload-sessions` and `manifest_mode=auto` automatically. Put datasets and optional `sync_scripts` in `artifacta.json` inside the ZIP — see `docs/protocol/manifest-v1.md`.
+
+See the main repository docs for onboarding, API details (`docs/API.md` — bundle script sync section), and release guidance.

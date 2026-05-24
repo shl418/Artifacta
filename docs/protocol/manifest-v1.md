@@ -18,9 +18,35 @@ Each dataset binding declares:
 
 - `id`: stable machine-readable identifier.
 - `name`: human-readable label.
-- `kind`: one of `csv`, `json`.
+- `kind`: one of `csv`, `json`, `jsonl`, `tsv`, `parquet`, `xlsx`, `other`.
 - `path`: optional relative path inside the bundle.
 - `refresh`: one of `manual`, `sync`. If omitted, Artifacta treats the binding as `manual`.
+
+## Sync Scripts (optional)
+
+`sync_scripts` declares bundle-local Python or Node scripts that refresh one or more dataset files inside the ZIP:
+
+```json
+"sync_scripts": [
+  {
+    "id": "main",
+    "path": "scripts/sync.py",
+    "runtime": "python",
+    "outputs": ["data/sales.csv"],
+    "schedule": "0 8 * * *"
+  }
+]
+```
+
+Rules:
+
+- `id`: `[a-zA-Z0-9_-]+`, max 80 characters.
+- `path`: bundle-relative; must end in `.py`, `.js`, or `.mjs`.
+- `runtime`: `python` or `node`.
+- `outputs`: non-empty list of bundle paths; each path must match a `datasets[].path` entry with `refresh: "sync"`.
+- `schedule`: optional cron string; the server may override schedule and secrets.
+
+Secrets and remote credentials never belong in the ZIP. The server stores them in `source_config` and injects `ARTIFACTA_SOURCE_CONFIG` at runtime.
 
 ## Safety Rules
 

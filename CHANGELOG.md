@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Bundle upload and script sync
+
+- **ZIP publish path:** `POST /upload-sessions` is required for ZIP create/update; direct `html_file` ZIP on `POST /projects` and `PUT /projects/:id/html` return `400 DEPRECATED`.
+- **Manifest import:** Bundled `artifacta.json` is parsed on commit; valid user manifests are not overwritten. Supports widened `datasets[].kind`, optional `sync_scripts[]`, and `manifest_mode=auto` on `POST /projects`.
+- **Upload UX:** `POST /upload-sessions` returns `manifest_detected`; Web upload skips the dataset wizard when present.
+- **Bundle script sync:** New `ProjectSyncScript` model, `GET/PUT /projects/:id/sync-scripts/*`, test/trigger/status/history routes, and `POST /sync/script-jobs/claim` for workers. Python/Node scripts run in the extracted bundle with `ARTIFACTA_*` env vars; one active script job per project.
+- **Re-upload protection:** `buildSyncProtectedPaths` also skips enabled script `outputs` and sync-enabled bundle dataset paths.
+- **CLI:** ZIP upload/update via upload session; `sync-scripts list|set|trigger|status`; `bundle run-script` for local dev.
+- **Docs:** `docs/API.md`, `docs/IMPLEMENTED-FEATURES.md`, `docs/protocol/manifest-v1.md`, OpenAPI routes, onboarding guides, and `docs/protocol/examples/script-sync-dashboard/artifacta.json`.
+
+### Earlier unreleased notes
+
 - Added runtime metadata (`packageManager`, Node version files), contributor/security docs, issue templates, PR template, examples, and `artifacta doctor`.
 - Added CLI `--json` output for agent and CI use.
 - Expanded `@artifacta/client` to build compiled JS and cover the core publish/dataset/sync workflow.

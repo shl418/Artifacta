@@ -40,7 +40,7 @@ export async function POST(request: Request) {
   try {
     const payload = await updateDatabase(async (nextDatabase) => {
       cleanExpiredSessions(nextDatabase)
-      const { session, fileTree } = await createUploadSession({
+      const { session, fileTree, manifestDetected } = await createUploadSession({
         file: file as File,
         userId: auth.user.id,
         organizationId: auth.user.organizationId,
@@ -50,13 +50,14 @@ export async function POST(request: Request) {
       const annotatedTree = projectIdInput
         ? annotateFileTreeWithExistingDatasets(nextDatabase, projectIdInput, fileTree)
         : fileTree
-      return { session, fileTree: annotatedTree }
+      return { session, fileTree: annotatedTree, manifestDetected }
     })
 
     return created({
       session_id: payload.session.id,
       file_tree: payload.fileTree,
       expires_at: payload.session.expiresAt,
+      manifest_detected: payload.manifestDetected,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : "无法创建上传会话。"

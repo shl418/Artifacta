@@ -22,6 +22,10 @@ try {
     await uploadProject(parseOptions(args.slice(1)))
   } else if (command === "sync") {
     await syncCommand(args.slice(1))
+  } else if (command === "sync-scripts") {
+    await syncScriptsCommand(args.slice(1))
+  } else if (command === "bundle") {
+    await bundleCommand(args.slice(1))
   } else {
     throw new Error(`Unknown command: ${command}`)
   }
@@ -46,6 +50,10 @@ Usage:
   artifacta datasets replace --project-id proj_x --dataset-id ds_x --file data.csv
   artifacta datasets sync set --project-id proj_x --dataset-id ds_x --source-type presto --config-file ./sync.json
   artifacta sync trigger --project-id proj_x --dataset-id ds_x
+  artifacta sync-scripts list --project-id proj_x
+  artifacta sync-scripts trigger --project-id proj_x --script-id sscript_x
+  artifacta sync-scripts status --project-id proj_x --script-id sscript_x
+  artifacta bundle run-script --file ./scripts/sync.py --bundle-root ./dist [--runtime python]
 
 Legacy alias:
   artifacta upload --file dashboard.html --name "Sales" [--data-file data.csv] [--visibility team]
@@ -134,6 +142,12 @@ async function listDatasets(options) {
 
 async function uploadProject(options) {
   const filePath = requiredOption(options, "file")
+  const extension = path.extname(filePath).toLowerCase()
+  if (extension === ".zip") {
+    await publishZipBundle(options, filePath)
+    return
+  }
+
   const name = String(options.name ?? path.basename(filePath, path.extname(filePath)))
   const form = new FormData()
 
@@ -153,11 +167,37 @@ async function uploadProject(options) {
   printOutput(result, () => printSummary("Project published", result))
 }
 
+async function publishZipBundle(options, filePath, projectId = null) {
+  const name = String(options.name ?? path.basename(filePath, path.extname(filePath)))
+  const sessionForm = new FormData()
+  await appendFile(sessionForm, "file", filePath)
+  if (projectId) sessionForm.append("project_id", projectId)
+
+  const session = await request("/upload-sessions", { method: "POST", body: sessionForm })
+  const publishForm = new FormData()
+  publishForm.append("name", name)
+  publishForm.append("description", String(options.description ?? "Uploaded with Artifacta CLI"))
+  publishForm.append("visibility", String(options.visibility ?? "team"))
+  if (options["folder-id"]) publishForm.append("folder_id", String(options["folder-id"]))
+  publishForm.append("upload_session_id", session.session_id)
+  publishForm.append("manifest_mode", "auto")
+  publishForm.append("datasets", "[]")
+
+  const payload = await request("/projects", { method: "POST", body: publishForm })
+  const result = { id: payload.id, name: payload.name, preview_url: payload.preview_url, manifest_detected: session.manifest_detected ?? false }
+  printOutput(result, () => printSummary(projectId ? "Project bundle updated" : "Project bundle published", result))
+}
+
 async function updateProjectHtml(options) {
   const projectId = requiredOption(options, "project-id")
   const filePath = requiredOption(options, "file")
-  const form = new FormData()
+  const extension = path.extname(filePath).toLowerCase()
+  if (extension === ".zip") {
+    await publishZipBundle(options, filePath, projectId)
+    return
+  }
 
+  const form = new FormData()
   await appendFile(form, "html_file", filePath)
 
   const payload = await request(`/projects/${projectId}/html`, { method: "PUT", body: form })
@@ -217,6 +257,83 @@ async function datasetSyncCommand(syncArgs) {
   })
 
   printOutput(payload, () => printSummary("Sync config saved", payload))
+}
+
+async function syncScriptsCommand(syncArgs) {
+  const subcommand = syncArgs[0]
+  const options = parseOptions(syncArgs.slice(1))
+  const projectId = requiredOption(options, "project-id")
+  const scriptId = optionalString(options, "script-id")
+
+  if (subcommand === "list") {
+    const payload = await request(`/projects/${projectId}/sync-scripts`)
+    printOutput(payload, () => console.table(payload.data ?? []))
+    return
+  }
+
+  if (!scriptId) throw new Error("--script-id is required for this subcommand.")
+
+  if (subcommand === "trigger") {
+    const payload = await request(`/projects/${projectId}/sync-scripts/${scriptId}/trigger`, { method: "POST" })
+    printOutput(payload, () => printSummary("Script sync queued", payload))
+    return
+  }
+
+  if (subcommand === "status") {
+    const payload = await request(`/projects/${projectId}/sync-scripts/${scriptId}/status`)
+    printOutput(payload, () => printSummary("Script sync status", payload))
+    return
+  }
+
+  if (subcommand === "set") {
+    const body = {}
+    if (options.enabled || options.enable) body.enabled = true
+    if (options.disabled || options.disable) body.enabled = false
+    if (options.schedule !== undefined) body.schedule = optionalString(options, "schedule")
+    const config = await readJsonConfig(options)
+    if (Object.keys(config).length > 0) body.source_config = config
+    const payload = await request(`/projects/${projectId}/sync-scripts/${scriptId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+    printOutput(payload, () => printSummary("Script sync config saved", payload))
+    return
+  }
+
+  throw new Error("Usage: artifacta sync-scripts <list|set|trigger|status> ...")
+}
+
+async function bundleCommand(bundleArgs) {
+  const subcommand = bundleArgs[0]
+  if (subcommand !== "run-script") {
+    throw new Error("Usage: artifacta bundle run-script --file ./scripts/sync.py --bundle-root ./dist")
+  }
+
+  const options = parseOptions(bundleArgs.slice(1))
+  const filePath = path.resolve(requiredOption(options, "file"))
+  const bundleRoot = path.resolve(requiredOption(options, "bundle-root"))
+  const runtime = String(options.runtime ?? (filePath.endsWith(".py") ? "python" : "node"))
+  const scriptPath = path.relative(bundleRoot, filePath)
+  const outputs = String(options.outputs ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+
+  const env = {
+    ...process.env,
+    ARTIFACTA_BUNDLE_ROOT: bundleRoot,
+    ARTIFACTA_OUTPUT_PATHS: outputs.join(","),
+    ARTIFACTA_SCRIPT_ID: String(options["script-id"] ?? "local"),
+    ARTIFACTA_SOURCE_CONFIG: JSON.stringify(await readJsonConfig(options)),
+  }
+
+  const command = runtime === "python" ? process.env.ARTIFACTA_PYTHON ?? "python3" : process.execPath
+  const args = runtime === "python" ? [filePath] : [filePath]
+  await execFileAsync(command, args, { cwd: bundleRoot, env })
+  printOutput({ ok: true, script_path: scriptPath, bundle_root: bundleRoot }, () =>
+    console.log(`Script completed: ${scriptPath}`)
+  )
 }
 
 async function syncCommand(syncArgs) {

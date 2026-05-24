@@ -157,17 +157,20 @@ Artifacta 不是要取代所有 BI 平台，而是补齐 AI 时代数据应用�
 - 仓库内：`pnpm cli -- ...`
 - 对外 npm 包：`npx @artifacta/cli@latest ...` 或 `npm install -g @artifacta/cli`
 
-支持项目创建、HTML 替换、数据集上传/替换、同步配置提交和同步触发。当前仓库内可通过 `pnpm cli -- ...` 调用：
+支持项目创建、ZIP/HTML 发布、数据集上传/替换、按数据集同步配置、以及 bundle 内 `sync_scripts` 脚本同步。ZIP 推荐在包内附带 `artifacta.json`（见 `docs/protocol/manifest-v1.md`）。当前仓库内可通过 `pnpm cli -- ...` 调用：
 
 ```bash
-# 上传项目
-pnpm cli -- projects upload --file ./dashboard.zip --data-file ./sales.csv --name "销售看板"
+# 上传 ZIP（自动 upload-session + manifest_mode=auto）
+pnpm cli -- projects upload --file ./dashboard.zip --name "销售看板"
 
-# 替换 HTML
+# 替换 ZIP 看板
 pnpm cli -- projects update-html --project-id proj_abc123 --file ./dashboard-v2.zip
 
-# 触发同步
+# 触发按数据集的外部同步
 pnpm cli -- sync trigger --project-id proj_abc123 --dataset-id ds_001
+
+# 触发 bundle 脚本同步
+pnpm cli -- sync-scripts trigger --project-id proj_abc123 --script-id sscript_abc123
 
 # 列出项目
 pnpm cli -- projects list
@@ -181,7 +184,7 @@ pnpm cli -- projects list
 # AI Agent 工作流示例
 1. 用户: "帮我分析销售数据并生成看板"
 2. Agent: 分析 CSV，生成 HTML 看板
-3. Agent: 执行 `pnpm cli -- projects upload --file ./dashboard.zip --data-file ./sales.csv`
+3. Agent: 打包 `dashboard.zip`（含 `artifacta.json` 与数据路径），执行 `pnpm cli -- projects upload --file ./dashboard.zip`
 4. Agent: 返回看板链接给用户
 ```
 
@@ -203,10 +206,11 @@ pnpm cli -- projects list
 
 ### 数据同步
 
-- **Worker**: API-driven Worker 领取队列任务并执行同步
-- **数据源**: 本地文件、上传目录文件、远程 URL、`mock_rows`
-- **格式转换**: CSV/JSON 自动解析
-- **扩展点**: COS/S3、Presto/Trino、分布式调度和告警
+- **Worker**: API-driven Worker 领取脚本任务与按数据集任务并执行同步
+- **Bundle 脚本**: ZIP 内 `sync_scripts` 在解包目录运行 Python/Node，一次可写多个 `outputs`
+- **按数据集来源**: 本地文件、上传目录文件、远程 URL、`mock_rows`、S3/COS、Presto/Trino HTTP
+- **格式转换**: CSV/JSON/JSONL/TSV 自动解析；Parquet/XLSX 存储为主
+- **扩展点**: 脚本出站网络代理、完整 cron、SAML、分布式调度
 
 ---
 

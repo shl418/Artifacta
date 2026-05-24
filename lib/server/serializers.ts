@@ -1,5 +1,6 @@
-import type { Activity, Database, Dataset, Folder, Project, ProjectMember, User } from "@/lib/types"
+import type { Activity, Database, Dataset, Folder, Project, ProjectMember, ProjectSyncScript, ScriptSyncHistory, User } from "@/lib/types"
 import { appUrl } from "@/lib/server/config"
+import { listProjectSyncScripts } from "@/lib/server/sync/sync-scripts"
 
 export function initials(name: string) {
   return name.trim().slice(0, 1).toUpperCase() || "U"
@@ -81,6 +82,7 @@ export function serializeProjectDetail(database: Database, project: Project) {
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
       .slice(0, 20)
       .map((activity) => serializeActivity(database, activity)),
+    sync_scripts: listProjectSyncScripts(database, project.id).map(serializeProjectSyncScript),
   }
 }
 
@@ -124,6 +126,45 @@ export function serializeSyncConfig(dataset: Dataset) {
     last_sync_at: dataset.syncConfig.lastSyncAt ?? null,
     last_sync_status: dataset.syncConfig.lastSyncStatus ?? null,
     next_sync_at: dataset.syncConfig.nextSyncAt ?? null,
+  }
+}
+
+export function serializeProjectSyncScript(script: ProjectSyncScript) {
+  return {
+    id: script.id,
+    manifest_id: script.manifestId,
+    project_id: script.projectId,
+    script_path: script.scriptPath,
+    runtime: script.runtime,
+    outputs: script.outputs,
+    schedule: script.schedule,
+    enabled: script.enabled,
+    source_config: script.sourceConfig,
+    last_run_at: script.lastRunAt,
+    last_run_status: script.lastRunStatus,
+    next_run_at: script.nextRunAt,
+    created_at: script.createdAt,
+    updated_at: script.updatedAt,
+  }
+}
+
+export function serializeScriptSyncHistory(history: ScriptSyncHistory) {
+  return {
+    id: history.id,
+    project_id: history.projectId,
+    script_id: history.scriptId,
+    job_id: history.jobId,
+    status: history.status,
+    started_at: history.startedAt,
+    completed_at: history.completedAt,
+    outputs: history.outputs.map((output) => ({
+      path: output.path,
+      dataset_id: output.datasetId,
+      status: output.status,
+      rows_synced: output.rowsSynced,
+      error: output.error,
+    })),
+    error: history.error,
   }
 }
 

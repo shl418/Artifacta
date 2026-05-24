@@ -16,7 +16,9 @@ Authorization: Bearer <API_KEY>
 ### 当前开源 MVP 状态
 
 - 已实现：登录、当前用户、项目 CRUD、HTML 上传/替换、HTML 预览渲染、文件夹、数据集上传/替换/删除、同步配置/触发/状态/历史、项目成员权限、团队成员、API Key。
-- 已实现：ZIP 看板包解包、入口 HTML 渲染、CSS/JS/图片等静态资源托管。
+- 已实现：ZIP 看板包解包、入口 HTML 渲染、CSS/JS/图片等静态资源托管；ZIP **创建/更新** 统一走上传会话（`upload_session_id`），不再接受 `POST /projects` 或 `PUT /html` 直接传 ZIP。
+- 已实现：包内 `artifacta.json` 导入（`sync_scripts`、数据集绑定、`manifest_mode=auto`）；合法用户 manifest 在提交时**不会被服务端覆盖**。
+- 已实现：Bundle 脚本同步（`sync_scripts`）：平台在解包目录内执行 Python/Node 脚本，一次运行可更新多个 `outputs` 路径。
 - 已实现：`DATA_DRIVER=json|sqlite|postgres` 元数据持久化，SQLite adapter 带幂等迁移，Postgres adapter 适合多实例元数据存储。
 - 已实现：`STORAGE_DRIVER=local|s3`，可使用 S3/COS/R2/MinIO 兼容对象存储保存看板和数据集文件。
 - 已实现：轻量 CLI、`--json` 输出、`artifacta doctor`、API-driven 同步 Worker、API smoke test。
@@ -109,20 +111,22 @@ POST /projects
 | name | string | 是 | 项目名称 |
 | description | string | 否 | 项目描述 |
 | folder_id | string | 否 | 所属文件夹 ID |
-| html_file | file | 是 | HTML 看板文件（单个 .html）或 ZIP 包 |
-| data_files | file[] | 否 | 数据文件，支持多个。当前会对 CSV/JSON 做行列和字段解析，其他类型会按文件保存但不做结构化检查。 |
+| html_file | file | 条件 | 单个 `.html` 看板（与 `upload_session_id` 二选一） |
+| upload_session_id | string | 条件 | 由 `POST /upload-sessions` 返回；**ZIP 看板包必须使用此字段** |
+| datasets | string (JSON) | 否 | 绑定包内数据集，见下方示例；`manifest_mode=auto` 时可传 `[]` |
+| manifest_mode | string | 否 | `auto`：有包内 `artifacta.json` 时以其为准；`wizard`：始终使用 `datasets` 向导配置 |
+| data_files | file[] | 否 | 仅 **单 HTML 模式** 下附加独立数据集文件（旧路径，ZIP 场景请用包内数据或 manifest） |
 | visibility | string | 否 | 可见性: `private`, `team`, `public`，默认 `private` |
 
-也支持 `data_files[]` 和 `data` 作为数据文件字段别名。高级上传流程可以改用 `upload_session_id` 与 `datasets`，详见“上传会话”。
+也支持 `data_files[]` 和 `data` 作为数据文件字段别名。
 
 **支持的文件格式:**
 
-- **单文件模式:** 直接上传 `.html` 文件
-- **ZIP 包模式:** 上传包含以下内容的 `.zip` 文件：
-  - `index.html` - 入口 HTML 文件（必需）
-  - `*.js` - JavaScript 文件（可选，支持多个）
-  - `*.css` - 样式文件（可选）
-  - `assets/` - 静态资源目录（可选，如图片、字体等）
+- **单 HTML 模式:** `html_file` 为 `.html`，可选 `data_files` 附加数据集
+- **ZIP 包模式（推荐）:** 必须先 `POST /upload-sessions`，再本接口传 `upload_session_id`（见「上传会话」）
+  - 包内需有 `index.html`（或由 `artifacta.json` 的 `entrypoint` 指定）
+  - 可选 `artifacta.json`：声明 `datasets`、`sync_scripts`（协议见 `docs/protocol/manifest-v1.md`）
+  - 直接 `html_file=@bundle.zip` 会返回 `400 DEPRECATED`
 
 **请求示例:**
 
@@ -137,21 +141,21 @@ curl -X POST http://localhost:3000/api/v1/projects \
   -F "visibility=team"
 ```
 
-**示例 2: HTML + JS 资源包**
+**示例 2: ZIP 看板包（上传会话 + manifest 自动导入）**
 ```bash
-# 创建包含 HTML 和 JS 的 ZIP 包
-zip -r dashboard.zip index.html chart.js utils.js styles.css assets/
+# 1. 创建上传会话
+SESSION=$(curl -s -X POST http://localhost:3000/api/v1/upload-sessions \
+  -H "Authorization: Bearer $API_KEY" \
+  -F "file=@dashboard.zip" | jq -r .session_id)
 
-# 上传 ZIP 包
+# 2. 提交项目（包内含 artifacta.json 时用 manifest_mode=auto）
 curl -X POST http://localhost:3000/api/v1/projects \
   -H "Authorization: Bearer $API_KEY" \
   -F "name=交互式销售看板" \
-  -F "html_file=@dashboard.zip" \
-  -F "data_files=@sales.csv" \
-  -F "data_files=@regions.csv" \
-  -F "visibility=team" \
-  -F "allowed_users[]=user_123" \
-  -F "allowed_user_permissions[user_123]=edit"
+  -F "upload_session_id=$SESSION" \
+  -F "manifest_mode=auto" \
+  -F "datasets=[]" \
+  -F "visibility=team"
 ```
 
 **响应示例:**
@@ -305,7 +309,7 @@ PATCH /projects/:project_id
 
 ### 更新项目 HTML
 
-替换项目的 HTML 看板文件。
+替换项目的 **单个 HTML** 看板文件。ZIP 包更新请使用上传会话并在 `POST /upload-sessions` 中传入 `project_id`。
 
 ```
 PUT /projects/:project_id/html
@@ -315,7 +319,7 @@ PUT /projects/:project_id/html
 
 | 字段 | 类型 | 必填 | 描述 |
 |------|------|------|------|
-| html_file | file | 是 | 新的 HTML 看板文件 |
+| html_file | file | 是 | 新的 `.html` 看板文件（**不支持 `.zip`**，ZIP 返回 `400 DEPRECATED`） |
 
 ### 渲染项目 HTML
 
@@ -518,7 +522,7 @@ DELETE /projects/:project_id/datasets/:dataset_id
 
 ## 上传会话
 
-上传会话用于 Web 端先上传 ZIP 包、读取包内文件树，再选择哪些包内数据文件要转成 Artifacta 数据集。普通 API/CLI 上传可以直接使用 `POST /projects` 的 `html_file`。
+上传会话是 **ZIP 看板创建与更新的标准路径**：先上传 ZIP、读取文件树，再提交项目。单文件 HTML 仍可直接 `POST /projects` 传 `html_file`。
 
 ### 创建上传会话
 
@@ -553,9 +557,12 @@ POST /upload-sessions
       "current_refresh": "manual"
     }
   ],
-  "expires_at": "2026-05-21T12:30:00.000Z"
+  "expires_at": "2026-05-21T12:30:00.000Z",
+  "manifest_detected": true
 }
 ```
+
+`manifest_detected` 为 `true` 时表示 ZIP 根目录存在 `artifacta.json`；Web 向导可跳过数据集选择，提交时使用 `manifest_mode=auto`。
 
 ### 使用上传会话创建项目
 
@@ -563,19 +570,105 @@ POST /upload-sessions
 POST /projects
 ```
 
-传 `upload_session_id` 替代 `html_file`，并用 `datasets` 指定需要从 ZIP 包内提取的数据集：
+传 `upload_session_id` 替代 `html_file`。
+
+**表单字段（multipart）:**
+
+| 字段 | 描述 |
+|------|------|
+| `datasets` | JSON 数组，指定包内路径与刷新方式 |
+| `manifest_mode` | `auto`：有合法包内 manifest 时忽略客户端 `datasets`；无 manifest 时自动发现数据扩展名 |
+| `name`, `description`, `visibility`, `folder_id` | 与直接创建相同 |
+
+**`datasets` 示例（向导模式）:**
 
 ```json
 [
   {
     "bundle_path": "data/sales.csv",
     "name": "Sales",
-    "refresh": "manual"
+    "refresh": "sync"
   }
 ]
 ```
 
-## 数据同步配置
+`refresh: "sync"` 会在导入时启用该 bundle 数据集的 `sync_config.enabled`，并参与重传时的路径保护。
+
+**更新已有 ZIP 项目:** `POST /upload-sessions` 时增加 `project_id=proj_xxx`，再 `POST /projects` 提交相同 `upload_session_id`。已启用同步的数据集路径与已启用脚本的 `outputs` 在解包时会被跳过，避免覆盖远端刷新结果。
+
+---
+
+## Bundle 同步脚本（sync_scripts）
+
+当 ZIP 内 `artifacta.json` 声明 `sync_scripts` 时，服务端会为项目创建 `ProjectSyncScript` 记录。脚本在解包目录（`projects/:id/bundle`）内执行，与按数据集配置的 URL/COS/Presto 同步**并行存在**。
+
+执行环境变量（子进程）:
+
+| 变量 | 含义 |
+|------|------|
+| `ARTIFACTA_BUNDLE_ROOT` | 解包根目录绝对路径 |
+| `ARTIFACTA_OUTPUT_PATHS` | 逗号分隔的输出相对路径 |
+| `ARTIFACTA_SCRIPT_ID` | manifest 中的脚本 `id` |
+| `ARTIFACTA_SOURCE_CONFIG` | 服务端 JSON 字符串（密钥仅存服务端，不进 ZIP） |
+
+### 列出项目脚本
+
+```
+GET /projects/:project_id/sync-scripts
+```
+
+**响应:** `{ "data": [ { "id", "manifest_id", "script_path", "runtime", "outputs", "schedule", "enabled", "source_config", "last_run_at", "last_run_status", "next_run_at", ... } ] }`
+
+项目详情 `GET /projects/:id` 的 `sync_scripts` 字段内容相同。
+
+### 更新脚本配置（服务端覆盖）
+
+```
+PUT /projects/:project_id/sync-scripts/:script_id
+```
+
+**请求体 (JSON):** 可选 `enabled`, `schedule`, `outputs`（须为已绑定 bundle 数据集路径）, `source_config`。
+
+重传 ZIP 时会更新 `script_path` / `runtime`，并**保留**已有 `source_config` 与管理员覆盖的 `outputs` / `schedule`。
+
+### 测试脚本（不写盘）
+
+```
+POST /projects/:project_id/sync-scripts/:script_id/test
+```
+
+校验脚本路径在 bundle 内且文件存在；不执行写操作。
+
+### 触发脚本同步
+
+```
+POST /projects/:project_id/sync-scripts/:script_id/trigger
+```
+
+**响应:** `202` + `{ "job_id", "status": "queued" }`。同一项目同时最多一个 `queued` 或 `running` 脚本任务。
+
+### 脚本运行状态与历史
+
+```
+GET /projects/:project_id/sync-scripts/:script_id/status
+GET /projects/:project_id/sync-scripts/:script_id/history
+```
+
+历史记录 `outputs` 数组包含每个输出路径的 `dataset_id`、`rows_synced`、`status`、`error`。
+
+### Worker 领取脚本任务
+
+```
+POST /sync/script-jobs/claim
+```
+
+与 `POST /sync/jobs/claim` 类似，领取后在本机执行 `runScriptSync`（Python 3 或 Node）。Worker 应先 drain 脚本队列再处理数据集任务（见 `scripts/sync-worker.mjs`）。
+
+**权限:** `trigger`、`claim`、`PUT` 配置需要 API Key scope `sync:run`（或管理员会话）。
+
+---
+
+## 数据同步配置（按数据集 / 传统来源）
 
 ### 获取数据集同步配置
 
@@ -1070,19 +1163,37 @@ pnpm cli -- projects list
 pnpm cli -- projects list --search 销售
 ```
 
-**创建或更新项目 HTML**
+**创建或更新项目**
 ```bash
+# ZIP：CLI 自动走 upload-sessions + manifest_mode=auto（包内可有 artifacta.json）
 pnpm cli -- projects upload \
   --file ./dashboard.zip \
   --name "AI 生成的销售分析" \
-  --description "由 coding agent 生成" \
-  --folder-id folder_001 \
-  --data-file ./sales-data.csv \
   --visibility team
+
+# 单 HTML + 独立数据文件
+pnpm cli -- projects upload \
+  --file ./dashboard.html \
+  --name "单页看板" \
+  --data-file ./sales-data.csv
 
 pnpm cli -- projects update-html \
   --project-id proj_abc123 \
   --file ./dashboard-v2.zip
+```
+
+**Bundle 脚本同步**
+```bash
+pnpm cli -- sync-scripts list --project-id proj_abc123
+pnpm cli -- sync-scripts trigger --project-id proj_abc123 --script-id sscript_abc123
+pnpm cli -- sync-scripts set --project-id proj_abc123 --script-id sscript_abc123 \
+  --config-file ./script-secrets.json --schedule "0 8 * * *"
+
+# 本地调试脚本（不调用 API）
+pnpm cli -- bundle run-script \
+  --file ./scripts/sync.py \
+  --bundle-root ./dist \
+  --outputs data/sales.csv
 ```
 
 **列出数据集**
@@ -1132,10 +1243,17 @@ pnpm cli -- --json projects list
 
 ### 同步 Worker
 
-Worker 使用相同 API Key，先通过 `POST /sync/jobs/claim` 处理已入队任务，再从 `/datasets` 读取启用同步的数据集并调用 `/sync/trigger` 入队，到期数据集入队后会继续领取并执行。
+Worker 使用相同 API Key：
+
+1. `POST /sync/script-jobs/claim` — 执行 bundle 脚本同步任务
+2. `POST /sync/jobs/claim` — 执行按数据集配置的传统同步任务
+3. `GET /datasets` + `POST .../sync/trigger` — 为到期的启用同步数据集入队
+
+脚本同步需要运行环境安装 **Python 3**（`ARTIFACTA_PYTHON` 可覆盖解释器路径）。
 
 ```bash
 export ARTIFACTA_API_KEY=art_live_xxxxxxxxxxxx
+export ARTIFACTA_PYTHON=python3
 pnpm worker:once
 node scripts/sync-worker.mjs --interval 300
 ```

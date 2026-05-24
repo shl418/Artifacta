@@ -70,6 +70,9 @@ Do not store these paths in an ephemeral container filesystem unless you are onl
 | `SYNC_URL_ALLOWLIST` | Recommended for sync | Comma-separated host allowlist for dataset sync URL sources. Leave empty to disable remote URL sync in shared production deployments. |
 | `SYNC_LOCAL_BASE_DIR` | Recommended for sync | Base directory for local file sync sources. Paths outside this directory are rejected. Leave empty only for local development. |
 | `ARTIFACTA_API_KEY` | Worker only | API key used by `scripts/sync-worker.mjs`. |
+| `ARTIFACTA_PYTHON` | Script sync | Python interpreter for bundle `sync_scripts` with `runtime: python`. Defaults to `python3`. |
+| `ARTIFACTA_SCRIPT_TIMEOUT_MS` | Script sync | Subprocess timeout (default `300000`). |
+| `ARTIFACTA_SCRIPT_RSS_LIMIT_MB` | Script sync | Reserved RSS cap hint (default `512`; enforcement is best-effort). |
 
 ## Container Shape
 
@@ -81,6 +84,7 @@ A production container should:
 4. Mount persistent volumes for `DATA_DIR`, `SQLITE_PATH`, and `UPLOAD_DIR`.
 5. Set `NEXT_PUBLIC_APP_URL` to the externally reachable HTTPS URL.
 6. Run `pnpm worker:once` on a schedule, or run `node scripts/sync-worker.mjs --interval 60` as a separate worker process.
+7. For bundle `sync_scripts`, install Python 3 on the worker host (or set `ARTIFACTA_PYTHON`). Node scripts use the same Node binary as the worker process.
 
 ## Reverse Proxy
 
@@ -109,7 +113,12 @@ ARTIFACTA_API_KEY=art_... \
 node scripts/sync-worker.mjs --interval 300
 ```
 
-Current sync runners support local files, already-uploaded artifact paths, URL fetches, `mock_rows`, S3/COS objects, and Presto/Trino HTTP queries.
+Current sync runners support:
+
+- **Per-dataset jobs** (`POST /sync/jobs/claim`): local files, uploaded artifact paths, URL fetches, `mock_rows`, S3/COS objects, and Presto/Trino HTTP queries.
+- **Bundle script jobs** (`POST /sync/script-jobs/claim`): Python/Node scripts declared in `artifacta.json` `sync_scripts`, writing only to declared `outputs` paths inside the bundle directory.
+
+Bundle scripts do not use `SYNC_URL_ALLOWLIST`; they run as subprocesses with cwd set to the bundle root. Treat script code as trusted only if you control who can publish ZIPs.
 
 ## Dataset Sync Source Safety
 

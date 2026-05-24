@@ -1,9 +1,17 @@
 import { promises as fs } from "node:fs"
 import path from "node:path"
 import AdmZip from "adm-zip"
+import { ZodError } from "zod"
+import type { ArtifactManifest } from "@/lib/server/artifacts/manifest"
 import type { BundleFileEntry, Database, Project, ProjectVisibility, UploadSession } from "@/lib/types"
 import { canEditProject } from "@/lib/server/access"
-import { datasetIdFromBundlePath, generateManifest } from "@/lib/server/artifacts/manifest"
+import {
+  datasetIdFromBundlePath,
+  generateManifest,
+  manifestDatasetsToCommitInput,
+} from "@/lib/server/artifacts/manifest"
+import { importManifestFromBundle } from "@/lib/server/artifacts/manifest-import"
+import { upsertProjectSyncScriptsFromManifest } from "@/lib/server/sync/sync-scripts"
 import { normalizeBundleEntry, validateZipBundle } from "@/lib/server/artifacts/zip-security"
 import { dataDir, maxArtifactBytes } from "@/lib/server/config"
 import { inspectDataset } from "@/lib/server/datasets"
@@ -11,18 +19,22 @@ import { now } from "@/lib/server/db"
 import { readStorageObject, writeStorageObject } from "@/lib/server/object-storage"
 import { extractProjectZip, sanitizeFileName } from "@/lib/server/storage"
 
-const DATASET_EXTENSIONS = new Set([".csv", ".tsv", ".json", ".jsonl", ".parquet", ".xlsx"])
+export const DATASET_EXTENSIONS = new Set([".csv", ".tsv", ".json", ".jsonl", ".parquet", ".xlsx"])
 const UPLOAD_SESSION_TTL_MS = 60 * 60 * 1000
 
 function inferDatasetFromExtension(extension: string) {
   return DATASET_EXTENSIONS.has(extension.toLowerCase())
 }
 
-function relativizeBundlePath(filePath: string, assetRoot: string) {
+export function relativizeBundlePath(filePath: string, assetRoot: string) {
   const normalized = filePath.replace(/\\/g, "/")
   const root = assetRoot.replace(/\\/g, "/")
   if (normalized.startsWith(`${root}/`)) return normalized.slice(root.length + 1)
   return path.posix.relative(root, normalized)
+}
+
+export function detectManifestInFileTree(fileTree: BundleFileEntry[]) {
+  return fileTree.some((entry) => entry.path === "artifacta.json")
 }
 
 export function buildFileTreeFromZipBuffer(buffer: Buffer): BundleFileEntry[] {
@@ -46,6 +58,16 @@ export function buildFileTreeFromZipBuffer(buffer: Buffer): BundleFileEntry[] {
   }
 
   return entries.sort((left, right) => left.path.localeCompare(right.path))
+}
+
+export function autoDiscoverDatasetsFromFileTree(fileTree: BundleFileEntry[]) {
+  return fileTree
+    .filter((entry) => inferDatasetFromExtension(path.extname(entry.path)))
+    .map((entry) => ({
+      bundle_path: entry.path,
+      name: path.basename(entry.path),
+      refresh: "manual" as const,
+    }))
 }
 
 export function annotateFileTreeWithExistingDatasets(database: Database, projectId: string, fileTree: BundleFileEntry[]) {
@@ -106,7 +128,7 @@ export async function createUploadSession(input: {
     expiresAt,
   }
 
-  return { session, fileTree }
+  return { session, fileTree, manifestDetected: detectManifestInFileTree(fileTree) }
 }
 
 export function getUploadSession(database: Database, sessionId: string, userId: string) {
@@ -126,17 +148,26 @@ export function cleanExpiredSessions(database: Database) {
   }
 }
 
-function buildSyncProtectedPaths(database: Database, projectId: string) {
+export function buildSyncProtectedPaths(database: Database, projectId: string) {
   const project = database.projects.find((item) => item.id === projectId)
   const assetRoot = project?.htmlArtifact.assetRoot
   if (!assetRoot) return new Set<string>()
 
   const skip = new Set<string>()
   for (const dataset of database.datasets) {
-    if (dataset.projectId !== projectId || dataset.origin !== "bundle" || !dataset.syncConfig.enabled) continue
+    if (dataset.projectId !== projectId || dataset.origin !== "bundle") continue
+    if (!dataset.syncConfig.enabled) continue
     const relative = relativizeBundlePath(dataset.filePath, assetRoot)
     if (relative && !relative.startsWith("..")) skip.add(relative)
   }
+
+  for (const script of database.projectSyncScripts ?? []) {
+    if (script.projectId !== projectId || !script.enabled) continue
+    for (const outputPath of script.outputs) {
+      skip.add(outputPath)
+    }
+  }
+
   return skip
 }
 
@@ -147,15 +178,21 @@ async function buildBundleDatasetRecord(input: {
   name: string
   refresh: "manual" | "sync"
   assetRoot: string
+  existingDataset?: {
+    id: string
+    version: number
+    createdAt: string
+    syncConfig: Database["datasets"][number]["syncConfig"]
+  }
 }) {
   const filePath = path.posix.join(input.assetRoot, input.bundlePath)
   const buffer = await readStorageObject(filePath)
   const fileName = path.posix.basename(input.bundlePath)
   const inspection = inspectDataset(fileName, buffer)
-  const createdAt = now()
+  const timestamp = now()
 
   return {
-    id: `ds_${crypto.randomUUID()}`,
+    id: input.existingDataset?.id ?? `ds_${crypto.randomUUID()}`,
     projectId: input.projectId,
     organizationId: input.organizationId,
     name: input.name.trim() || fileName,
@@ -167,18 +204,46 @@ async function buildBundleDatasetRecord(input: {
     rows: inspection.rows,
     columns: inspection.columns,
     schema: inspection.schema,
-    version: 1,
+    version: input.existingDataset?.version ?? 1,
     origin: "bundle" as const,
     syncConfig: {
       enabled: input.refresh === "sync",
       sourceType: "manual" as const,
-      sourceConfig: {},
-      updateMode: "full" as const,
-      schedule: null,
+      sourceConfig: input.existingDataset?.syncConfig.sourceConfig ?? {},
+      updateMode: input.existingDataset?.syncConfig.updateMode ?? "full",
+      schedule: input.existingDataset?.syncConfig.schedule ?? null,
+      lastSyncAt: input.existingDataset?.syncConfig.lastSyncAt,
+      lastSyncStatus: input.existingDataset?.syncConfig.lastSyncStatus,
+      nextSyncAt: input.existingDataset?.syncConfig.nextSyncAt,
     },
-    createdAt,
-    updatedAt: createdAt,
+    createdAt: input.existingDataset?.createdAt ?? timestamp,
+    updatedAt: timestamp,
   }
+}
+
+function resolveDatasetBindings(input: {
+  fileTree: BundleFileEntry[]
+  clientDatasets: Array<{ bundle_path: string; name: string; refresh: "manual" | "sync" }>
+  manifestMode?: "auto" | "wizard"
+  bundledManifest: ArtifactManifest | null
+}) {
+  if (input.bundledManifest && input.manifestMode === "auto") {
+    return manifestDatasetsToCommitInput(input.bundledManifest)
+  }
+
+  if (input.bundledManifest && input.clientDatasets.length === 0) {
+    return manifestDatasetsToCommitInput(input.bundledManifest)
+  }
+
+  if (input.clientDatasets.length > 0) {
+    return input.clientDatasets
+  }
+
+  if (input.manifestMode === "auto" || input.bundledManifest === null) {
+    return autoDiscoverDatasetsFromFileTree(input.fileTree)
+  }
+
+  return input.clientDatasets
 }
 
 export interface CommitUploadSessionInput {
@@ -190,6 +255,7 @@ export interface CommitUploadSessionInput {
   visibility: ProjectVisibility
   folderId: string | null
   datasets: Array<{ bundle_path: string; name: string; refresh: "manual" | "sync" }>
+  manifestMode?: "auto" | "wizard"
 }
 
 export async function commitUploadSession(database: Database, input: CommitUploadSessionInput) {
@@ -210,18 +276,38 @@ export async function commitUploadSession(database: Database, input: CommitUploa
   await writeStorageObject(relativeZipPath, buffer, "application/zip")
 
   const extracted = await extractProjectZip(projectId, buffer, skipPaths)
-  const manifestDatasets = input.datasets.map((item) => ({
-    id: datasetIdFromBundlePath(item.bundle_path),
-    name: item.name,
-    bundlePath: item.bundle_path,
-    refresh: item.refresh,
-  }))
-  const manifest = generateManifest(input.name, extracted.entryPath, manifestDatasets)
-  await writeStorageObject(
-    path.posix.join(extracted.assetRoot, "artifacta.json"),
-    `${JSON.stringify(manifest, null, 2)}\n`,
-    "application/json; charset=utf-8"
-  )
+  let bundledManifest: ArtifactManifest | null = null
+  try {
+    bundledManifest = await importManifestFromBundle(extracted.assetRoot)
+  } catch (error) {
+    if (error instanceof ZodError) throw new Error("INVALID_BUNDLED_MANIFEST")
+    throw error
+  }
+
+  const datasetBindings = resolveDatasetBindings({
+    fileTree: session.fileTree,
+    clientDatasets: input.datasets,
+    manifestMode: input.manifestMode,
+    bundledManifest,
+  })
+
+  const entryPath = bundledManifest?.entrypoint ?? extracted.entryPath
+  const preserveBundledManifest = bundledManifest !== null
+
+  if (!preserveBundledManifest) {
+    const manifestDatasets = datasetBindings.map((item) => ({
+      id: datasetIdFromBundlePath(item.bundle_path),
+      name: item.name,
+      bundlePath: item.bundle_path,
+      refresh: item.refresh,
+    }))
+    const manifest = generateManifest(input.name, entryPath, manifestDatasets)
+    await writeStorageObject(
+      path.posix.join(extracted.assetRoot, "artifacta.json"),
+      `${JSON.stringify(manifest, null, 2)}\n`,
+      "application/json; charset=utf-8"
+    )
+  }
 
   const timestamp = now()
   const htmlArtifact = {
@@ -230,22 +316,34 @@ export async function commitUploadSession(database: Database, input: CommitUploa
     path: relativeZipPath,
     size: buffer.byteLength,
     contentType: "application/zip",
-    entryPath: extracted.entryPath,
+    entryPath,
     assetRoot: extracted.assetRoot,
   }
 
+  const existingBundleDatasets = isUpdate
+    ? database.datasets.filter((dataset) => dataset.projectId === projectId && dataset.origin === "bundle")
+    : []
+
   const bundleDatasets = await Promise.all(
-    input.datasets.map((item) =>
-      buildBundleDatasetRecord({
+    datasetBindings.map((item) => {
+      const existing = existingBundleDatasets.find(
+        (dataset) => relativizeBundlePath(dataset.filePath, extracted.assetRoot) === item.bundle_path
+      )
+      return buildBundleDatasetRecord({
         projectId,
         organizationId: input.organizationId,
         bundlePath: item.bundle_path,
         name: item.name,
         refresh: item.refresh,
         assetRoot: extracted.assetRoot,
+        existingDataset: existing,
       })
-    )
+    })
   )
+
+  if (bundledManifest) {
+    upsertProjectSyncScriptsFromManifest(database, projectId, bundledManifest)
+  }
 
   let project: Project
   if (isUpdate) {
@@ -285,5 +383,5 @@ export async function commitUploadSession(database: Database, input: CommitUploa
   database.uploadSessions = database.uploadSessions.filter((item) => item.id !== session.id)
   await fs.rm(path.join(dataDir, "tmp", session.id), { recursive: true, force: true })
 
-  return { project, datasets: bundleDatasets }
+  return { project, datasets: bundleDatasets, manifestImported: preserveBundledManifest }
 }

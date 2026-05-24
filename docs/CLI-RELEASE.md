@@ -62,7 +62,21 @@ The CLI itself is stateless. External users still need:
 - `ARTIFACTA_URL`
 - `ARTIFACTA_API_KEY`
 - local HTML or ZIP dashboard artifacts
-- optional dataset files
-- optional sync configuration JSON
+- for ZIP bundles: optional `artifacta.json` inside the ZIP (`docs/protocol/manifest-v1.md`)
+- optional dataset files (legacy HTML path only, or separate `datasets upload`)
+- optional per-dataset sync JSON (`datasets sync set`) or bundle script secrets (`sync-scripts set`)
+
+### CLI surface to mention in release notes
+
+When bumping `@artifacta/cli`, document behavior changes in `CHANGELOG.md`:
+
+| Command | Notes |
+| --- | --- |
+| `projects upload --file *.zip` | Uses upload session + `manifest_mode=auto`; no `--data-file` needed when manifest lists datasets |
+| `projects update-html --file *.zip` | Same session flow with existing `project_id` |
+| `sync-scripts list\|set\|trigger\|status` | Bundle `sync_scripts` from manifest |
+| `bundle run-script` | Local-only helper; not required for publish |
+
+Server requirements for script sync: Python 3 on the worker host (`ARTIFACTA_PYTHON`), running `scripts/sync-worker.mjs` with an API key that has `sync:run`.
 
 For the end-user path, see `docs/ONBOARDING.md` and the Claude Code skill template under `templates/claude-code-artifacta-publisher/SKILL.md`.

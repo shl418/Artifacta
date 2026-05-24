@@ -9,6 +9,8 @@ export type SyncStatus = "pending" | "running" | "success" | "failed"
 export type SyncJobStatus = "queued" | "running" | "success" | "failed"
 export type ActivityType = "dashboard" | "dataset" | "team" | "upload" | "permission"
 export type DatasetOrigin = "bundle" | "upload" | "sync"
+export type ScriptSyncRuntime = "python" | "node"
+export type ManifestDatasetKind = "csv" | "json" | "jsonl" | "tsv" | "parquet" | "xlsx" | "other"
 export type WebhookEvent = "project.created" | "project.updated" | "project.deleted" | "permission.changed" | "sync.success" | "sync.failed"
 
 export interface Organization {
@@ -170,6 +172,57 @@ export interface SyncJob {
   completedAt: string | null
 }
 
+export interface ProjectSyncScript {
+  id: string
+  manifestId: string
+  projectId: string
+  scriptPath: string
+  runtime: ScriptSyncRuntime
+  outputs: string[]
+  schedule: string | null
+  enabled: boolean
+  sourceConfig: Record<string, unknown>
+  lastRunAt: string | null
+  lastRunStatus: SyncStatus | null
+  nextRunAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ScriptSyncJob {
+  id: string
+  projectId: string
+  scriptId: string
+  organizationId: string
+  status: SyncJobStatus
+  trigger: "manual" | "scheduled"
+  requestedBy: string | null
+  error: string | null
+  createdAt: string
+  startedAt: string | null
+  completedAt: string | null
+}
+
+export interface ScriptSyncHistoryOutput {
+  path: string
+  datasetId: string | null
+  status: SyncStatus
+  rowsSynced: number
+  error: string | null
+}
+
+export interface ScriptSyncHistory {
+  id: string
+  projectId: string
+  scriptId: string
+  jobId: string
+  status: SyncStatus
+  startedAt: string
+  completedAt: string | null
+  outputs: ScriptSyncHistoryOutput[]
+  error: string | null
+}
+
 export interface DashboardVersion {
   id: string
   projectId: string
@@ -244,6 +297,9 @@ export interface Database {
   apiKeys: ApiKey[]
   syncHistory: SyncHistory[]
   syncJobs: SyncJob[]
+  projectSyncScripts: ProjectSyncScript[]
+  scriptSyncJobs: ScriptSyncJob[]
+  scriptSyncHistory: ScriptSyncHistory[]
   uploadSessions: UploadSession[]
   dashboardVersions: DashboardVersion[]
   datasetVersions: DatasetVersion[]

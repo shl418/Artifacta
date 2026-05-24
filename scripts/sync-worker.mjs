@@ -43,7 +43,8 @@ async function runLoop(options, intervalSeconds) {
 }
 
 async function runOnce(options) {
-  let claimed = options["dry-run"] ? 0 : await drainQueuedJobs()
+  let claimed = options["dry-run"] ? 0 : await drainScriptJobs()
+  claimed += options["dry-run"] ? 0 : await drainQueuedJobs()
   const payload = await request("/datasets")
   const datasets = payload.data.filter((dataset) => dataset.sync_config.enabled)
   const dueDatasets = datasets.filter((dataset) => options.all || isDue(dataset))
@@ -63,7 +64,31 @@ async function runOnce(options) {
     console.log(`ENQUEUED ${label} -> ${result.status} job_id=${result.job_id}`)
   }
 
-  if (!options["dry-run"]) claimed += await drainQueuedJobs()
+  if (!options["dry-run"]) {
+    claimed += await drainScriptJobs()
+    claimed += await drainQueuedJobs()
+  }
+}
+
+async function drainScriptJobs() {
+  let claimed = 0
+
+  try {
+    for (let index = 0; index < 100; index += 1) {
+      const result = await request("/sync/script-jobs/claim", { method: "POST" })
+      if (!result.job) break
+
+      claimed += 1
+      const job = result.job
+      console.log(
+        `SCRIPT ${job.project_id}/${job.script_id} -> ${job.status} error=${job.error ?? ""}`
+      )
+    }
+  } catch (error) {
+    console.error(`Script claim failed: ${error instanceof Error ? error.message : error}`)
+  }
+
+  return claimed
 }
 
 async function drainQueuedJobs() {

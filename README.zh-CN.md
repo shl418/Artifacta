@@ -83,7 +83,7 @@ export ARTIFACTA_URL=http://localhost:3000
 export ARTIFACTA_API_KEY=art_...
 
 pnpm cli -- projects list
-pnpm cli -- projects upload --file ./dashboard.zip --name "增长周报" --data-file ./growth.csv --visibility team
+pnpm cli -- projects upload --file ./dashboard.zip --name "增长周报" --visibility team
 pnpm cli -- projects update-html --project-id proj_123 --file ./dashboard-v2.zip
 pnpm cli -- datasets upload --project-id proj_123 --file ./growth.csv --name "增长周报数据"
 pnpm cli -- datasets sync set --project-id proj_123 --dataset-id ds_123 --source-type presto --config-file ./sync.json

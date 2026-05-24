@@ -37,6 +37,17 @@ interface ProjectDetail {
   }>
   permissions: Array<{ user_id: string; user_name: string; user_email: string; permission: string }>
   recent_activity: Array<{ id: string; type: string; action: string; target: string; created_at: string; user?: { name: string } }>
+  sync_scripts?: Array<{
+    id: string
+    manifest_id: string
+    script_path: string
+    runtime: string
+    outputs: string[]
+    schedule: string | null
+    enabled: boolean
+    last_run_status: string | null
+    next_run_at: string | null
+  }>
 }
 
 export default function ProjectDetailPage() {
@@ -90,6 +101,17 @@ export default function ProjectDetailPage() {
       return
     }
     setActionMessage("看板已回滚到所选版本。")
+    await loadProject()
+  }
+
+  const triggerScriptSync = async (scriptId: string) => {
+    const response = await fetch(`/api/v1/projects/${params.projectId}/sync-scripts/${scriptId}/trigger`, { method: "POST" })
+    const payload = await response.json().catch(() => null)
+    if (!response.ok) {
+      setActionMessage(payload?.error?.message ?? "无法触发脚本同步。")
+      return
+    }
+    setActionMessage(`脚本同步已排队：${payload.job_id}`)
     await loadProject()
   }
 
@@ -170,6 +192,7 @@ export default function ProjectDetailPage() {
                   <TabsList>
                     <TabsTrigger value="overview">概览</TabsTrigger>
                     <TabsTrigger value="datasets">数据集</TabsTrigger>
+                    <TabsTrigger value="sync-scripts">同步脚本</TabsTrigger>
                     <TabsTrigger value="permissions">协作</TabsTrigger>
                     <TabsTrigger value="versions">版本</TabsTrigger>
                     <TabsTrigger value="activity">动态</TabsTrigger>
@@ -206,6 +229,37 @@ export default function ProjectDetailPage() {
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <Clock className="h-4 w-4" />
                             {dataset.sync_config.enabled ? dataset.sync_config.last_sync_status ?? "等待同步" : "手动"}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </TabsContent>
+                  <TabsContent value="sync-scripts" className="mt-4 space-y-3">
+                    {(project.sync_scripts ?? []).length === 0 && (
+                      <Card>
+                        <CardContent className="p-6 text-sm text-muted-foreground">
+                          此项目没有 bundle 同步脚本。在 ZIP 内的 artifacta.json 中声明 sync_scripts 后重新发布即可导入。
+                        </CardContent>
+                      </Card>
+                    )}
+                    {(project.sync_scripts ?? []).map((script) => (
+                      <Card key={script.id}>
+                        <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
+                          <div>
+                            <p className="font-medium">{script.manifest_id}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {script.script_path} · {script.runtime} · {script.outputs.join(", ")}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              计划：{script.schedule ?? "手动"} · 下次：{script.next_run_at ? new Date(script.next_run_at).toLocaleString("zh-CN") : "—"}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={script.enabled ? "default" : "secondary"}>{script.enabled ? "启用" : "禁用"}</Badge>
+                            <Badge variant="outline">{script.last_run_status ?? "未运行"}</Badge>
+                            <Button variant="outline" size="sm" disabled={!script.enabled} onClick={() => triggerScriptSync(script.id)}>
+                              触发同步
+                            </Button>
                           </div>
                         </CardContent>
                       </Card>

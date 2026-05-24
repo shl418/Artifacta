@@ -59,15 +59,30 @@ export ARTIFACTA_API_KEY=art_...
 
 建议 skill 把产物统一写到一个临时目录，例如：
 
-- `dashboard.zip` 或 `dashboard.html`
-- `data.csv`
-- `sync.json`，如果你还要提交数据集同步配置
+- `dashboard.zip`（推荐），可选根目录 `artifacta.json` 声明数据集与 `sync_scripts`
+- `dashboard.html`（单文件看板）
+- 仅 HTML 模式才需要单独的 `data.csv`；ZIP 请把数据文件写在 manifest 里
+
+协议说明见 `docs/protocol/manifest-v1.md`，带脚本示例见 `docs/protocol/examples/script-sync-dashboard/artifacta.json`。
 
 ## 第五步：创建远端项目
+
+**ZIP（含 manifest 时无需 `--data-file`）：**
 
 ```bash
 artifacta projects upload \
   --file ./dashboard.zip \
+  --name "增长周报" \
+  --visibility team
+```
+
+CLI 会自动：`POST /upload-sessions` → `POST /projects`（`manifest_mode=auto`）。
+
+**单 HTML + 独立数据文件：**
+
+```bash
+artifacta projects upload \
+  --file ./dashboard.html \
   --name "增长周报" \
   --data-file ./data.csv \
   --visibility team
@@ -121,11 +136,22 @@ artifacta datasets sync set \
 
 ## 第九步：手动触发同步
 
+**按数据集的外部来源（URL/COS/Presto）：**
+
 ```bash
 artifacta sync trigger \
   --project-id proj_123 \
   --dataset-id ds_123
 ```
+
+**ZIP 内 `sync_scripts` 声明的 bundle 脚本：**
+
+```bash
+artifacta sync-scripts list --project-id proj_123
+artifacta sync-scripts trigger --project-id proj_123 --script-id sscript_xxxxxxxx
+```
+
+密钥通过 `sync-scripts set --config-file ./secrets.json` 保存在服务端，执行时注入 `ARTIFACTA_SOURCE_CONFIG`。
 
 ## Claude Code / skill 的推荐模式
 
@@ -142,7 +168,8 @@ artifacta sync trigger \
 
 ## 默认建议
 
-- 只要 HTML 依赖 CSS、JS、图片或字体，就优先上传 ZIP 包。
+- 只要 HTML 依赖 CSS、JS、图片或字体，就优先上传 ZIP 包，并附带 `artifacta.json` 以自动绑定数据集或脚本同步。
+- 不要用 `POST /projects` 的 `html_file` 直接传 ZIP；请走上传会话（CLI 已自动处理）。
 - 把 `project_id`、`dataset_id` 当成远端 ID，不要当成本地目录名。
 - API Key 只放在环境变量里，不要写进 prompt 或仓库文件。
 - 每次上传成功后，把 `preview_url` 直接回传给用户。

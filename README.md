@@ -83,7 +83,7 @@ export ARTIFACTA_URL=http://localhost:3000
 export ARTIFACTA_API_KEY=art_...
 
 pnpm cli -- projects list
-pnpm cli -- projects upload --file ./dashboard.zip --name "Weekly Growth" --data-file ./growth.csv --visibility team
+pnpm cli -- projects upload --file ./dashboard.zip --name "Weekly Growth" --visibility team
 pnpm cli -- projects update-html --project-id proj_123 --file ./dashboard-v2.zip
 pnpm cli -- datasets upload --project-id proj_123 --file ./growth.csv --name "Weekly Growth Data"
 pnpm cli -- datasets sync set --project-id proj_123 --dataset-id ds_123 --source-type presto --config-file ./sync.json
@@ -133,7 +133,7 @@ bash examples/publish-example.sh
 
 ## Sync Worker
 
-The worker scans datasets with sync enabled, checks whether jobs are due, and runs the same sync executor as manual API triggers.
+The worker drains bundle script jobs (`POST /sync/script-jobs/claim`), then per-dataset sync jobs, and enqueues due dataset syncs from `/datasets`.
 
 ```bash
 export ARTIFACTA_API_KEY=art_...

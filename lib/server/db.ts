@@ -15,6 +15,9 @@ import type {
   Organization,
   Project,
   ProjectMember,
+  ProjectSyncScript,
+  ScriptSyncHistory,
+  ScriptSyncJob,
   SyncHistory,
   SyncJob,
   UploadSession,
@@ -224,6 +227,9 @@ function seedDatabase(): Database {
       },
     ],
     syncJobs: [],
+    projectSyncScripts: [],
+    scriptSyncJobs: [],
+    scriptSyncHistory: [],
     uploadSessions: [],
     dashboardVersions: [],
     datasetVersions: [],
@@ -531,6 +537,41 @@ async function ensureSqliteDatabase() {
     `
   )
 
+  applySqliteMigration(
+    database,
+    5,
+    "script_sync_tables",
+    `
+      CREATE TABLE IF NOT EXISTS project_sync_scripts (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        data TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS script_sync_jobs (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        organization_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        data TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS script_sync_history (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        script_id TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        data TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_project_sync_scripts_project ON project_sync_scripts (project_id);
+      CREATE INDEX IF NOT EXISTS idx_script_sync_jobs_status_created ON script_sync_jobs (status, created_at);
+      CREATE INDEX IF NOT EXISTS idx_script_sync_history_script ON script_sync_history (script_id, started_at DESC);
+    `
+  )
+
   const row = database.prepare("SELECT COUNT(1) AS count FROM organizations").get() as { count: number }
   if (row.count === 0) {
     writeSqliteDatabase(seedDatabase())
@@ -562,6 +603,9 @@ function applySeedDataUpdates(database: Database) {
 
 function normalizeDatabase(database: Database) {
   database.syncJobs ??= []
+  database.projectSyncScripts ??= []
+  database.scriptSyncJobs ??= []
+  database.scriptSyncHistory ??= []
   database.uploadSessions ??= []
   database.dashboardVersions ??= []
   database.datasetVersions ??= []
@@ -604,6 +648,15 @@ function readSqliteDatabase(): Database {
     apiKeys: readSqliteRows<ApiKey>(database, "api_keys"),
     syncHistory: readSqliteRows<SyncHistory>(database, "sync_history").sort((left, right) => right.startedAt.localeCompare(left.startedAt)),
     syncJobs: readSqliteRows<SyncJob>(database, "sync_jobs").sort((left, right) => left.createdAt.localeCompare(right.createdAt)),
+    projectSyncScripts: readSqliteRows<ProjectSyncScript>(database, "project_sync_scripts").sort((left, right) =>
+      left.updatedAt.localeCompare(right.updatedAt)
+    ),
+    scriptSyncJobs: readSqliteRows<ScriptSyncJob>(database, "script_sync_jobs").sort((left, right) =>
+      left.createdAt.localeCompare(right.createdAt)
+    ),
+    scriptSyncHistory: readSqliteRows<ScriptSyncHistory>(database, "script_sync_history").sort((left, right) =>
+      right.startedAt.localeCompare(left.startedAt)
+    ),
     uploadSessions: readSqliteRows<UploadSession>(database, "upload_sessions").sort((left, right) => left.createdAt.localeCompare(right.createdAt)),
     dashboardVersions: readSqliteRows<DashboardVersion>(database, "dashboard_versions").sort((left, right) => right.version - left.version),
     datasetVersions: readSqliteRows<DatasetVersion>(database, "dataset_versions").sort((left, right) => right.version - left.version),
@@ -622,6 +675,9 @@ function writeSqliteDatabase(appDatabase: Database) {
     database.prepare("DELETE FROM webhook_endpoints").run()
     database.prepare("DELETE FROM dataset_versions").run()
     database.prepare("DELETE FROM dashboard_versions").run()
+    database.prepare("DELETE FROM script_sync_history").run()
+    database.prepare("DELETE FROM script_sync_jobs").run()
+    database.prepare("DELETE FROM project_sync_scripts").run()
     database.prepare("DELETE FROM sync_jobs").run()
     database.prepare("DELETE FROM sync_history").run()
     database.prepare("DELETE FROM activities").run()
@@ -645,6 +701,15 @@ function writeSqliteDatabase(appDatabase: Database) {
     const insertSyncHistory = database.prepare("INSERT INTO sync_history (id, project_id, dataset_id, started_at, data) VALUES (?, ?, ?, ?, ?)")
     const insertSyncJob = database.prepare(
       "INSERT INTO sync_jobs (id, project_id, dataset_id, organization_id, status, trigger, requested_by, created_at, started_at, completed_at, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    )
+    const insertProjectSyncScript = database.prepare(
+      "INSERT INTO project_sync_scripts (id, project_id, updated_at, data) VALUES (?, ?, ?, ?)"
+    )
+    const insertScriptSyncJob = database.prepare(
+      "INSERT INTO script_sync_jobs (id, project_id, organization_id, status, created_at, data) VALUES (?, ?, ?, ?, ?, ?)"
+    )
+    const insertScriptSyncHistory = database.prepare(
+      "INSERT INTO script_sync_history (id, project_id, script_id, started_at, data) VALUES (?, ?, ?, ?, ?)"
     )
     const insertUploadSession = database.prepare(
       "INSERT INTO upload_sessions (id, user_id, organization_id, expires_at, data) VALUES (?, ?, ?, ?, ?)"
@@ -683,6 +748,12 @@ function writeSqliteDatabase(appDatabase: Database) {
         job.completedAt,
         stringifySqliteRow(job)
       )
+    for (const script of appDatabase.projectSyncScripts ?? [])
+      insertProjectSyncScript.run(script.id, script.projectId, script.updatedAt, stringifySqliteRow(script))
+    for (const job of appDatabase.scriptSyncJobs ?? [])
+      insertScriptSyncJob.run(job.id, job.projectId, job.organizationId, job.status, job.createdAt, stringifySqliteRow(job))
+    for (const history of appDatabase.scriptSyncHistory ?? [])
+      insertScriptSyncHistory.run(history.id, history.projectId, history.scriptId, history.startedAt, stringifySqliteRow(history))
     for (const session of appDatabase.uploadSessions ?? [])
       insertUploadSession.run(session.id, session.userId, session.organizationId, session.expiresAt, stringifySqliteRow(session))
     for (const version of appDatabase.dashboardVersions ?? [])
@@ -709,6 +780,9 @@ type SqliteTable =
   | "api_keys"
   | "sync_history"
   | "sync_jobs"
+  | "project_sync_scripts"
+  | "script_sync_jobs"
+  | "script_sync_history"
   | "upload_sessions"
   | "dashboard_versions"
   | "dataset_versions"

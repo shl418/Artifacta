@@ -57,15 +57,30 @@ export ARTIFACTA_API_KEY=art_...
 
 Your local skill should write artifacts to a temporary or working directory, for example:
 
-- `dashboard.zip` or `dashboard.html`
-- `data.csv`
-- `sync.json` if you want to submit dataset sync configuration
+- `dashboard.zip` with optional `artifacta.json` (recommended for multi-file dashboards and bundle datasets)
+- `dashboard.html` for single-file dashboards
+- `data.csv` only when using HTML + separate `data_files` upload (legacy path)
+
+For ZIP bundles, put datasets and optional `sync_scripts` in `artifacta.json` — see `docs/protocol/manifest-v1.md` and `docs/protocol/examples/script-sync-dashboard/artifacta.json`.
 
 ## Step 5: Create the Remote Project
+
+**ZIP with manifest (recommended):**
 
 ```bash
 artifacta projects upload \
   --file ./dashboard.zip \
+  --name "Weekly Growth" \
+  --visibility team
+```
+
+The CLI uploads the ZIP via `POST /upload-sessions`, then publishes with `manifest_mode=auto`. You do **not** need `--data-file` when CSV/JSON paths are declared in `artifacta.json`.
+
+**Single HTML + separate dataset:**
+
+```bash
+artifacta projects upload \
+  --file ./dashboard.html \
   --name "Weekly Growth" \
   --data-file ./data.csv \
   --visibility team
@@ -119,11 +134,23 @@ The CLI passes your local JSON object through to `source_config`.
 
 ## Step 9: Trigger Sync
 
+**Per-dataset remote source (URL/COS/Presto):**
+
 ```bash
 artifacta sync trigger \
   --project-id proj_123 \
   --dataset-id ds_123
 ```
+
+**Bundle script from `artifacta.json`:**
+
+```bash
+artifacta sync-scripts trigger \
+  --project-id proj_123 \
+  --script-id sscript_xxxxxxxx
+```
+
+List scripts with `artifacta sync-scripts list --project-id proj_123`. Configure secrets with `sync-scripts set --config-file ./secrets.json` (stored server-side as `source_config`, injected as `ARTIFACTA_SOURCE_CONFIG` when the script runs).
 
 ## Claude Code / Skill Pattern
 
@@ -140,7 +167,8 @@ Use `templates/claude-code-artifacta-publisher/SKILL.md` as the copyable startin
 
 ## Good Defaults
 
-- Use ZIP dashboards if your HTML references CSS, JS, fonts, or images.
+- Use ZIP dashboards if your HTML references CSS, JS, fonts, or images; include `artifacta.json` when you want zero-config dataset binding or bundle script sync.
+- Do not pass ZIP via `html_file` on `POST /projects` — the CLI and API use upload sessions instead.
 - Treat `project_id` and `dataset_id` as remote IDs owned by Artifacta, not local folder names.
 - Keep API keys in environment variables, not inside prompts or committed files.
 - Return the `preview_url` to the user after every successful upload.

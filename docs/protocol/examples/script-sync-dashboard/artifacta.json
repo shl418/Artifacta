@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "name": "Script Sync Example",
+  "entrypoint": "index.html",
+  "datasets": [
+    {
+      "id": "sales",
+      "name": "Sales CSV",
+      "kind": "csv",
+      "path": "data/sales.csv",
+      "refresh": "sync"
+    },
+    {
+      "id": "inventory",
+      "name": "Inventory CSV",
+      "kind": "csv",
+      "path": "data/inventory.csv",
+      "refresh": "sync"
+    }
+  ],
+  "sync_scripts": [
+    {
+      "id": "main",
+      "path": "scripts/sync.py",
+      "runtime": "python",
+      "outputs": ["data/sales.csv", "data/inventory.csv"],
+      "schedule": "0 8 * * *"
+    }
+  ]
+}

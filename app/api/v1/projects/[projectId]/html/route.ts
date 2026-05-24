@@ -37,6 +37,16 @@ export async function PUT(request: Request, context: RouteContext) {
 
   if (!htmlFile) return apiError(400, "INVALID_REQUEST", "请上传 html_file。", { field: "html_file" })
 
+  const extension = htmlFile.name.toLowerCase()
+  if (extension.endsWith(".zip") || htmlFile.type === "application/zip") {
+    return apiError(
+      400,
+      "DEPRECATED",
+      "ZIP 看板更新请使用 POST /upload-sessions（带 project_id）并通过 upload_session_id 提交。",
+      { field: "html_file" }
+    )
+  }
+
   const artifact = await saveProjectArtifact(projectId, htmlFile).catch((error) => {
     if (error instanceof Error) return error
     return new Error("看板文件保存失败。")
