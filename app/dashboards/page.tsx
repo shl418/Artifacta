@@ -266,7 +266,8 @@ export default function DashboardsPage() {
               </Alert>
             )}
 
-            <div className="rounded-lg border border-border bg-card overflow-hidden overflow-x-auto">
+            <div className="rounded-lg border border-border bg-card">
+              <div className="overflow-x-auto">
               <Table className="min-w-[720px]">
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
@@ -386,6 +387,7 @@ export default function DashboardsPage() {
                   })}
                 </TableBody>
               </Table>
+              </div>
 
               {!error && payload && payload.data.length === 0 && currentFolderId === null && payload.folders.length === 0 && (
                 <Empty className="border-0 py-16">

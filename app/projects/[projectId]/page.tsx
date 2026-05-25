@@ -152,33 +152,42 @@ export default function ProjectDetailPage() {
 
             {project && (
               <div className="mx-auto max-w-6xl space-y-6">
-                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <FileBarChart className="h-5 w-5 text-primary" />
-                      <h2 className="text-xl font-semibold">{project.name}</h2>
-                      <Badge variant="outline">{project.visibility}</Badge>
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <FileBarChart className="h-5 w-5 shrink-0 text-primary" />
+                        <h2 className="text-xl font-semibold">{project.name}</h2>
+                        <Badge variant="outline">{project.visibility}</Badge>
+                      </div>
+                      <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{project.description || "暂无描述"}</p>
                     </div>
-                    <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{project.description || "暂无描述"}</p>
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                      <Button asChild variant="outline" size="sm"><Link href={`/view/${project.id}`}>预览</Link></Button>
+                      <Button variant="outline" size="sm" onClick={createEmbedLink}>嵌入链接</Button>
+                      <Select value={project.visibility} onValueChange={(value) => updateVisibility(value as Visibility)}>
+                        <SelectTrigger className="h-9 w-32"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="private">私有</SelectItem>
+                          <SelectItem value="team">团队</SelectItem>
+                          <SelectItem value="public">公开</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                  {actionMessage && <p className="text-sm text-muted-foreground">{actionMessage}</p>}
-                  {embedUrl && (
-                    <p className="text-xs text-muted-foreground break-all">
-                      嵌入链接：<a className="text-primary underline" href={embedUrl} target="_blank" rel="noreferrer">{embedUrl}</a>
-                    </p>
+                  {(actionMessage || embedUrl) && (
+                    <div className="space-y-2 rounded-lg border border-border bg-muted/30 px-3 py-2.5">
+                      {actionMessage && <p className="text-sm text-muted-foreground">{actionMessage}</p>}
+                      {embedUrl && (
+                        <p className="text-xs text-muted-foreground">
+                          <span className="font-medium">嵌入链接：</span>
+                          <a className="break-all text-primary underline" href={embedUrl} target="_blank" rel="noreferrer">
+                            {embedUrl}
+                          </a>
+                        </p>
+                      )}
+                    </div>
                   )}
-                  <div className="flex flex-wrap gap-2">
-                    <Button asChild variant="outline" size="sm"><Link href={`/view/${project.id}`}>预览</Link></Button>
-                    <Button variant="outline" size="sm" onClick={createEmbedLink}>嵌入链接</Button>
-                    <Select value={project.visibility} onValueChange={(value) => updateVisibility(value as Visibility)}>
-                      <SelectTrigger className="h-9 w-32"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="private">私有</SelectItem>
-                        <SelectItem value="team">团队</SelectItem>
-                        <SelectItem value="public">公开</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-4">
