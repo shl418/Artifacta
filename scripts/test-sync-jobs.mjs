@@ -98,17 +98,23 @@ try {
 }
 
 async function loadSyncJobs() {
-  const source = await readFile(sourcePath, "utf8")
+  await mkdir(tempDir, { recursive: true })
+
+  const lifecyclePath = path.join(repoRoot, "lib/server/sync/job-lifecycle.ts")
+  const lifecycleCompiled = path.join(tempDir, "job-lifecycle.cjs")
+  const lifecycleSource = await readFile(lifecyclePath, "utf8")
+  const lifecycleResult = ts.transpileModule(lifecycleSource, {
+    compilerOptions: { esModuleInterop: true, module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    fileName: lifecyclePath,
+  })
+  await writeFile(lifecycleCompiled, lifecycleResult.outputText, "utf8")
+
+  const source = (await readFile(sourcePath, "utf8"))
+    .replace(/@\/lib\/server\/sync\/job-lifecycle/g, lifecycleCompiled)
   const compiled = ts.transpileModule(source, {
-    compilerOptions: {
-      esModuleInterop: true,
-      module: ts.ModuleKind.CommonJS,
-      target: ts.ScriptTarget.ES2022,
-    },
+    compilerOptions: { esModuleInterop: true, module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
     fileName: sourcePath,
   })
-
-  await mkdir(tempDir, { recursive: true })
   await writeFile(compiledPath, compiled.outputText, "utf8")
 
   const require = createRequire(import.meta.url)

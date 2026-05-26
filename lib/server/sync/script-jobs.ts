@@ -1,4 +1,5 @@
 import type { Database, ScriptSyncJob } from "@/lib/types"
+import { claimNext, completeJob, failJob } from "@/lib/server/sync/job-lifecycle"
 
 interface EnqueueScriptSyncJobInput {
   projectId: string
@@ -44,37 +45,15 @@ export function enqueueScriptSyncJob(database: Database, input: EnqueueScriptSyn
 
 export function claimNextScriptSyncJob(database: Database, organizationId?: string) {
   database.scriptSyncJobs ??= []
-
-  const job = database.scriptSyncJobs
-    .filter((candidate) => candidate.status === "queued" && (!organizationId || candidate.organizationId === organizationId))
-    .sort((left, right) => left.createdAt.localeCompare(right.createdAt))[0]
-
-  if (!job) return null
-
-  job.status = "running"
-  job.startedAt = new Date().toISOString()
-  job.error = null
-  return job
+  return claimNext(database.scriptSyncJobs, organizationId)
 }
 
 export function completeScriptSyncJob(database: Database, jobId: string) {
-  const job = database.scriptSyncJobs?.find((candidate) => candidate.id === jobId)
-  if (!job) return null
-
-  job.status = "success"
-  job.completedAt = new Date().toISOString()
-  job.error = null
-  return job
+  return completeJob(database.scriptSyncJobs ?? [], jobId)
 }
 
 export function failScriptSyncJob(database: Database, jobId: string, error: string) {
-  const job = database.scriptSyncJobs?.find((candidate) => candidate.id === jobId)
-  if (!job) return null
-
-  job.status = "failed"
-  job.completedAt = new Date().toISOString()
-  job.error = error
-  return job
+  return failJob(database.scriptSyncJobs ?? [], jobId, error)
 }
 
 export function serializeScriptSyncJobClaim(job: ScriptSyncJob) {

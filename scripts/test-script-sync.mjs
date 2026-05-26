@@ -8,8 +8,11 @@ import ts from "typescript"
 const repoRoot = process.cwd()
 const tempDir = path.join(repoRoot, ".script-sync-test")
 
-async function compileModule(sourcePath) {
-  const source = await readFile(sourcePath, "utf8")
+async function compileModule(sourcePath, pathReplacements = {}) {
+  let source = await readFile(sourcePath, "utf8")
+  for (const [from, to] of Object.entries(pathReplacements)) {
+    source = source.replaceAll(from, to)
+  }
   const compiled = ts.transpileModule(source, {
     compilerOptions: {
       esModuleInterop: true,
@@ -27,7 +30,12 @@ async function compileModule(sourcePath) {
 
 try {
   const cron = await compileModule(path.join(repoRoot, "lib/server/sync/cron.ts"))
-  const scriptJobs = await compileModule(path.join(repoRoot, "lib/server/sync/script-jobs.ts"))
+  const lifecycleCompiledPath = path.join(tempDir, "job-lifecycle.cjs")
+  await compileModule(path.join(repoRoot, "lib/server/sync/job-lifecycle.ts"))
+  const scriptJobs = await compileModule(
+    path.join(repoRoot, "lib/server/sync/script-jobs.ts"),
+    { "@/lib/server/sync/job-lifecycle": lifecycleCompiledPath }
+  )
 
   const nextRun = cron.computeNextCronRun("0 8 * * *", new Date("2026-05-24T10:00:00.000Z"))
   assert.ok(nextRun)

@@ -1,4 +1,5 @@
 import type { Database, SyncJob } from "@/lib/types"
+import { claimNext, completeJob, failJob } from "@/lib/server/sync/job-lifecycle"
 
 interface EnqueueSyncJobInput {
   projectId: string
@@ -48,36 +49,15 @@ export function enqueueSyncJob(database: Database, input: EnqueueSyncJobInput) {
 }
 
 export function claimNextSyncJob(database: Database, organizationId?: string) {
-  const job = database.syncJobs
-    .filter((candidate) => candidate.status === "queued" && (!organizationId || candidate.organizationId === organizationId))
-    .sort((left, right) => left.createdAt.localeCompare(right.createdAt))[0]
-
-  if (!job) return null
-
-  job.status = "running"
-  job.startedAt = new Date().toISOString()
-  job.error = null
-  return job
+  return claimNext(database.syncJobs, organizationId)
 }
 
 export function completeSyncJob(database: Database, jobId: string) {
-  const job = database.syncJobs.find((candidate) => candidate.id === jobId)
-  if (!job) return null
-
-  job.status = "success"
-  job.completedAt = new Date().toISOString()
-  job.error = null
-  return job
+  return completeJob(database.syncJobs, jobId)
 }
 
 export function failSyncJob(database: Database, jobId: string, error: string) {
-  const job = database.syncJobs.find((candidate) => candidate.id === jobId)
-  if (!job) return null
-
-  job.status = "failed"
-  job.completedAt = new Date().toISOString()
-  job.error = error
-  return job
+  return failJob(database.syncJobs, jobId, error)
 }
 
 export function applySyncJobPatch(database: Database, jobId: string, patch: SyncJobPatch) {
