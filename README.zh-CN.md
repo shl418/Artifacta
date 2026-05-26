@@ -111,24 +111,25 @@ npm install -g @artifacta/cli
 ## REST API 示例
 
 ```bash
+SESSION=$(curl -s -X POST http://localhost:3000/api/v1/upload-sessions \
+  -H "Authorization: Bearer $ARTIFACTA_API_KEY" \
+  -F "file=@./dashboard.zip" | jq -r .session_id)
 curl -X POST http://localhost:3000/api/v1/projects \
   -H "Authorization: Bearer $ARTIFACTA_API_KEY" \
   -F "name=销售看板" \
   -F "visibility=team" \
-  -F "html_file=@./dashboard.zip" \
-  -F "data_files=@./sales.csv"
+  -F "upload_session_id=$SESSION"
 ```
 
 完整路由、请求参数和响应格式见 [docs/API.md](docs/API.md)。稳定的 ZIP/Bundle 协议见 [docs/protocol/manifest-v1.md](docs/protocol/manifest-v1.md)。
 
 ## 示例
 
-`examples/` 包含单文件 HTML 看板、带 CSS/JS/图片资源的 ZIP 看板、CSV/JSON 数据集、`mock_rows` 同步配置和 CLI 发布脚本：
+`examples/WALKTHROUGH.zh-CN.md` 提供走通示例：单 HTML、扁平 zip、带 `data/` 子目录的多数据集包、脚本同步、COS 同步；示例目录内**不含**预置的 `artifacta.json`（脚本示例需自建）。
 
 ```bash
-export ARTIFACTA_URL=http://localhost:3000
-export ARTIFACTA_API_KEY=art_live_...
-bash examples/publish-example.sh
+cd examples/0-single-html && artifacta projects upload --file index.html --name "单文件"
+# 更多见 examples/WALKTHROUGH.zh-CN.md
 ```
 
 ## 数据同步 Worker

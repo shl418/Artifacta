@@ -97,17 +97,21 @@ async function createApiKey(cookie) {
 }
 
 async function uploadZipDashboard() {
-  const form = new FormData()
   const zip = new AdmZip()
   zip.addFile("index.html", Buffer.from(`<!doctype html><html><head><title>Smoke ZIP Dashboard</title><link rel="stylesheet" href="styles.css"></head><body><main><h1>Smoke ZIP Dashboard</h1><p id="status">ready</p><script src="app.js"></script></main></body></html>`))
   zip.addFile("styles.css", Buffer.from("body { margin: 0; background: #f6fbfa; font-family: system-ui, sans-serif; } main { padding: 32px; }"))
   zip.addFile("app.js", Buffer.from("document.getElementById('status').textContent = 'hydrated';"))
+  zip.addFile("smoke.csv", Buffer.from("stage,users\nvisit,10\npaid,3\n"))
 
+  const sessionForm = new FormData()
+  sessionForm.append("file", new Blob([zip.toBuffer()], { type: "application/zip" }), "smoke-dashboard.zip")
+  const session = await jsonRequest("/upload-sessions", { method: "POST", body: sessionForm })
+
+  const form = new FormData()
   form.append("name", `Smoke ZIP ${Date.now()}`)
   form.append("description", "Temporary project created by scripts/smoke-api.mjs")
   form.append("visibility", "team")
-  form.append("html_file", new Blob([zip.toBuffer()], { type: "application/zip" }), "smoke-dashboard.zip")
-  form.append("data_files", new Blob(["stage,users\nvisit,10\npaid,3\n"], { type: "text/csv" }), "smoke.csv")
+  form.append("upload_session_id", session.session_id)
 
   return jsonRequest("/projects", { method: "POST", body: form })
 }

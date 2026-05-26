@@ -19,6 +19,28 @@ ZIP 看板建议遵循稳定协议 `docs/protocol/manifest-v1.md`。
 
 Artifacta 里的 project 是远端资源。第一次执行上传命令时，服务端就会创建这个 project。
 
+## 第零步：本地用 HTTP 预览
+
+如果看板会通过 `fetch()` 读取同包内的 CSV / JSON 等数据文件，**必须**先用 HTTP 服务预览，再打包上传。双击 `index.html` 用的是 `file://` 协议，浏览器禁止从 `null` origin 发起 fetch，本地会失败但上传到 Artifacta 后又能跑——很容易误判。
+
+任何静态 HTTP 服务器都可以：
+
+```bash
+cd my-dashboard
+npx serve .                       # 已装 Node
+python3 -m http.server 5173       # 已装 Python
+```
+
+打开终端打印的 URL，在 DevTools → Network 里确认每个数据请求都返回 `200` 再继续。
+
+构建前请记牢三条托管约束：
+
+- **必须 ZIP**：单文件 `.html` 上传没有同包资源路由。
+- **一个 HTML 一个包**：只有入口 HTML 能访问；同包内其他 `.html` 会返回 `409 ASSET_BLOCKED`，多 HTML 包上传时直接报 `MULTIPLE_HTML_FILES`。
+- **只用相对路径**：`fetch("data/x.csv")` 本地与托管表现一致；带前导斜杠的 `/data/x.csv` 在托管端会绕过注入的 `<base href>` 而 404。
+
+可直接复用 `examples/2-html-csv/`（扁平目录，无预置 manifest），完整五步见 `examples/WALKTHROUGH.zh-CN.md`。
+
 ## 第一步：创建 API Key
 
 在 Artifacta 网页中：
@@ -61,13 +83,13 @@ export ARTIFACTA_API_KEY=art_...
 
 - `dashboard.zip`（推荐），可选根目录 `artifacta.json` 声明数据集与 `sync_scripts`
 - `dashboard.html`（单文件看板）
-- 仅 HTML 模式才需要单独的 `data.csv`；ZIP 请把数据文件写在 manifest 里
+- 单 HTML 仅适合内联数据；需要 `fetch()` 时请把 `data.csv` 等与 `index.html` 打在同一 ZIP 内
 
 协议说明见 `docs/protocol/manifest-v1.md`，带脚本示例见 `docs/protocol/examples/script-sync-dashboard/artifacta.json`。
 
 ## 第五步：创建远端项目
 
-**ZIP（含 manifest 时无需 `--data-file`）：**
+**ZIP（推荐）：**
 
 ```bash
 artifacta projects upload \
@@ -76,15 +98,14 @@ artifacta projects upload \
   --visibility team
 ```
 
-CLI 会自动：`POST /upload-sessions` → `POST /projects`（`manifest_mode=auto`）。
+CLI 会自动：`POST /upload-sessions` → `POST /projects`。数据文件必须在 ZIP 内。
 
-**单 HTML + 独立数据文件：**
+**单 HTML（仅内联数据）：**
 
 ```bash
 artifacta projects upload \
   --file ./dashboard.html \
   --name "增长周报" \
-  --data-file ./data.csv \
   --visibility team
 ```
 

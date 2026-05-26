@@ -62,6 +62,18 @@ export const artifactManifestSchema = z
       .default([]),
   })
   .superRefine((manifest, context) => {
+    for (const [datasetIndex, dataset] of manifest.datasets.entries()) {
+      if (!dataset.path || dataset.kind === "other") continue
+      const expected = manifestKindForPath(dataset.path)
+      if (expected !== "other" && expected !== dataset.kind) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `datasets[${datasetIndex}].kind '${dataset.kind}' does not match path extension (.${expected}). DATASET_KIND_EXTENSION_MISMATCH`,
+          path: ["datasets", datasetIndex, "kind"],
+        })
+      }
+    }
+
     const datasetPaths = new Set(
       manifest.datasets.map((dataset) => dataset.path).filter((value): value is string => Boolean(value))
     )

@@ -17,7 +17,7 @@ Authorization: Bearer <API_KEY>
 
 - 已实现：登录、当前用户、项目 CRUD、HTML 上传/替换、HTML 预览渲染、文件夹、数据集上传/替换/删除、同步配置/触发/状态/历史、项目成员权限、团队成员、API Key。
 - 已实现：ZIP 看板包解包、入口 HTML 渲染、CSS/JS/图片等静态资源托管；ZIP **创建/更新** 统一走上传会话（`upload_session_id`），不再接受 `POST /projects` 或 `PUT /html` 直接传 ZIP。
-- 已实现：包内 `artifacta.json` 导入（`sync_scripts`、数据集绑定、`manifest_mode=auto`）；合法用户 manifest 在提交时**不会被服务端覆盖**。
+- 已实现：包内 `artifacta.json` 导入（`sync_scripts`、数据集绑定）；合法用户 manifest 在提交时**不会被服务端覆盖**。无 manifest 时按扩展名自动登记包内数据文件。
 - 已实现：Bundle 脚本同步（`sync_scripts`）：平台在解包目录内执行 Python/Node 脚本，一次运行可更新多个 `outputs` 路径。
 - 已实现：`DATA_DRIVER=json|sqlite|postgres` 元数据持久化，SQLite adapter 带幂等迁移，Postgres adapter 适合多实例元数据存储。
 - 已实现：`STORAGE_DRIVER=local|s3`，可使用 S3/COS/R2/MinIO 兼容对象存储保存看板和数据集文件。
@@ -98,7 +98,7 @@ POST /auth/logout
 
 ### 创建项目
 
-上传 HTML 看板及关联数据集，创建新项目。
+上传 HTML 看板或 ZIP 看板包，创建新项目。
 
 ```
 POST /projects
@@ -113,19 +113,14 @@ POST /projects
 | folder_id | string | 否 | 所属文件夹 ID |
 | html_file | file | 条件 | 单个 `.html` 看板（与 `upload_session_id` 二选一） |
 | upload_session_id | string | 条件 | 由 `POST /upload-sessions` 返回；**ZIP 看板包必须使用此字段** |
-| datasets | string (JSON) | 否 | 绑定包内数据集，见下方示例；`manifest_mode=auto` 时可传 `[]` |
-| manifest_mode | string | 否 | `auto`：有包内 `artifacta.json` 时以其为准；`wizard`：始终使用 `datasets` 向导配置 |
-| data_files | file[] | 否 | 仅 **单 HTML 模式** 下附加独立数据集文件（旧路径，ZIP 场景请用包内数据或 manifest） |
 | visibility | string | 否 | 可见性: `private`, `team`, `public`，默认 `private` |
-
-也支持 `data_files[]` 和 `data` 作为数据文件字段别名。
 
 **支持的文件格式:**
 
-- **单 HTML 模式:** `html_file` 为 `.html`，可选 `data_files` 附加数据集
+- **单 HTML 模式:** `html_file` 为 `.html`（仅适合内联数据；若看板 `fetch()` 相对路径数据文件，请使用 ZIP）
 - **ZIP 包模式（推荐）:** 必须先 `POST /upload-sessions`，再本接口传 `upload_session_id`（见「上传会话」）
   - 包内需有 `index.html`（或由 `artifacta.json` 的 `entrypoint` 指定）
-  - 可选 `artifacta.json`：声明 `datasets`、`sync_scripts`（协议见 `docs/protocol/manifest-v1.md`）
+  - 数据文件放在 ZIP 内；可选 `artifacta.json` 声明 `datasets`、`sync_scripts`（协议见 `docs/protocol/manifest-v1.md`）。无 manifest 时服务端按扩展名自动登记包内数据文件
   - 直接 `html_file=@bundle.zip` 会返回 `400 DEPRECATED`
 
 **请求示例:**
@@ -137,7 +132,6 @@ curl -X POST http://localhost:3000/api/v1/projects \
   -F "name=销售月报" \
   -F "description=2024年1月销售数据看板" \
   -F "html_file=@dashboard.html" \
-  -F "data_files=@sales.csv" \
   -F "visibility=team"
 ```
 
@@ -148,13 +142,11 @@ SESSION=$(curl -s -X POST http://localhost:3000/api/v1/upload-sessions \
   -H "Authorization: Bearer $API_KEY" \
   -F "file=@dashboard.zip" | jq -r .session_id)
 
-# 2. 提交项目（包内含 artifacta.json 时用 manifest_mode=auto）
+# 2. 提交项目（包内数据由 artifacta.json 或自动发现登记）
 curl -X POST http://localhost:3000/api/v1/projects \
   -H "Authorization: Bearer $API_KEY" \
   -F "name=交互式销售看板" \
   -F "upload_session_id=$SESSION" \
-  -F "manifest_mode=auto" \
-  -F "datasets=[]" \
   -F "visibility=team"
 ```
 
@@ -562,7 +554,7 @@ POST /upload-sessions
 }
 ```
 
-`manifest_detected` 为 `true` 时表示 ZIP 根目录存在 `artifacta.json`；Web 向导可跳过数据集选择，提交时使用 `manifest_mode=auto`。
+`manifest_detected` 为 `true` 时表示 ZIP 根目录存在 `artifacta.json`；提交项目时服务端会按其 `datasets` / `sync_scripts` 登记，无需客户端再传数据集配置。
 
 ### 使用上传会话创建项目
 
@@ -572,27 +564,7 @@ POST /projects
 
 传 `upload_session_id` 替代 `html_file`。
 
-**表单字段（multipart）:**
-
-| 字段 | 描述 |
-|------|------|
-| `datasets` | JSON 数组，指定包内路径与刷新方式 |
-| `manifest_mode` | `auto`：有合法包内 manifest 时忽略客户端 `datasets`；无 manifest 时自动发现数据扩展名 |
-| `name`, `description`, `visibility`, `folder_id` | 与直接创建相同 |
-
-**`datasets` 示例（向导模式）:**
-
-```json
-[
-  {
-    "bundle_path": "data/sales.csv",
-    "name": "Sales",
-    "refresh": "sync"
-  }
-]
-```
-
-`refresh: "sync"` 会在导入时启用该 bundle 数据集的 `sync_config.enabled`，并参与重传时的路径保护。
+**表单字段（multipart）:** `name`, `description`, `visibility`, `folder_id`（与直接创建相同）。包内数据集由 `artifacta.json` 驱动，或按 `.csv` / `.json` 等扩展名自动发现。`refresh: "sync"` 须在 manifest 中声明，会在导入时启用同步并参与重传时的路径保护。
 
 **更新已有 ZIP 项目:** `POST /upload-sessions` 时增加 `project_id=proj_xxx`，再 `POST /projects` 提交相同 `upload_session_id`。已启用同步的数据集路径与已启用脚本的 `outputs` 在解包时会被跳过，避免覆盖远端刷新结果。
 
@@ -1165,17 +1137,16 @@ pnpm cli -- projects list --search 销售
 
 **创建或更新项目**
 ```bash
-# ZIP：CLI 自动走 upload-sessions + manifest_mode=auto（包内可有 artifacta.json）
+# ZIP：CLI 自动走 upload-sessions（数据文件放在 ZIP 内）
 pnpm cli -- projects upload \
   --file ./dashboard.zip \
   --name "AI 生成的销售分析" \
   --visibility team
 
-# 单 HTML + 独立数据文件
+# 单 HTML（仅内联数据）
 pnpm cli -- projects upload \
   --file ./dashboard.html \
-  --name "单页看板" \
-  --data-file ./sales-data.csv
+  --name "单页看板"
 
 pnpm cli -- projects update-html \
   --project-id proj_abc123 \
@@ -1277,7 +1248,6 @@ pnpm test:smoke
 pnpm cli -- projects upload \
   --file ./dashboard.zip \
   --name "AI 生成的增长周报" \
-  --data-file ./source.csv \
   --visibility team
 
 # 3. Agent 给数据集写同步配置
@@ -1344,6 +1314,5 @@ The checked OpenAPI contract lives at `docs/openapi/artifacta.v1.yaml`. Use `pnp
     pnpm cli -- projects upload \
       --file ./dist/dashboard.zip \
       --name "Build Report #${{ github.run_number }}" \
-      --data-file ./dist/data.csv \
       --visibility team
 ```

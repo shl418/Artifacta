@@ -4,7 +4,7 @@ import { canViewProject } from "@/lib/server/access"
 import { readDatabase, updateDatabase } from "@/lib/server/db"
 import { embedCookie, embedTokenFromRequest, verifyEmbedToken } from "@/lib/server/embed"
 import { apiError } from "@/lib/server/responses"
-import { readDashboardHtml } from "@/lib/server/storage"
+import { BundleIncompleteError, readDashboardHtml } from "@/lib/server/storage"
 
 export const runtime = "nodejs"
 
@@ -21,7 +21,15 @@ export async function GET(request: Request, context: RouteContext) {
   if (!project) return apiError(404, "NOT_FOUND", "项目不存在。")
   if (!hasEmbedAccess && !canViewProject(database, auth?.user ?? null, project)) return apiError(403, "FORBIDDEN", "无权访问该看板。")
 
-  const html = await readDashboardHtml(project)
+  let html: string
+  try {
+    html = await readDashboardHtml(project)
+  } catch (error) {
+    if (error instanceof BundleIncompleteError) {
+      return apiError(500, error.code, error.message)
+    }
+    throw error
+  }
 
   await updateDatabase((mutable) => {
     const record = mutable.projects.find((candidate) => candidate.id === projectId)

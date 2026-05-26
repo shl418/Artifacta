@@ -1,9 +1,0 @@
-{
-  "enabled": true,
-  "source_type": "presto",
-  "update_mode": "full",
-  "schedule": "0 8 * * *",
-  "source_config": {
-    "url": "https://example.com/public/sales.csv"
-  }
-}

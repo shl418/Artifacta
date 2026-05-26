@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>区域销售分析</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface2: #21262d;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --blue: #58a6ff;
+      --green: #3fb950;
+      --red: #f85149;
+      --amber: #d29922;
+      --violet: #a371f7;
+    }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    .shell { max-width: 1200px; margin: 0 auto; padding: 32px 24px 56px; }
+
+    header {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      flex-wrap: wrap; gap: 16px;
+      margin-bottom: 32px; padding-bottom: 24px; border-bottom: 1px solid var(--border);
+    }
+    header h1 { font-size: 1.25rem; font-weight: 700; }
+    header p { font-size: 0.82rem; color: var(--muted); margin-top: 4px; }
+    header code { background: rgba(88,166,255,0.12); color: var(--blue); padding: 1px 6px; border-radius: 4px; font-family: monospace; }
+    .tag { background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 5px 12px; font-size: 0.75rem; color: var(--muted); }
+
+    .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+    @media (max-width: 800px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+    .kpi {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 18px 20px;
+    }
+    .kpi-label { font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+    .kpi-value { font-size: 1.7rem; font-weight: 700; margin: 8px 0 4px; font-variant-numeric: tabular-nums; }
+    .kpi-delta { font-size: 0.77rem; }
+    .up { color: var(--green); }
+    .down { color: var(--red); }
+
+    .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+    @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 22px;
+    }
+    .card-full { grid-column: 1 / -1; }
+    .card-title { font-size: 0.85rem; font-weight: 600; margin-bottom: 18px; }
+    .chart-wrap { position: relative; height: 260px; }
+    .chart-wrap-sm { position: relative; height: 200px; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+    th { text-align: left; font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 0 14px 10px; }
+    td { padding: 11px 14px; border-top: 1px solid var(--border); }
+    tr:hover td { background: var(--surface2); }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .bar-inline { display: flex; align-items: center; gap: 8px; }
+    .bar-inline-track { flex: 1; height: 6px; background: var(--surface2); border-radius: 99px; overflow: hidden; }
+    .bar-inline-fill { height: 100%; border-radius: 99px; background: var(--blue); }
+    .pill {
+      display: inline-block; padding: 2px 8px;
+      border-radius: 99px; font-size: 0.72rem; font-weight: 500;
+    }
+    .pill-up { background: rgba(63,185,80,0.15); color: var(--green); }
+    .pill-down { background: rgba(248,81,73,0.15); color: var(--red); }
+
+    .loading { text-align: center; padding: 80px; color: var(--muted); }
+    .error { text-align: center; padding: 80px; color: var(--red); }
+  </style>
+</head>
+<body>
+<div class="shell">
+  <header>
+    <div>
+      <h1>🗺️ 区域销售分析</h1>
+      <p>数据来源：<code>region_sales.csv</code> · 同级目录</p>
+    </div>
+    <div class="tag">2024 年度</div>
+  </header>
+  <div id="root" class="loading">加载数据中…</div>
+</div>
+
+<script>
+Chart.defaults.color = '#8b949e';
+Chart.defaults.borderColor = '#30363d';
+Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+
+const PALETTE = ['#58a6ff','#3fb950','#a371f7','#d29922','#f85149','#39d353','#e3b341'];
+
+function parseCsv(text) {
+  const lines = text.trim().split(/\r?\n/).filter(Boolean);
+  const cols = lines[0].split(',');
+  return lines.slice(1).map(line => {
+    const cells = line.split(',');
+    const row = {};
+    cols.forEach((c, i) => row[c.trim()] = cells[i]?.trim() || '');
+    return row;
+  });
+}
+
+fetch("region_sales.csv")
+  .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
+  .then(t => render(parseCsv(t)))
+  .catch(e => {
+    document.getElementById('root').className = 'error';
+    document.getElementById('root').textContent = '加载失败: ' + e.message + ' — 请用 npx serve . 预览';
+  });
+
+function fmt(n) { return Number(n).toLocaleString('zh-CN'); }
+function fmtMoney(n) { return '¥' + (Number(n) / 10000).toFixed(1) + '万'; }
+
+function render(rows) {
+  const totalRev = rows.reduce((s, r) => s + Number(r.revenue), 0);
+  const totalOrders = rows.reduce((s, r) => s + Number(r.orders), 0);
+  const avgGrowth = (rows.reduce((s, r) => s + Number(r.growth), 0) / rows.length).toFixed(1);
+  const topRegion = rows.reduce((a, b) => Number(a.revenue) > Number(b.revenue) ? a : b);
+  const maxRev = Math.max(...rows.map(r => Number(r.revenue)));
+  const sorted = [...rows].sort((a, b) => Number(b.revenue) - Number(a.revenue));
+
+  document.getElementById('root').innerHTML = `
+    <div class="kpis">
+      <div class="kpi">
+        <div class="kpi-label">总营收</div>
+        <div class="kpi-value" style="color:var(--blue)">${fmtMoney(totalRev)}</div>
+        <div class="kpi-delta up">↑ ${avgGrowth}% 年均增长</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">总订单量</div>
+        <div class="kpi-value" style="color:var(--green)">${fmt(totalOrders)}</div>
+        <div class="kpi-delta" style="color:var(--muted)">${rows.length} 个大区</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">最佳大区</div>
+        <div class="kpi-value" style="color:var(--violet);font-size:1.5rem">${topRegion.region}</div>
+        <div class="kpi-delta up">↑ ${topRegion.growth}% 同比</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">客单价</div>
+        <div class="kpi-value" style="color:var(--amber)">¥${(totalRev / totalOrders).toFixed(0)}</div>
+        <div class="kpi-delta" style="color:var(--muted)">全区平均</div>
+      </div>
+    </div>
+    <div class="layout">
+      <div class="card">
+        <div class="card-title">各区营收分布</div>
+        <div class="chart-wrap"><canvas id="barChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">营收占比</div>
+        <div class="chart-wrap-sm"><canvas id="pieChart"></canvas></div>
+      </div>
+      <div class="card card-full">
+        <div class="card-title">大区详情</div>
+        <table>
+          <thead><tr>
+            <th>大区</th>
+            <th>营收占比</th>
+            <th class="num">营收</th>
+            <th class="num">订单数</th>
+            <th class="num">同比增长</th>
+          </tr></thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  new Chart(document.getElementById('barChart'), {
+    type: 'bar',
+    data: {
+      labels: sorted.map(r => r.region),
+      datasets: [{
+        label: '营收',
+        data: sorted.map(r => Number(r.revenue)),
+        backgroundColor: PALETTE.map(c => c + 'cc'),
+        borderColor: PALETTE,
+        borderWidth: 1,
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: '#21262d' } },
+        y: { grid: { color: '#21262d' }, ticks: { callback: v => '¥' + (v/10000).toFixed(0) + '万' } }
+      }
+    }
+  });
+
+  new Chart(document.getElementById('pieChart'), {
+    type: 'doughnut',
+    data: {
+      labels: sorted.map(r => r.region),
+      datasets: [{
+        data: sorted.map(r => Number(r.revenue)),
+        backgroundColor: PALETTE,
+        borderColor: '#161b22',
+        borderWidth: 2,
+        hoverOffset: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      cutout: '60%',
+      plugins: { legend: { position: 'right', labels: { boxWidth: 10, padding: 12, font: { size: 11 } } } }
+    }
+  });
+
+  const tbody = document.getElementById('tableBody');
+  sorted.forEach((r, i) => {
+    const pct = (Number(r.revenue) / maxRev * 100).toFixed(0);
+    const grow = Number(r.growth);
+    tbody.innerHTML += `<tr>
+      <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${PALETTE[i]};margin-right:8px"></span>${r.region}</td>
+      <td>
+        <div class="bar-inline">
+          <div class="bar-inline-track"><div class="bar-inline-fill" style="width:${pct}%;background:${PALETTE[i]}"></div></div>
+          <span style="font-size:0.75rem;color:var(--muted);white-space:nowrap">${(Number(r.revenue)/totalRev*100).toFixed(1)}%</span>
+        </div>
+      </td>
+      <td class="num">${fmtMoney(r.revenue)}</td>
+      <td class="num">${fmt(r.orders)}</td>
+      <td class="num"><span class="pill ${grow >= 0 ? 'pill-up' : 'pill-down'}">${grow >= 0 ? '↑' : '↓'} ${Math.abs(grow)}%</span></td>
+    </tr>`;
+  });
+}
+</script>
+</body>
+</html>

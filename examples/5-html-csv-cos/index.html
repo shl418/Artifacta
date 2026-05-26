@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>销售快照 · COS 同步</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface2: #21262d;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --blue: #58a6ff;
+      --green: #3fb950;
+      --amber: #d29922;
+      --red: #f85149;
+      --violet: #a371f7;
+    }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    .shell { max-width: 1100px; margin: 0 auto; padding: 32px 24px 56px; }
+    header {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      flex-wrap: wrap; gap: 16px;
+      margin-bottom: 32px; padding-bottom: 24px; border-bottom: 1px solid var(--border);
+    }
+    header h1 { font-size: 1.25rem; font-weight: 700; }
+    header p { font-size: 0.82rem; color: var(--muted); margin-top: 4px; }
+    header code { background: rgba(88,166,255,0.12); color: var(--blue); padding: 1px 6px; border-radius: 4px; font-family: monospace; }
+    .tag { background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 5px 14px; font-size: 0.75rem; color: var(--muted); }
+
+    .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+    @media (max-width: 800px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+    .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
+    .kpi-label { font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+    .kpi-value { font-size: 1.7rem; font-weight: 700; margin: 8px 0 4px; font-variant-numeric: tabular-nums; }
+    .kpi-sub { font-size: 0.77rem; }
+    .up { color: var(--green); } .down { color: var(--red); }
+
+    .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+    @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 22px; }
+    .card-full { grid-column: 1 / -1; }
+    .card-title { font-size: 0.85rem; font-weight: 600; margin-bottom: 18px; }
+    .chart-wrap { position: relative; height: 260px; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+    th { text-align: left; font-size: 0.67rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 0 14px 10px; }
+    td { padding: 11px 14px; border-top: 1px solid var(--border); }
+    tr:hover td { background: var(--surface2); }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+    .attain { display: flex; align-items: center; gap: 8px; }
+    .attain-bar { flex: 1; height: 6px; background: var(--surface2); border-radius: 99px; overflow: hidden; min-width: 60px; }
+    .attain-fill { height: 100%; border-radius: 99px; }
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 0.72rem; font-weight: 500; }
+    .pill-up { background: rgba(63,185,80,0.15); color: var(--green); }
+    .pill-down { background: rgba(248,81,73,0.15); color: var(--red); }
+
+    .loading { text-align: center; padding: 80px; color: var(--muted); }
+    .error { text-align: center; padding: 80px; color: var(--red); }
+  </style>
+</head>
+<body>
+<div class="shell">
+  <header>
+    <div>
+      <h1>☁️ 销售快照</h1>
+      <p>数据来源：<code>sales_snapshot.csv</code> · 由腾讯云 COS 定时同步</p>
+    </div>
+    <div class="tag">COS 内置同步示例</div>
+  </header>
+  <div id="root" class="loading">加载数据中…</div>
+</div>
+
+<script>
+Chart.defaults.color = '#8b949e';
+Chart.defaults.borderColor = '#30363d';
+Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+
+const PALETTE = ['#58a6ff','#3fb950','#a371f7','#d29922','#f85149','#39d353','#e3b341'];
+
+function parseCsv(text) {
+  const lines = text.trim().split(/\r?\n/).filter(Boolean);
+  const cols = lines[0].split(',');
+  return lines.slice(1).map(line => {
+    const cells = line.split(',');
+    const row = {};
+    cols.forEach((c, i) => row[c.trim()] = cells[i]?.trim() || '');
+    return row;
+  });
+}
+
+function fmt(n) { return Number(n).toLocaleString('zh-CN'); }
+function fmtMoney(n) { return '¥' + (Number(n) / 10000).toFixed(1) + '万'; }
+
+fetch("sales_snapshot.csv")
+  .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
+  .then(t => render(parseCsv(t)))
+  .catch(e => {
+    document.getElementById('root').className = 'error';
+    document.getElementById('root').textContent = '加载失败: ' + e.message + ' — 请用 npx serve . 预览';
+  });
+
+function render(rows) {
+  const totalRev = rows.reduce((s, r) => s + Number(r.revenue), 0);
+  const totalTarget = rows.reduce((s, r) => s + Number(r.target), 0);
+  const totalOrders = rows.reduce((s, r) => s + Number(r.orders), 0);
+  const overallAttain = (totalRev / totalTarget * 100).toFixed(1);
+  const growingCount = rows.filter(r => Number(r.growth) >= 0).length;
+  const maxRev = Math.max(...rows.map(r => Number(r.revenue)));
+
+  document.getElementById('root').innerHTML = `
+    <div class="kpis">
+      <div class="kpi">
+        <div class="kpi-label">快照总营收</div>
+        <div class="kpi-value" style="color:var(--blue)">${fmtMoney(totalRev)}</div>
+        <div class="kpi-sub up">↑ ${rows.reduce((s,r)=>s+Number(r.growth),0)/rows.length|0}% 平均增速</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">目标完成率</div>
+        <div class="kpi-value" style="color:${overallAttain>=100?'var(--green)':'var(--amber)'}">${overallAttain}%</div>
+        <div class="kpi-sub" style="color:var(--muted)">目标 ${fmtMoney(totalTarget)}</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">总订单量</div>
+        <div class="kpi-value" style="color:var(--violet)">${fmt(totalOrders)}</div>
+        <div class="kpi-sub" style="color:var(--muted)">${rows.length} 个大区</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">增长大区</div>
+        <div class="kpi-value" style="color:var(--green)">${growingCount}<span style="font-size:1rem;color:var(--muted)"> / ${rows.length}</span></div>
+        <div class="kpi-sub" style="color:var(--muted)">同比正增长</div>
+      </div>
+    </div>
+    <div class="layout">
+      <div class="card">
+        <div class="card-title">营收 vs 目标</div>
+        <div class="chart-wrap"><canvas id="barChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">目标达成率</div>
+        <div class="chart-wrap"><canvas id="attainChart"></canvas></div>
+      </div>
+      <div class="card card-full">
+        <div class="card-title">大区详情</div>
+        <table>
+          <thead><tr><th>大区</th><th>达成进度</th><th class="num">实际营收</th><th class="num">目标</th><th class="num">订单数</th><th class="num">同比增长</th></tr></thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  // Bar: revenue vs target grouped
+  new Chart(document.getElementById('barChart'), {
+    type: 'bar',
+    data: {
+      labels: rows.map(r => r.region),
+      datasets: [
+        {
+          label: '实际营收',
+          data: rows.map(r => Number(r.revenue)),
+          backgroundColor: PALETTE.map(c => c + 'cc'),
+          borderColor: PALETTE,
+          borderWidth: 1,
+          borderRadius: 4,
+        },
+        {
+          label: '目标',
+          data: rows.map(r => Number(r.target)),
+          backgroundColor: 'transparent',
+          borderColor: '#8b949e',
+          borderWidth: 1.5,
+          borderDash: [4, 3],
+          borderRadius: 4,
+          type: 'bar',
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top', labels: { boxWidth: 10, padding: 16 } } },
+      scales: {
+        x: { grid: { color: '#21262d' } },
+        y: { grid: { color: '#21262d' }, ticks: { callback: v => '¥' + (v/10000).toFixed(0) + '万' } }
+      }
+    }
+  });
+
+  // Attainment doughnut
+  const attainData = rows.map(r => +(Number(r.revenue) / Number(r.target) * 100).toFixed(1));
+  new Chart(document.getElementById('attainChart'), {
+    type: 'bar',
+    data: {
+      labels: rows.map(r => r.region),
+      datasets: [{
+        label: '达成率 %',
+        data: attainData,
+        backgroundColor: attainData.map(v => v >= 100 ? 'rgba(63,185,80,0.7)' : v >= 80 ? 'rgba(210,153,34,0.7)' : 'rgba(248,81,73,0.7)'),
+        borderColor: attainData.map(v => v >= 100 ? '#3fb950' : v >= 80 ? '#d29922' : '#f85149'),
+        borderWidth: 1,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: '#21262d' }, ticks: { callback: v => v + '%' }, max: 130 },
+        y: { grid: { color: '#21262d' } }
+      }
+    }
+  });
+
+  const tbody = document.getElementById('tableBody');
+  rows.forEach((r, i) => {
+    const attain = (Number(r.revenue) / Number(r.target) * 100).toFixed(1);
+    const pct = Math.min(Number(r.revenue) / maxRev * 100, 100).toFixed(0);
+    const grow = Number(r.growth);
+    tbody.innerHTML += `<tr>
+      <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${PALETTE[i]};margin-right:8px"></span>${r.region}</td>
+      <td>
+        <div class="attain">
+          <div class="attain-bar"><div class="attain-fill" style="width:${pct}%;background:${PALETTE[i]}"></div></div>
+          <span style="font-size:0.75rem;color:var(--muted);white-space:nowrap">${attain}%</span>
+        </div>
+      </td>
+      <td class="num">${fmtMoney(r.revenue)}</td>
+      <td class="num" style="color:var(--muted)">${fmtMoney(r.target)}</td>
+      <td class="num">${fmt(r.orders)}</td>
+      <td class="num"><span class="pill ${grow >= 0 ? 'pill-up' : 'pill-down'}">${grow >= 0 ? '↑' : '↓'} ${Math.abs(grow)}%</span></td>
+    </tr>`;
+  });
+}
+</script>
+</body>
+</html>

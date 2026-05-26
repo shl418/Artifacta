@@ -77,7 +77,6 @@ export interface UploadProjectInput {
   folderId?: string | null
   htmlFile: Blob
   htmlFileName?: string
-  dataFiles?: Array<{ file: Blob; fileName: string }>
 }
 
 export interface UploadDatasetInput {
@@ -137,9 +136,6 @@ export class ArtifactaClient {
     if (input.visibility) form.set("visibility", input.visibility)
     if (input.folderId) form.set("folder_id", input.folderId)
     form.set("html_file", input.htmlFile, input.htmlFileName ?? "dashboard.html")
-    for (const dataFile of input.dataFiles ?? []) {
-      form.append("data_files", dataFile.file, dataFile.fileName)
-    }
     return this.request("/api/v1/projects", { method: "POST", body: form })
   }
 

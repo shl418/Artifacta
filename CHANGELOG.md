@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### Project create: bundle-only data
+
+- **Removed** `POST /projects` fields `data_files`, `datasets`, and `manifest_mode`. Data must live inside the ZIP; bindings come from bundled `artifacta.json` or server-side auto-discovery.
+- **Upload UI:** single form for HTML or ZIP; no separate dataset upload or ZIP dataset wizard.
+- **CLI / client:** dropped `--data-file` on `projects upload`; ZIP publish no longer sends manifest/datasets form fields.
+
+### Local-preview contract and hosting reliability
+
+- **SKILL + ONBOARDING:** added a "preview over HTTP" step (no `file://`), four hard hosting constraints (ZIP-required, single-page, relative paths only, CSV/JSON preferred), and a ban on file-picker fallbacks for BI dashboards.
+- **Example `examples/data-dashboard/`:** minimal dashboard that `fetch()`-loads `data/sales.csv` — same path locally and on Artifacta.
+- **Cache-Control by visibility:** bundle asset responses now use `private, max-age=300` for `private`/`team` projects; only `public` projects keep `public, max-age=300`. Prevents shared caches from leaking gated assets.
+- **ZIP entrypoint convergence:** both upload paths now share `resolveBundleEntryPath` — manifest `entrypoint` is honored first, then root `index.html`, then the first nested `index.html`. Missing manifest entrypoints raise `MANIFEST_ENTRYPOINT_MISSING`.
+- **Upload-time validation (`validateBundleForHosting`):** bundles with multiple HTML files are now rejected with `MULTIPLE_HTML_FILES`; dataset `kind`/extension mismatches are rejected as `DATASET_KIND_EXTENSION_MISMATCH` inside `INVALID_BUNDLED_MANIFEST`; datasets with extensions outside the MIME map produce a `DATASET_MIME_FALLBACK` warning surfaced in the upload response.
+- **`getProjectById` on the html asset route:** removes the O(full-DB) `Array.find` per asset request; SQLite uses an indexed primary-key lookup.
+- **`ASSET_BLOCKED` error code:** asset route now distinguishes blocked-by-design requests (`reason: "html_sibling" | "not_zip_bundle"`) from genuinely missing files (`NOT_FOUND`).
+- **Stale `zipPlaceholderHtml` removed:** ZIP bundles with incomplete metadata now return `BUNDLE_INCOMPLETE` instead of a misleading "coming soon" page.
+- **MIME helper extracted:** `lib/server/artifacts/mime.ts` is now the single source of truth for `contentTypeForPath` and blocked-host extensions.
+
 ### Bundle upload and script sync
 
 - **ZIP publish path:** `POST /upload-sessions` is required for ZIP create/update; direct `html_file` ZIP on `POST /projects` and `PUT /projects/:id/html` return `400 DEPRECATED`.

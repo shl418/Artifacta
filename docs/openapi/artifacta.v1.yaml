@@ -166,18 +166,7 @@ paths:
                   description: Single HTML file; mutually exclusive with upload_session_id
                 upload_session_id:
                   type: string
-                  description: Required for ZIP bundles
-                manifest_mode:
-                  type: string
-                  enum: [auto, wizard]
-                datasets:
-                  type: string
-                  description: JSON array of bundle_path, name, refresh
-                data_files:
-                  type: array
-                  items:
-                    type: string
-                    format: binary
+                  description: Required for ZIP bundles; bundle datasets are imported from artifacta.json or auto-discovered
       responses:
         "201":
           description: Published project
@@ -354,6 +343,17 @@ paths:
           description: Static asset
         "404":
           $ref: "#/components/responses/Error"
+        "409":
+          description: |
+            Asset request is blocked by hosting rules. Error envelope uses
+            `code: "ASSET_BLOCKED"` with `details.reason` set to either
+            `html_sibling` (sibling .html files are not served — only the
+            entrypoint is reachable) or `not_zip_bundle` (project is a
+            single-file HTML upload and has no asset route).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /api/v1/projects/{projectId}/versions:
     get:
       summary: List dashboard versions

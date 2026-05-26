@@ -111,25 +111,21 @@ For the zero-repo end-user path, see [docs/ONBOARDING.md](docs/ONBOARDING.md). F
 ## REST API Example
 
 ```bash
+SESSION=$(curl -s -X POST http://localhost:3000/api/v1/upload-sessions \
+  -H "Authorization: Bearer $ARTIFACTA_API_KEY" \
+  -F "file=@./dashboard.zip" | jq -r .session_id)
 curl -X POST http://localhost:3000/api/v1/projects \
   -H "Authorization: Bearer $ARTIFACTA_API_KEY" \
   -F "name=Sales Dashboard" \
   -F "visibility=team" \
-  -F "html_file=@./dashboard.zip" \
-  -F "data_files=@./sales.csv"
+  -F "upload_session_id=$SESSION"
 ```
 
 See [docs/API.md](docs/API.md) for routes, request fields, and response shapes. The stable ZIP/bundle contract is [docs/protocol/manifest-v1.md](docs/protocol/manifest-v1.md).
 
 ## Examples
 
-`examples/` includes a single-file HTML dashboard, a ZIP dashboard with CSS/JS/images, CSV and JSON datasets, a `mock_rows` sync config, and a CLI publish script:
-
-```bash
-export ARTIFACTA_URL=http://localhost:3000
-export ARTIFACTA_API_KEY=art_live_...
-bash examples/publish-example.sh
-```
+`examples/WALKTHROUGH.zh-CN.md` walks through sample bundles: single HTML, flat zips, nested `3-html-csv-json/`, script sync, and COS sync. Start with `examples/0-single-html/` or `examples/1-html-json/`.
 
 ## Sync Worker
 

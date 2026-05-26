@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>用户转化漏斗</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface2: #21262d;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --blue: #58a6ff;
+      --green: #3fb950;
+      --violet: #a371f7;
+      --amber: #d29922;
+      --red: #f85149;
+    }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    .shell { max-width: 960px; margin: 0 auto; padding: 32px 24px 56px; }
+
+    header {
+      margin-bottom: 32px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    header h1 { font-size: 1.25rem; font-weight: 700; margin-bottom: 6px; }
+    header p { font-size: 0.82rem; color: var(--muted); }
+    header code {
+      background: rgba(88,166,255,0.12);
+      color: var(--blue);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-family: ui-monospace, monospace;
+      font-size: 0.8em;
+    }
+
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 640px) { .kpis { grid-template-columns: 1fr; } }
+    .kpi {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+    }
+    .kpi-label { font-size: 0.7rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+    .kpi-value { font-size: 1.8rem; font-weight: 700; margin: 8px 0 4px; }
+    .kpi-sub { font-size: 0.78rem; color: var(--muted); }
+
+    .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 700px) { .cards { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 22px;
+    }
+    .card.wide { grid-column: 1 / -1; }
+    .card-title { font-size: 0.85rem; font-weight: 600; margin-bottom: 20px; }
+    .chart-wrap { position: relative; height: 280px; }
+
+    .funnel { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+    .funnel-row { position: relative; }
+    .funnel-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 6px;
+      font-size: 0.83rem;
+    }
+    .funnel-name { font-weight: 500; }
+    .funnel-meta { font-size: 0.78rem; color: var(--muted); }
+    .funnel-track { height: 36px; background: var(--surface2); border-radius: 6px; overflow: hidden; position: relative; }
+    .funnel-fill { height: 100%; border-radius: 6px; display: flex; align-items: center; padding: 0 12px; font-size: 0.82rem; font-weight: 600; white-space: nowrap; transition: width 0.6s cubic-bezier(0.16,1,0.3,1); }
+    .funnel-badge {
+      position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 4px; padding: 2px 8px; font-size: 0.72rem; color: var(--muted);
+    }
+
+    .loading { text-align: center; padding: 80px; color: var(--muted); font-size: 0.9rem; }
+    .error { text-align: center; padding: 80px; color: var(--red); font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+<div class="shell">
+  <header>
+    <h1>🔽 用户转化漏斗</h1>
+    <p>数据来源：<code>metrics.json</code> · 实时加载 · 请用 <code>npx serve .</code> 预览</p>
+  </header>
+  <div id="root" class="loading">加载数据中…</div>
+</div>
+
+<script>
+Chart.defaults.color = '#8b949e';
+Chart.defaults.borderColor = '#30363d';
+Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+
+const COLORS = ['#58a6ff','#a371f7','#3fb950','#d29922','#f85149'];
+
+fetch("metrics.json")
+  .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+  .then(render)
+  .catch(e => {
+    document.getElementById('root').className = 'error';
+    document.getElementById('root').textContent = '加载失败: ' + e.message + ' — 请用 npx serve . 预览';
+  });
+
+function render(stages) {
+  const root = document.getElementById('root');
+  const top = stages[0].users;
+  const bottom = stages[stages.length - 1].users;
+  const overallCvr = ((bottom / top) * 100).toFixed(1);
+  const avgDrop = ((1 - Math.pow(bottom / top, 1 / (stages.length - 1))) * 100).toFixed(1);
+
+  root.innerHTML = `
+    <div class="kpis">
+      <div class="kpi">
+        <div class="kpi-label">漏斗顶部流量</div>
+        <div class="kpi-value" style="color:var(--blue)">${top.toLocaleString()}</div>
+        <div class="kpi-sub">每月 ${stages[0].stage}</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">整体转化率</div>
+        <div class="kpi-value" style="color:var(--green)">${overallCvr}%</div>
+        <div class="kpi-sub">${stages[0].stage} → ${stages[stages.length-1].stage}</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">平均每层流失</div>
+        <div class="kpi-value" style="color:var(--amber)">${avgDrop}%</div>
+        <div class="kpi-sub">共 ${stages.length} 个阶段</div>
+      </div>
+    </div>
+    <div class="cards">
+      <div class="card wide">
+        <div class="card-title">各阶段用户量</div>
+        <div class="funnel" id="funnel"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">阶段用户量对比</div>
+        <div class="chart-wrap"><canvas id="barChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">逐层转化率</div>
+        <div class="chart-wrap"><canvas id="cvrChart"></canvas></div>
+      </div>
+    </div>
+  `;
+
+  // Funnel bars
+  const funnelEl = document.getElementById('funnel');
+  stages.forEach((s, i) => {
+    const pct = (s.users / top * 100).toFixed(0);
+    const stepCvr = i === 0 ? null : ((s.users / stages[i-1].users) * 100).toFixed(1);
+    funnelEl.innerHTML += `
+      <div class="funnel-row">
+        <div class="funnel-label">
+          <span class="funnel-name">${s.stage}</span>
+          <span class="funnel-meta">${s.users.toLocaleString()} 用户${stepCvr ? ` · 上一步转化 ${stepCvr}%` : ''}</span>
+        </div>
+        <div class="funnel-track">
+          <div class="funnel-fill" style="width:${pct}%;background:linear-gradient(90deg,${COLORS[i]},${COLORS[i]}88)">
+            ${pct}%
+          </div>
+        </div>
+      </div>`;
+  });
+
+  // Bar chart
+  new Chart(document.getElementById('barChart'), {
+    type: 'bar',
+    data: {
+      labels: stages.map(s => s.stage),
+      datasets: [{
+        data: stages.map(s => s.users),
+        backgroundColor: COLORS.slice(0, stages.length).map(c => c + 'bb'),
+        borderColor: COLORS.slice(0, stages.length),
+        borderWidth: 1,
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: '#21262d' } },
+        y: { grid: { color: '#21262d' }, ticks: { callback: v => v.toLocaleString() } }
+      }
+    }
+  });
+
+  // Conversion rate line chart
+  const cvrLabels = stages.slice(1).map((s, i) => `${stages[i].stage}→${s.stage}`);
+  const cvrData = stages.slice(1).map((s, i) => +((s.users / stages[i].users) * 100).toFixed(1));
+  new Chart(document.getElementById('cvrChart'), {
+    type: 'line',
+    data: {
+      labels: cvrLabels,
+      datasets: [{
+        label: '转化率 %',
+        data: cvrData,
+        borderColor: '#3fb950',
+        backgroundColor: 'rgba(63,185,80,0.1)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 5,
+        pointBackgroundColor: '#3fb950',
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: '#21262d' } },
+        y: { grid: { color: '#21262d' }, ticks: { callback: v => v + '%' }, min: 0, max: 100 }
+      }
+    }
+  });
+}
+</script>
+</body>
+</html>

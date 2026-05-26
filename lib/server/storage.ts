@@ -2,6 +2,14 @@ import path from "node:path"
 import AdmZip from "adm-zip"
 import type { DashboardArtifact, Project } from "@/lib/types"
 import { maxArtifactBytes, maxDatasetBytes } from "@/lib/server/config"
+import {
+  classifyDashboardAssetRequest,
+  type AssetBlockedReason,
+  type DashboardAssetClassification,
+} from "@/lib/server/artifacts/asset-routing"
+import { BundleIncompleteError } from "@/lib/server/artifacts/errors"
+import { pickDefaultIndex, resolveBundleEntryPath } from "@/lib/server/artifacts/entrypoint"
+import { contentTypeForPath, fileExtension } from "@/lib/server/artifacts/mime"
 import { normalizeBundleEntry, validateZipBundle } from "@/lib/server/artifacts/zip-security"
 import {
   listStorageEntries,
@@ -12,15 +20,14 @@ import {
   writeStorageObject,
 } from "@/lib/server/object-storage"
 
+export { contentTypeForPath, fileExtension }
+export { BundleIncompleteError }
+
 const safeNamePattern = /[^a-zA-Z0-9._-]/g
 
 export function sanitizeFileName(fileName: string) {
   const baseName = path.basename(fileName).replace(safeNamePattern, "_").replace(/^\.+/, "")
   return baseName || "upload.bin"
-}
-
-export function fileExtension(fileName: string) {
-  return path.extname(fileName).replace(/^\./, "").toLowerCase()
 }
 
 export async function saveProjectArtifact(projectId: string, file: File): Promise<DashboardArtifact> {
@@ -44,13 +51,24 @@ export async function saveProjectArtifact(projectId: string, file: File): Promis
 
   if (isZip) {
     const extracted = await extractProjectZip(projectId, buffer)
+    let entryPath: string
+    try {
+      entryPath = resolveBundleEntryPath({
+        htmlFiles: extracted.htmlFiles,
+        defaultIndex: extracted.defaultIndex,
+        manifestEntry: null,
+      })
+    } catch (error) {
+      await removeStoragePrefix(extracted.assetRoot)
+      throw error
+    }
     return {
       kind: "zip",
       originalName: file.name,
       path: relativePath,
       size: buffer.byteLength,
       contentType: file.type || "application/zip",
-      entryPath: extracted.entryPath,
+      entryPath,
       assetRoot: extracted.assetRoot,
     }
   }
@@ -103,7 +121,7 @@ export async function readDashboardHtml(project: Project) {
 
   const entryPath = project.htmlArtifact.entryPath
   const assetRoot = project.htmlArtifact.assetRoot
-  if (!entryPath || !assetRoot) return zipPlaceholderHtml(project)
+  if (!entryPath || !assetRoot) throw new BundleIncompleteError()
 
   const html = await readStorageText(path.posix.join(assetRoot, entryPath))
   const entryDirectory = path.posix.dirname(entryPath)
@@ -111,18 +129,25 @@ export async function readDashboardHtml(project: Project) {
   return injectBaseHref(html, baseHref)
 }
 
-export async function readDashboardAsset(project: Project, assetPath: string[]) {
-  if (project.htmlArtifact.kind !== "zip" || !project.htmlArtifact.assetRoot) return null
+export type DashboardAssetResult =
+  | { kind: "ok"; buffer: Buffer; contentType: string }
+  | { kind: "blocked"; reason: AssetBlockedReason }
+  | { kind: "missing" }
 
-  const safePath = normalizeBundleEntry(assetPath.join("/"))
-  if (!safePath || safePath.toLowerCase().endsWith(".html")) return null
+export { classifyDashboardAssetRequest }
+export type { AssetBlockedReason, DashboardAssetClassification }
 
-  const buffer = await readStorageObject(path.posix.join(project.htmlArtifact.assetRoot, safePath)).catch(() => null)
-  if (!buffer) return null
+export async function readDashboardAsset(project: Project, assetPath: string[]): Promise<DashboardAssetResult> {
+  const classification = classifyDashboardAssetRequest(project, assetPath)
+  if (classification.kind !== "ready") return classification
+
+  const buffer = await readStorageObject(path.posix.join(classification.assetRoot, classification.safePath)).catch(() => null)
+  if (!buffer) return { kind: "missing" }
 
   return {
+    kind: "ok",
     buffer,
-    contentType: contentTypeForPath(safePath),
+    contentType: contentTypeForPath(classification.safePath),
   }
 }
 
@@ -146,12 +171,22 @@ function escapeHtml(value: string) {
   })
 }
 
-export async function extractProjectZip(projectId: string, buffer: Buffer, skipPaths?: Set<string>) {
+export interface ExtractProjectZipResult {
+  assetRoot: string
+  htmlFiles: string[]
+  defaultIndex: string | null
+}
+
+export async function extractProjectZip(
+  projectId: string,
+  buffer: Buffer,
+  skipPaths?: Set<string>,
+): Promise<ExtractProjectZipResult> {
   const zip = new AdmZip(buffer)
   validateZipBundle(zip)
 
   const assetRoot = `projects/${projectId}/bundle`
-  let entryPath: string | null = null
+  const htmlFiles: string[] = []
 
   if (skipPaths && skipPaths.size > 0) {
     const existingFiles = await listStorageEntries(assetRoot)
@@ -173,17 +208,10 @@ export async function extractProjectZip(projectId: string, buffer: Buffer, skipP
 
     await writeStorageObject(path.posix.join(assetRoot, safePath), entry.getData(), contentTypeForPath(safePath))
 
-    const lowerPath = safePath.toLowerCase()
-    if (lowerPath === "index.html") entryPath = safePath
-    if (!entryPath && lowerPath.endsWith("/index.html")) entryPath = safePath
+    if (safePath.toLowerCase().endsWith(".html")) htmlFiles.push(safePath)
   }
 
-  if (!entryPath) {
-    await removeStoragePrefix(assetRoot)
-    throw new Error("ZIP dashboard bundle must contain an index.html file")
-  }
-
-  return { assetRoot, entryPath }
+  return { assetRoot, htmlFiles, defaultIndex: pickDefaultIndex(htmlFiles) }
 }
 
 function formatBytes(bytes: number) {
@@ -201,49 +229,3 @@ function injectBaseHref(html: string, baseHref: string) {
   return `${base}${html}`
 }
 
-function contentTypeForPath(filePath: string) {
-  const extension = fileExtension(filePath)
-  const contentTypes: Record<string, string> = {
-    css: "text/css; charset=utf-8",
-    js: "text/javascript; charset=utf-8",
-    mjs: "text/javascript; charset=utf-8",
-    json: "application/json; charset=utf-8",
-    csv: "text/csv; charset=utf-8",
-    png: "image/png",
-    jpg: "image/jpeg",
-    jpeg: "image/jpeg",
-    gif: "image/gif",
-    webp: "image/webp",
-    svg: "image/svg+xml",
-    ico: "image/x-icon",
-    woff: "font/woff",
-    woff2: "font/woff2",
-    ttf: "font/ttf",
-  }
-  return contentTypes[extension] ?? "application/octet-stream"
-}
-
-function zipPlaceholderHtml(project: Project) {
-  return `<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${escapeHtml(project.name)}</title>
-    <style>
-      body { margin: 0; min-height: 100vh; display: grid; place-items: center; font-family: system-ui, sans-serif; background: #f5fbfb; color: #193333; }
-      main { width: min(560px, calc(100% - 48px)); background: white; border: 1px solid #d8eeee; border-radius: 10px; padding: 28px; }
-      h1 { margin: 0 0 12px; font-size: 22px; }
-      p { line-height: 1.7; color: #4b6666; }
-      code { background: #ecf8f8; border-radius: 4px; padding: 2px 6px; }
-    </style>
-  </head>
-  <body>
-    <main>
-      <h1>${escapeHtml(project.name)}</h1>
-      <p>此项目上传的是 ZIP 看板包：<code>${escapeHtml(project.htmlArtifact.originalName)}</code>。</p>
-      <p>当前开源 MVP 已保存该包，下一里程碑会加入 ZIP 解包与多资源托管。</p>
-    </main>
-  </body>
-</html>`
-}

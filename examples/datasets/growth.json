@@ -1,6 +1,0 @@
-[
-  { "stage": "visit", "users": 1200 },
-  { "stage": "signup", "users": 360 },
-  { "stage": "activated", "users": 148 },
-  { "stage": "paid", "users": 42 }
-]

@@ -318,6 +318,27 @@ export async function readDatabase(): Promise<Database> {
   return normalizeDatabase(JSON.parse(content) as Database)
 }
 
+export async function getProjectById(projectId: string): Promise<Project | null> {
+  await ensureDatabase()
+  if (dataDriver === "sqlite") {
+    const database = getSqliteDatabase()
+    const row = database.prepare("SELECT data FROM projects WHERE id = ? LIMIT 1").get(projectId) as { data: string } | undefined
+    if (!row) return null
+    return JSON.parse(row.data) as Project
+  }
+
+  if (dataDriver === "postgres") {
+    // Postgres stores the whole DB as a single JSONB blob in `artifacta_state`,
+    // so a per-row index does not exist — we fall back to the singleton fetch.
+    const database = await readPostgresDatabase()
+    return database.projects.find((project) => project.id === projectId) ?? null
+  }
+
+  const content = await fs.readFile(databasePath, "utf8")
+  const parsed = JSON.parse(content) as Database
+  return parsed.projects.find((project) => project.id === projectId) ?? null
+}
+
 export async function writeDatabase(database: Database) {
   await fs.mkdir(dataDir, { recursive: true })
   if (dataDriver === "sqlite") {

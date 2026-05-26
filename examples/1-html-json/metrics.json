@@ -1,0 +1,7 @@
+[
+  { "stage": "访问", "users": 12400 },
+  { "stage": "注册", "users": 3720 },
+  { "stage": "激活", "users": 1860 },
+  { "stage": "付费", "users": 558 },
+  { "stage": "续费", "users": 390 }
+]

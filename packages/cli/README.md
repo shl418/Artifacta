@@ -30,7 +30,7 @@ artifacta projects list [--search growth]
 artifacta --json projects list
 artifacta doctor [--app-url http://localhost:3000]
 artifacta projects upload --file ./dashboard.zip --name "Weekly Growth" --visibility team [--folder-id folder_123]
-artifacta projects upload --file ./dashboard.html --name "Single Page" --data-file ./growth.csv
+artifacta projects upload --file ./dashboard.html --name "Single Page"
 artifacta projects update-html --project-id proj_123 --file ./dashboard-v2.zip
 artifacta sync-scripts list --project-id proj_123
 artifacta sync-scripts trigger --project-id proj_123 --script-id sscript_abc123
@@ -49,6 +49,6 @@ artifacta sync trigger --project-id proj_123 --dataset-id ds_123
 
 Use `--json` for stable agent/CI output. Without it, list commands use tables and write commands print short human summaries.
 
-ZIP uploads use `POST /upload-sessions` and `manifest_mode=auto` automatically. Put datasets and optional `sync_scripts` in `artifacta.json` inside the ZIP — see `docs/protocol/manifest-v1.md`.
+ZIP uploads use `POST /upload-sessions` automatically. Put data files in the ZIP; optionally declare `datasets` and `sync_scripts` in `artifacta.json` — see `docs/protocol/manifest-v1.md`.
 
 See the main repository docs for onboarding, API details (`docs/API.md` — bundle script sync section), and release guidance.

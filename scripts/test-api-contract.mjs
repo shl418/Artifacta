@@ -62,6 +62,11 @@ for (const snakeCaseField of ["project_id", "dataset_id", "sync_config", "create
 }
 
 assert.match(openapi, /ErrorEnvelope:/, "OpenAPI should define ErrorEnvelope")
+assert.match(
+  openapi,
+  /ASSET_BLOCKED[\s\S]*html_sibling[\s\S]*not_zip_bundle/,
+  "Asset route OpenAPI should document the ASSET_BLOCKED error code and both reasons (html_sibling, not_zip_bundle)",
+)
 assert.doesNotMatch(openapi, /cdn\.artifacta\.io|app\.artifacta\.io/, "OpenAPI should use local or relative examples, not aspirational domains")
 
 console.log(`API contract coverage passed for ${requiredPaths.length} public routes.`)

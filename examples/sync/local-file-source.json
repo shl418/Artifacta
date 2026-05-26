@@ -1,9 +1,0 @@
-{
-  "enabled": true,
-  "source_type": "presto",
-  "update_mode": "full",
-  "schedule": null,
-  "source_config": {
-    "local_path": "./examples/datasets/sales.csv"
-  }
-}

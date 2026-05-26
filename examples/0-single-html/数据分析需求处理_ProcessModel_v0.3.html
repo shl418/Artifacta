@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1400">
+<title>数据分析需求处理 · Process Model + Instance · v0.3</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+  :root {
+    --accent: #00bebe;
+    --accent-2: #00D4D4;
+    --accent-soft: #D0F5F5;
+    --sage: #004b64;
+
+    --ink-1: #1A1F1F;
+    --ink-2: #2E3D3D;
+    --ink-3: #5C7070;
+    --ink-4: #8AABAB;
+
+    --bg: #FFFFFF;
+    --bg-soft: #F0FAFA;
+    --bg-card: #FFFFFF;
+    --line: #D8EEEE;
+    --line-2: #B8DEDE;
+
+    --gate: #D14545;
+    --gate-soft: #FFF1F1;
+    --gate-line: #F5C5C5;
+
+    --branch: #7B6CE8;
+    --branch-soft: #EFEAFE;
+    --branch-line: #C7BFF2;
+
+    --warn: #E8B947;
+    --warn-soft: #FFFBEB;
+
+    --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+    --sans: 'Inter', -apple-system, 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--ink-2);
+    font-size: 14px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* topbar */
+  .topbar {
+    background: var(--ink-1);
+    color: #fff;
+    padding: 14px 48px;
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    border-bottom: 3px solid var(--accent);
+    font-size: 12px;
+  }
+  .topbar .brand {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    color: var(--accent-2);
+  }
+  .topbar .title { font-size: 14px; font-weight: 600; color: #fff; }
+  .topbar .layer-note {
+    margin-left: auto;
+    color: rgba(255,255,255,0.6);
+    font-size: 11.5px;
+  }
+  .topbar .layer-note b { color: var(--accent-2); font-weight: 500; }
+  .topbar .ver {
+    font-family: var(--mono);
+    font-size: 10px;
+    background: rgba(255,255,255,0.08);
+    padding: 4px 10px;
+    border-radius: 3px;
+    color: rgba(255,255,255,0.75);
+    letter-spacing: 0.05em;
+  }
+
+  section {
+    max-width: 1340px;
+    margin: 0 auto;
+    padding: 40px 48px 8px;
+  }
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin-bottom: 8px;
+  }
+  .section-head .num {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+  }
+  .section-head h2 {
+    font-size: 19px;
+    font-weight: 600;
+    color: var(--ink-1);
+    letter-spacing: -0.005em;
+  }
+  .section-head .tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 2px 8px;
+    color: var(--ink-3);
+    background: var(--bg-soft);
+    border-radius: 3px;
+    letter-spacing: 0.05em;
+  }
+  .section-sub {
+    color: var(--ink-3);
+    font-size: 12.5px;
+    margin-bottom: 22px;
+  }
+
+  /* main diagram */
+  .diagram-card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 32px 24px 16px;
+    box-shadow: 0 24px 50px -32px rgba(0,60,70,0.18);
+  }
+  .diagram-card svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+
+  .diagram-legend {
+    display: flex;
+    gap: 26px;
+    padding: 14px 8px 0;
+    flex-wrap: wrap;
+    font-size: 11.5px;
+    color: var(--ink-3);
+    border-top: 1px dashed var(--line);
+    margin-top: 16px;
+  }
+  .diagram-legend .li { display: flex; align-items: center; gap: 8px; }
+  .diagram-legend .sw {
+    width: 18px; height: 12px; border-radius: 2px; display: inline-block;
+  }
+  .sw.normal { background: #fff; border: 1.5px solid var(--line-2); }
+  .sw.gate { background: var(--gate-soft); border: 1.5px solid var(--gate); }
+  .sw.branch { background: var(--branch-soft); border: 1.5px solid var(--branch); }
+  .sw.warn { background: var(--warn-soft); border: 1.5px solid var(--warn); }
+
+  /* schema (折叠) */
+  .schema-wrap { margin-top: 8px; }
+  details.node-schema {
+    border-bottom: 1px solid var(--line);
+  }
+  details.node-schema[open] { background: var(--bg-soft); }
+  details.node-schema summary {
+    cursor: pointer;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    list-style: none;
+    user-select: none;
+    transition: background 0.15s;
+  }
+  details.node-schema summary::-webkit-details-marker { display: none; }
+  details.node-schema summary:hover { background: var(--bg-soft); }
+  details.node-schema summary::before {
+    content: '▸';
+    color: var(--ink-4);
+    font-size: 10px;
+    transition: transform 0.15s;
+  }
+  details.node-schema[open] summary::before { transform: rotate(90deg); }
+
+  .schema-id {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent);
+    background: var(--accent-soft);
+    padding: 3px 9px;
+    border-radius: 3px;
+    min-width: 42px;
+    text-align: center;
+    letter-spacing: 0.04em;
+  }
+  details.gate .schema-id { color: var(--gate); background: var(--gate-soft); }
+  details.branch .schema-id { color: var(--branch); background: var(--branch-soft); }
+
+  .schema-title { font-size: 14px; font-weight: 600; color: var(--ink-1); }
+  .schema-badges { margin-left: auto; display: flex; gap: 6px; }
+  .badge {
+    font-family: var(--mono);
+    font-size: 9.5px;
+    padding: 2px 7px;
+    border-radius: 3px;
+    letter-spacing: 0.05em;
+  }
+  .badge.gate { color: var(--gate); background: #fff; border: 1px solid var(--gate-line); }
+  .badge.branch { color: var(--branch); background: #fff; border: 1px solid var(--branch-line); }
+  .badge.warn { color: var(--warn); background: #fff; border: 1px solid #FDE68A; }
+  .badge.loop { color: var(--warn); background: #fff; border: 1px solid #FDE68A; }
+
+  .schema-body {
+    padding: 4px 50px 18px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px 32px;
+    font-size: 12.5px;
+  }
+  .schema-body > div { display: grid; grid-template-columns: 78px 1fr; gap: 10px; align-items: start; }
+  .schema-body .full { grid-column: 1 / -1; }
+  .schema-body .k {
+    color: var(--ink-3);
+    font-family: var(--mono);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding-top: 2px;
+  }
+  .schema-body .v { color: var(--ink-2); }
+  .schema-body .v code {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    background: #fff;
+    padding: 1px 6px;
+    border-radius: 3px;
+    color: var(--ink-1);
+    border: 1px solid var(--line);
+  }
+  .ref-pill {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--branch);
+    background: #fff;
+    border: 1px dashed var(--branch);
+    padding: 1px 7px;
+    border-radius: 3px;
+    margin: 2px 3px 2px 0;
+  }
+  .ref-pill::before { content: '↗ '; font-weight: 700; }
+
+  .bp-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--gate);
+    background: var(--gate-soft);
+    padding: 2px 7px;
+    border-radius: 3px;
+    border: 1px solid var(--gate-line);
+    margin: 1px 3px;
+  }
+  .bp-pill::before { content: '⛔'; font-size: 8px; }
+
+  .branchrow { display: grid; gap: 4px; margin-top: 2px; }
+  .branchrow > div {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    gap: 12px;
+    font-size: 12px;
+    padding: 2px 0;
+  }
+  .branchrow .c {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--branch);
+    font-weight: 600;
+    padding-top: 1px;
+  }
+  .branchrow .t { color: var(--ink-2); }
+
+  /* instance */
+  .inst-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--line);
+    margin: 12px 0 18px;
+  }
+  .inst-tab {
+    padding: 11px 18px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-3);
+    border-bottom: 2px solid transparent;
+    user-select: none;
+    transition: all 0.15s;
+  }
+  .inst-tab:hover { color: var(--ink-1); }
+  .inst-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .inst-tab .tag {
+    font-family: var(--mono);
+    font-size: 9.5px;
+    color: var(--ink-4);
+    background: var(--bg-soft);
+    padding: 1px 6px;
+    border-radius: 3px;
+    margin-left: 8px;
+    letter-spacing: 0.04em;
+  }
+  .inst-tab.active .tag { color: var(--accent); background: var(--accent-soft); }
+
+  .inst-panel { display: none; }
+  .inst-panel.active { display: block; }
+
+  .inst-card {
+    background: var(--bg-soft);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px 24px;
+    font-size: 12.5px;
+  }
+  .inst-card .ik {
+    font-family: var(--mono);
+    font-size: 9.5px;
+    color: var(--ink-3);
+    letter-spacing: 0.08em;
+    margin-bottom: 3px;
+    text-transform: uppercase;
+  }
+  .inst-card .iv { color: var(--ink-1); font-weight: 500; font-size: 12.5px; }
+  .inst-card .iv.full { grid-column: 1 / -1; font-weight: 400; color: var(--ink-2); }
+
+  .trace-svg-wrap {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 18px 12px 10px;
+    margin-bottom: 14px;
+    overflow-x: auto;
+  }
+  .trace-svg-wrap svg { display: block; min-width: 1200px; }
+
+  .trace-steps { display: grid; gap: 6px; }
+  .ts {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    border-radius: 5px;
+    padding: 10px 14px;
+    display: grid;
+    grid-template-columns: 64px 1fr;
+    gap: 14px;
+    font-size: 12px;
+  }
+  .ts.gate { border-left-color: var(--gate); }
+  .ts.branch { border-left-color: var(--branch); }
+  .ts.skip { opacity: 0.45; background: var(--bg-soft); border-left-color: var(--ink-4); }
+  .ts.bp { border-left-color: var(--warn); background: linear-gradient(90deg, var(--warn-soft) 0%, #fff 25%); }
+  .ts .ts-id {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--accent);
+    font-weight: 700;
+    padding-top: 1px;
+  }
+  .ts.gate .ts-id { color: var(--gate); }
+  .ts.branch .ts-id { color: var(--branch); }
+  .ts.skip .ts-id { color: var(--ink-4); }
+  .ts .ts-content { color: var(--ink-2); line-height: 1.55; }
+  .ts .ts-content b { color: var(--ink-1); font-weight: 600; }
+  .ts .ts-content code {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: var(--bg-soft);
+    padding: 1px 5px;
+    border-radius: 2px;
+    color: var(--ink-1);
+  }
+  .ts.skip .ts-content { font-style: italic; color: var(--ink-3); }
+
+  .verdict {
+    background: linear-gradient(180deg, #FFFFFF 0%, var(--accent-soft) 200%);
+    border: 1px solid var(--line-2);
+    border-left: 3px solid var(--accent);
+    padding: 14px 18px;
+    border-radius: 0 6px 6px 0;
+    margin-top: 14px;
+    font-size: 12.5px;
+    color: var(--ink-2);
+  }
+  .verdict b { color: var(--ink-1); }
+
+  .doc-footer {
+    margin-top: 50px;
+    padding: 20px 48px;
+    background: var(--ink-1);
+    color: rgba(255,255,255,0.55);
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.05em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .doc-footer b { color: rgba(255,255,255,0.85); font-weight: 500; }
+
+  @media (max-width: 1100px) {
+    .inst-card { grid-template-columns: repeat(2, 1fr); }
+    .schema-body { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="brand">DA AGENT</span>
+  <span class="title">数据分析需求处理 · Process Model + Instance</span>
+  <span class="layer-note">
+    本文档 = <b>L1 流程骨架</b> · 已有 <b>L2 Domain Ontology</b>（29 实体 / 84 关系）作引用对象、本次不展开
+  </span>
+  <span class="ver">v0.3</span>
+</div>
+
+<!-- ═══════════════════════ §1 主图 ═══════════════════════ -->
+<section>
+  <div class="section-head">
+    <span class="num">§ 01</span>
+    <h2>Process Model · 主图</h2>
+    <span class="tag">10 NODES · 4 GATES · 1 LOOPBACK</span>
+  </div>
+  <div class="section-sub">主流向 + 类型分流 + 闭环回边。细节进 §02 折叠展开。</div>
+
+  <div class="diagram-card">
+    <svg viewBox="0 0 1280 400" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill="#5C7070"/>
+        </marker>
+        <marker id="ah-gate" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill="#D14545"/>
+        </marker>
+        <marker id="ah-loop" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill="#00bebe"/>
+        </marker>
+      </defs>
+
+      <!-- Row 1: N1 N2 N3 N4 -->
+      <g>
+        <rect x="40" y="60" width="160" height="56" rx="6" fill="#fff" stroke="#B8DEDE" stroke-width="1.5"/>
+        <text x="56" y="84" font-family="JetBrains Mono" font-size="12" font-weight="700" fill="#00bebe">N1</text>
+        <text x="88" y="84" font-family="Inter" font-size="13.5" font-weight="600" fill="#1A1F1F">需求接收</text>
+        <text x="56" y="103" font-family="Inter" font-size="11" fill="#5C7070">+ 类型判定</text>
+      </g>
+      <line x1="200" y1="88" x2="240" y2="88" stroke="#5C7070" stroke-width="1.5" marker-end="url(#ah)"/>
+
+      <g>
+        <rect x="240" y="60" width="160" height="56" rx="6" fill="#fff" stroke="#B8DEDE" stroke-width="1.5"/>
+        <text x="256" y="84" font-family="JetBrains Mono" font-size="12" font-weight="700" fill="#00bebe">N2</text>
+        <text x="288" y="84" font-family="Inter" font-size="13.5" font-weight="600" fill="#1A1F1F">历史复用检索</text>
+        <text x="256" y="103" font-family="Inter" font-size="11" fill="#5C7070">检索前置</text>
+      </g>
+      <line x1="400" y1="88" x2="440" y2="88" stroke="#5C7070" stroke-width="1.5" marker-end="url(#ah)"/>
+
+      <g>
+        <rect x="440" y="60" width="160" height="56" rx="6" fill="#fff" stroke="#B8DEDE" stroke-width="1.5"/>
+        <text x="456" y="84" font-family="JetBrains Mono" font-size="12" font-weight="700" fill="#00bebe">N3</text>
+        <text x="488" y="84" font-family="Inter" font-size="13.5" font-weight="600" fill="#1A1F1F">需求填槽</text>
+        <text x="456" y="103" font-family="Inter" font-size="11" fill="#5C7070">六要素</text>
+      </g>
+      <line x1="600" y1="88" x2="640" y2="88" stroke="#5C7070" stroke-width="1.5" marker-end="url(#ah)"/>
+
+      <g>
+        <rect x="640" y="60" width="180" height="56" rx="6" fill="#FFFBEB" stroke="#E8B947" stroke-width="2"/>
+        <text x="656" y="84" font-family="JetBrains Mono" font-size="12" font-weight="700" fill="#00bebe">N4</text>
+        <text x="688" y="84" font-family="Inter" font-size="13.5" font-weight="600" fill="#1A1F1F">信号确认</text>
+        <text x="772" y="80" font-family="JetBrains Mono" font-size="9" fill="#E8B947" text-anchor="end" font-weight="600">⚠ 断点高发</text>
+        <text x="656" y="103" font-family="Inter" font-size="11" fill="#5C7070">上云校验</text>
+      </g>
+
+      <!-- 类型分流：从 N4 出发，向下分两路 -->
+      <!-- 一次性 → 直接到 N6 -->
+      <path d="M 730 116 L 730 178 L 450 178 L 450 220" stroke="#5C7070" stroke-width="1.5" fill="none" marker-end="url(#ah)"/>
+      <text x="540" y="171" font-family="JetBrains Mono" font-size="11" fill="#5C7070">一次性</text>
+
+      <!-- 监控类 → N5 → N6 -->
+      <path d="M 770 116 L 770 178 L 920 178 L 920 220" stroke="#7B6CE8" stroke-width="1.5" fill="none" marker-end="url(#ah)"/>
+      <text x="828" y="171" font-family="JetBrains Mono" font-size="11" fill="#7B6CE8" font-weight="600">监控类</text>
+
+      <!-- N5 (路径分流) -->
+      <g>
+        <rect x="840" y="220" width="160" height="56" rx="6" fill="#EFEAFE" stroke="#7B6CE8" stroke-width="1.8" stroke-dasharray="6,3"/>
+        <text x="856" y="244" font-family="JetBrains Mono" font-size="12" font-weight="700" fill="#7B6CE8">N5</text>
+        <text x="888" y="244" font-family="Inter" font-size="13.5" font-weight="600" fill="#1A1F1F">路径分流</text>
+        <text x="856" y="263" font-family="JetBrains Mono" font-size="10.5" fill="#7B6CE8" font-weight="600">→ α / β / γ</text>
+      </g>
+
+      <!-- N5 → N6 -->
+      <path d="M 840 248 L 530 248" stroke="#7B6CE8" stroke-width="1.5" fill="none" marker-end="url(#ah)"/>
+
+      <!-- Row 2: N6 N7 N8 (闸口) -->
+      <g>
+        <rect x="370" y="220" width="160" height="56" rx="6" fill="#FFF1F1" stroke="#D14545" stroke-width="1.8"/>
+        <text x="386" y="244" font-family="JetBrains Mono" font-size="12" font-weight="700" fill="#D14545">N6</text>
+        <text x="418" y="244" font-family="Inter" font-size="13.5" font-weight="600" fill="#1A1F1F">需求单审批</text>
+        <text x="386" y="263" font-family="JetBrains Mono" font-size="10" fill="#D14545" font-weight="600">⛔ GATE 0</text>
+      </g>
+      <line x1="370" y1="248" x2="330" y2="248" stroke="#D14545" stroke-width="1.5" marker-end="url(#ah-gate)"/>
+
+      <g>
+        <rect x="170" y="220" width="160" height="56" rx="6" fill="#FFF1F1" stroke="#D14545" stroke-width="1.8"/>
+        <text x="186" y="244" font-family="JetBrains Mono" font-size="12" font-weight="700" fill="#D14545">N7</text>
+        <text x="218" y="244" font-family="Inter" font-size="13.5" font-weight="600" fill="#1A1F1F">开发 + 验证</text>
+        <text x="186" y="263" font-family="JetBrains Mono" font-size="10" fill="#D14545" font-weight="600">⛔ GATE 1</text>
+      </g>
+      <line x1="170" y1="248" x2="130" y2="248" stroke="#D14545" stroke-width="1.5" marker-end="url(#ah-gate)"/>
+
+      <!-- N7 → N8 (转角，N8 在下行) -->
+      <path d="M 90 248 L 90 310" stroke="#D14545" stroke-width="1.5" fill="none"/>
+      <line x1="90" y1="310" x2="170" y2="310" stroke="#D14545" stroke-width="1.5" marker-end="url(#ah-gate)"/>
+
+      <!-- Row 3: N8 N9 N10 -->
+      <g>
+        <rect x="170" y="310" width="160" height="56" rx="6" fill="#FFF1F1" stroke="#D14545" stroke-width="1.8"/>
+        <text x="186" y="334" font-family="JetBrains Mono" font-size="12" font-weight="700" fill="#D14545">N8</text>
+        <text x="218" y="334" font-family="Inter" font-size="13.5" font-weight="600" fill="#1A1F1F">全量执行 / 部署</text>
+        <text x="186" y="353" font-family="JetBrains Mono" font-size="10" fill="#D14545" font-weight="600">⛔ GATE 2</text>
+      </g>
+      <line x1="330" y1="338" x2="370" y2="338" stroke="#D14545" stroke-width="1.5" marker-end="url(#ah-gate)"/>
+
+      <g>
+        <rect x="370" y="310" width="160" height="56" rx="6" fill="#FFF1F1" stroke="#D14545" stroke-width="1.8"/>
+        <text x="386" y="334" font-family="JetBrains Mono" font-size="12" font-weight="700" fill="#D14545">N9</text>
+        <text x="418" y="334" font-family="Inter" font-size="13.5" font-weight="600" fill="#1A1F1F">交付</text>
+        <text x="386" y="353" font-family="JetBrains Mono" font-size="10" fill="#D14545" font-weight="600">⛔ GATE 3</text>
+      </g>
+      <line x1="530" y1="338" x2="570" y2="338" stroke="#5C7070" stroke-width="1.5" marker-end="url(#ah)"/>
+
+      <g>
+        <rect x="570" y="310" width="160" height="56" rx="6" fill="#fff" stroke="#B8DEDE" stroke-width="1.5"/>
+        <text x="586" y="334" font-family="JetBrains Mono" font-size="12" font-weight="700" fill="#00bebe">N10</text>
+        <text x="624" y="334" font-family="Inter" font-size="13.5" font-weight="600" fill="#1A1F1F">价值跟踪 + 回写</text>
+        <text x="586" y="353" font-family="Inter" font-size="11" fill="#5C7070">入历史库</text>
+      </g>
+
+      <!-- LOOPBACK N10 → N2 (粗青色虚线，走外圈) -->
+      <path d="M 730 338 L 1140 338 L 1140 88 L 400 88" stroke="#00bebe" stroke-width="2" stroke-dasharray="7,4" fill="none" marker-end="url(#ah-loop)" opacity="0.7"/>
+      <g>
+        <rect x="1020" y="200" width="170" height="44" rx="6" fill="#fff" stroke="#00bebe" stroke-width="1.5"/>
+        <text x="1030" y="220" font-family="JetBrains Mono" font-size="11" font-weight="700" fill="#00bebe">↻ 闭环回写</text>
+        <text x="1030" y="235" font-family="Inter" font-size="11" fill="#5C7070">N10 → N2 反哺检索</text>
+      </g>
+    </svg>
+
+    <div class="diagram-legend">
+      <div class="li"><div class="sw normal"></div>普通节点</div>
+      <div class="li"><div class="sw warn"></div>断点高发节点</div>
+      <div class="li"><div class="sw branch"></div>路由分叉（仅监控）</div>
+      <div class="li"><div class="sw gate"></div>闸口节点（人工 review / 审批）</div>
+      <div class="li" style="color:#00bebe;font-weight:500;">━━ 闭环回边</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════ §2 节点 schema ═══════════════════════ -->
+<section>
+  <div class="section-head">
+    <span class="num">§ 02</span>
+    <h2>节点 Schema · 进出条件 + 分叉 + L2 引用</h2>
+    <span class="tag">CLICK TO EXPAND</span>
+  </div>
+  <div class="section-sub">每个节点点开看详情。所有分叉、断点、循环、L2 引用都在这里。</div>
+
+  <div class="schema-wrap">
+
+    <details class="node-schema">
+      <summary>
+        <span class="schema-id">N1</span>
+        <span class="schema-title">需求接收与类型判定</span>
+        <div class="schema-badges"><span class="badge branch">→ 类型分流起点</span></div>
+      </summary>
+      <div class="schema-body">
+        <div><span class="k">进入</span><span class="v">需求方任意渠道发起（VESTA Agent / 飞书 / 群聊 / 会议）</span></div>
+        <div><span class="k">出口</span><span class="v">初步意图清楚 + 需求类型已定</span></div>
+        <div class="full"><span class="k">分叉</span><span class="v">
+          <div class="branchrow">
+            <div><span class="c">一次性 →</span><span class="t">主线（跳过 N5）</span></div>
+            <div><span class="c">监控类 →</span><span class="t">主线 + 必经 N5</span></div>
+          </div>
+        </span></div>
+        <div><span class="k">AI 实例</span><span class="v">需求收集 Skill · 类型判定 + 对话起点</span></div>
+      </div>
+    </details>
+
+    <details class="node-schema">
+      <summary>
+        <span class="schema-id">N2</span>
+        <span class="schema-title">历史复用检索（检索前置）</span>
+        <div class="schema-badges"><span class="badge branch">↗ L2</span><span class="badge branch">→ 早退分支</span></div>
+      </summary>
+      <div class="schema-body">
+        <div><span class="k">进入</span><span class="v">初步意图</span></div>
+        <div><span class="k">出口</span><span class="v">检索结果已呈现 + 需求方给出"复用/不复用"</span></div>
+        <div class="full"><span class="k">分叉</span><span class="v">
+          <div class="branchrow">
+            <div><span class="c">命中 + 接受 →</span><span class="t"><code>END</code>（无需建单）</span></div>
+            <div><span class="c">未命中 / 不接受 →</span><span class="t">继续 N3</span></div>
+          </div>
+        </span></div>
+        <div class="full"><span class="k">L2 引用</span><span class="v"><span class="ref-pill">DA-Ontology.HistoricalRequirement</span></span></div>
+        <div class="full"><span class="k">设计意图</span><span class="v">老板原话："这不是实例层的优化（'AI 搜得更准'），是本体层的拓扑调整——改变了节点顺序和短路条件。"</span></div>
+      </div>
+    </details>
+
+    <details class="node-schema">
+      <summary>
+        <span class="schema-id">N3</span>
+        <span class="schema-title">需求填槽（六要素 + 监控专属字段）</span>
+        <div class="schema-badges"><span class="badge branch">↗ L2</span></div>
+      </summary>
+      <div class="schema-body">
+        <div><span class="k">进入</span><span class="v">类型已知 + N2 未复用</span></div>
+        <div><span class="k">出口</span><span class="v">除信号外的五要素填齐</span></div>
+        <div class="full"><span class="k">字段集</span><span class="v">
+          <div class="branchrow">
+            <div><span class="c">一次性 →</span><span class="t">品牌 / 平台 / 车型 / 统计口径 / 需求形态</span></div>
+            <div><span class="c">监控类 →</span><span class="t">上述 + 触发逻辑 + 监控频率 + 截止时间 + 看板字段</span></div>
+          </div>
+        </span></div>
+        <div class="full"><span class="k">L2 引用</span><span class="v">
+          <span class="ref-pill">Brand</span><span class="ref-pill">Platform</span><span class="ref-pill">VehicleModel</span><span class="ref-pill">Brand→Platform→Model 联动约束</span>
+        </span></div>
+        <div><span class="k">AI 实例</span><span class="v">需求收集 Skill · slot filling</span></div>
+      </div>
+    </details>
+
+    <details class="node-schema">
+      <summary>
+        <span class="schema-id">N4</span>
+        <span class="schema-title">信号确认与上云校验</span>
+        <div class="schema-badges"><span class="badge warn">⚠ 断点高发</span><span class="badge loop">↻ 自循环</span><span class="badge branch">↗ L2</span></div>
+      </summary>
+      <div class="schema-body">
+        <div><span class="k">进入</span><span class="v">平台 / 车型已知 + 有信号意图</span></div>
+        <div><span class="k">出口</span><span class="v">所有信号"已上云 + 解析路径已定"</span></div>
+        <div class="full"><span class="k">子步骤</span><span class="v"><code>4.1 模糊匹配</code> → <code>4.2 信号查询</code> → <code>4.3 SOA 二层校验</code> → <code>4.4 降采样确认</code></span></div>
+        <div class="full"><span class="k">分叉</span><span class="v">
+          <div class="branchrow">
+            <div><span class="c">全部上云 →</span><span class="t">继续</span></div>
+            <div><span class="c">未上云 →</span><span class="t"><span class="bp-pill">飞书 FO/DS 接入</span>→ 回 N4</span></div>
+            <div><span class="c">无法接入 →</span><span class="t"><code>END</code>（反馈需求方）</span></div>
+          </div>
+        </span></div>
+        <div class="full"><span class="k">L2 引用</span><span class="v">
+          <span class="ref-pill">Signal</span><span class="ref-pill">Signal.signal_type</span><span class="ref-pill">Signal→DataTable</span><span class="ref-pill">Signal→ParseFunction</span><span class="ref-pill">Platform→SignalListSource</span>
+        </span></div>
+        <div><span class="k">AI 实例</span><span class="v"><code>signal_fuzzy_search</code> · <code>signal_query</code></span></div>
+      </div>
+    </details>
+
+    <details class="node-schema branch">
+      <summary>
+        <span class="schema-id">N5</span>
+        <span class="schema-title">部署路径分流 · ROUTER</span>
+        <div class="schema-badges"><span class="badge branch">仅监控类</span><span class="badge branch">α / β / γ</span></div>
+      </summary>
+      <div class="schema-body">
+        <div><span class="k">触发</span><span class="v">需求类型 = 监控类</span></div>
+        <div><span class="k">出口</span><span class="v">α / β / γ 路径已选</span></div>
+        <div class="full"><span class="k">判定依据</span><span class="v"><code>VESTA 7 类默认字段</code>能否覆盖看板字段需求 + 规则复杂度</span></div>
+        <div class="full"><span class="k">分叉</span><span class="v">
+          <div class="branchrow">
+            <div><span class="c">α</span><span class="t">VESTA 用户模式 · 规则简单、无需 SQL</span></div>
+            <div><span class="c">β</span><span class="t">VESTA 编辑模式 · 写 SQL，输出列固定</span></div>
+            <div><span class="c">γ</span><span class="t">DataSight 全量开发 · DDL + SQL + 调度 + 看板</span></div>
+          </div>
+        </span></div>
+        <div class="full"><span class="k">L2 引用</span><span class="v"><span class="ref-pill">VESTAFieldSet</span></span></div>
+      </div>
+    </details>
+
+    <details class="node-schema gate">
+      <summary>
+        <span class="schema-id">N6</span>
+        <span class="schema-title">需求单创建与审批</span>
+        <div class="schema-badges"><span class="badge gate">⛔ GATE 0</span></div>
+      </summary>
+      <div class="schema-body">
+        <div><span class="k">进入</span><span class="v">N3 + N4 完成（监控类还需 N5）</span></div>
+        <div><span class="k">出口</span><span class="v">VESTA 需求单已创建 + 审批通过</span></div>
+        <div class="full"><span class="k">闸口</span><span class="v"><span class="bp-pill">项目 Code 对应 BO + 需求审批人</span></span></div>
+        <div class="full"><span class="k">分叉</span><span class="v">
+          <div class="branchrow">
+            <div><span class="c">通过 →</span><span class="t">JSON 阶段1字段冻结</span></div>
+            <div><span class="c">驳回 →</span><span class="t">回 N3 或终止</span></div>
+          </div>
+        </span></div>
+      </div>
+    </details>
+
+    <details class="node-schema gate">
+      <summary>
+        <span class="schema-id">N7</span>
+        <span class="schema-title">开发与小范围验证</span>
+        <div class="schema-badges"><span class="badge gate">⛔ GATE 1</span><span class="badge loop">↻ 迭代</span><span class="badge branch">↗ L2</span></div>
+      </summary>
+      <div class="schema-body">
+        <div><span class="k">进入</span><span class="v">需求单已审批</span></div>
+        <div><span class="k">出口</span><span class="v">分析师 + 需求方都确认</span></div>
+        <div class="full"><span class="k">内部分流</span><span class="v">
+          <div class="branchrow">
+            <div><span class="c">一次性 →</span><span class="t">验证 SQL → DataSight 试跑 → 询问聚合/明细/都要</span></div>
+            <div><span class="c">α →</span><span class="t">生成 VESTA 配置说明文档</span></div>
+            <div><span class="c">β →</span><span class="t">生成监控 SQL（输出列严格匹配 schema）</span></div>
+            <div><span class="c">γ →</span><span class="t">DDL → 分析师确认 → 数据开发 SQL + 调度</span></div>
+          </div>
+        </span></div>
+        <div class="full"><span class="k">内部循环</span><span class="v"><span class="bp-pill">需求方反馈</span>→ AI 调 SQL → 重验（≤ 5 轮，不回审批）</span></div>
+        <div class="full"><span class="k">L2 引用</span><span class="v"><span class="ref-pill">Signal→DataTable→ParseFunction</span><span class="ref-pill">MonitorOutputSchema</span></span></div>
+      </div>
+    </details>
+
+    <details class="node-schema gate">
+      <summary>
+        <span class="schema-id">N8</span>
+        <span class="schema-title">全量执行 / 上线部署</span>
+        <div class="schema-badges"><span class="badge gate">⛔ GATE 2</span><span class="badge warn">⚠ 硬约束</span></div>
+      </summary>
+      <div class="schema-body">
+        <div><span class="k">进入</span><span class="v">GATE 1 放行</span></div>
+        <div><span class="k">出口</span><span class="v">数据产物 / 监控规则就位</span></div>
+        <div class="full"><span class="k">内部分流</span><span class="v">
+          <div class="branchrow">
+            <div><span class="c">一次性-A →</span><span class="t">pyspark → CSV → 人工下载</span></div>
+            <div><span class="c">一次性-B →</span><span class="t">建表 → 分片执行 → 数据表 (+聚合视图)</span></div>
+            <div><span class="c">监控-α/β →</span><span class="t"><span class="bp-pill">VESTA 无 API · 人工配置</span></span></div>
+            <div><span class="c">监控-γ →</span><span class="t">DataSight API 建表 + 调度 + <span class="bp-pill">人工搭 BI 看板</span></span></div>
+          </div>
+        </span></div>
+      </div>
+    </details>
+
+    <details class="node-schema gate">
+      <summary>
+        <span class="schema-id">N9</span>
+        <span class="schema-title">交付</span>
+        <div class="schema-badges"><span class="badge gate">⛔ GATE 3</span></div>
+      </summary>
+      <div class="schema-body">
+        <div><span class="k">进入</span><span class="v">数据 / 规则 / 看板就位</span></div>
+        <div><span class="k">出口</span><span class="v">需求方确认收到 + 内容符合预期</span></div>
+        <div class="full"><span class="k">内部分流</span><span class="v">
+          <div class="branchrow">
+            <div><span class="c">一次性 →</span><span class="t">报告 Skill → 分析师 review → 上传 VESTA → 飞书推送</span></div>
+            <div><span class="c">监控 →</span><span class="t">监控链接 → 需求方确认</span></div>
+          </div>
+        </span></div>
+      </div>
+    </details>
+
+    <details class="node-schema">
+      <summary>
+        <span class="schema-id">N10</span>
+        <span class="schema-title">价值跟踪 + 历史回写</span>
+        <div class="schema-badges"><span class="badge branch">↻ 闭环 → N2</span></div>
+      </summary>
+      <div class="schema-body">
+        <div><span class="k">进入</span><span class="v">N9 交付完成</span></div>
+        <div><span class="k">出口</span><span class="v">完整需求实体 JSON 入 VESTA 历史库</span></div>
+        <div class="full"><span class="k">内部分流</span><span class="v">
+          <div class="branchrow">
+            <div><span class="c">一次性 →</span><span class="t">飞书定时提醒填收益 → ROI 嵌入 JSON</span></div>
+            <div><span class="c">监控 →</span><span class="t">生命周期：到期 / 零命中 / 资源异常 → 下线闭环</span></div>
+          </div>
+        </span></div>
+        <div class="full"><span class="k">闭环</span><span class="v">历史库回写 → 反哺 N2 检索（系统唯一回边）</span></div>
+      </div>
+    </details>
+
+  </div>
+</section>
+
+<!-- ═══════════════════════ §3 Instance ═══════════════════════ -->
+<section>
+  <div class="section-head">
+    <span class="num">§ 03</span>
+    <h2>Instance · 两条真实需求走查</h2>
+    <span class="tag">L1 验证</span>
+  </div>
+  <div class="section-sub">验证三件事：进出条件是否成立、断点是否显式、路由边界是否清晰。</div>
+
+  <div class="inst-tabs">
+    <div class="inst-tab active" data-target="iA">A · 一次性分析<span class="tag">分支 B · 命中 N4 断点</span></div>
+    <div class="inst-tab" data-target="iB">B · 监控类<span class="tag">路径 β · 命中 N8 断点</span></div>
+  </div>
+
+  <!-- INST A -->
+  <div id="iA" class="inst-panel active">
+
+    <div class="inst-card">
+      <div><div class="ik">需求方</div><div class="iv">车型规划组 · PM</div></div>
+      <div><div class="ik">类型</div><div class="iv">一次性</div></div>
+      <div><div class="ik">路径</div><div class="iv">N1→N2→N3→N4↻→N6→N7→N8(B)→N9→N10</div></div>
+      <div><div class="ik">断点</div><div class="iv">N4 · FO/DS 接入 1 次</div></div>
+      <div class="iv full"><div class="ik">需求描述</div>近 30 天 NT3 ET7 全国全量车辆，AEB 触发次数按车型+软件版本聚合，并附明细（车速、前向距离）。</div>
+    </div>
+
+    <div class="trace-svg-wrap">
+      <svg viewBox="0 0 1200 110" xmlns="http://www.w3.org/2000/svg">
+        <line x1="60" y1="55" x2="1140" y2="55" stroke="#D8EEEE" stroke-width="1.5"/>
+
+        <circle cx="80" cy="55" r="16" fill="#fff" stroke="#00bebe" stroke-width="2"/>
+        <text x="80" y="59" font-family="JetBrains Mono" font-size="11" font-weight="700" fill="#00bebe" text-anchor="middle">N1</text>
+        <text x="80" y="90" font-family="Inter" font-size="10" fill="#5C7070" text-anchor="middle">接收</text>
+
+        <circle cx="190" cy="55" r="16" fill="#fff" stroke="#00bebe" stroke-width="2"/>
+        <text x="190" y="59" font-family="JetBrains Mono" font-size="11" font-weight="700" fill="#00bebe" text-anchor="middle">N2</text>
+        <text x="190" y="90" font-family="Inter" font-size="10" fill="#5C7070" text-anchor="middle">未命中</text>
+
+        <circle cx="300" cy="55" r="16" fill="#fff" stroke="#00bebe" stroke-width="2"/>
+        <text x="300" y="59" font-family="JetBrains Mono" font-size="11" font-weight="700" fill="#00bebe" text-anchor="middle">N3</text>
+        <text x="300" y="90" font-family="Inter" font-size="10" fill="#5C7070" text-anchor="middle">填槽</text>
+
+        <circle cx="410" cy="55" r="18" fill="#FFFBEB" stroke="#E8B947" stroke-width="2"/>
+        <text x="410" y="59" font-family="JetBrains Mono" font-size="11" font-weight="700" fill="#1A1F1F" text-anchor="middle">N4</text>
+        <text x="410" y="90" font-family="Inter" font-size="10" fill="#E8B947" text-anchor="middle" font-weight="600">⛔ 断点 ↻</text>
+
+        <circle cx="520" cy="55" r="14" fill="#F0FAFA" stroke="#B8DEDE" stroke-width="1" stroke-dasharray="2,2"/>
+        <text x="520" y="59" font-family="JetBrains Mono" font-size="10" fill="#8AABAB" text-anchor="middle">N5</text>
+        <text x="520" y="90" font-family="Inter" font-size="10" fill="#8AABAB" text-anchor="middle" font-style="italic">跳过</text>
+
+        <rect x="614" y="40" width="32" height="30" rx="4" fill="#FFF1F1" stroke="#D14545" stroke-width="2"/>
+        <text x="630" y="59" font-family="JetBrains Mono" font-size="10" font-weight="700" fill="#D14545" text-anchor="middle">N6</text>
+        <text x="630" y="90" font-family="Inter" font-size="10" fill="#D14545" text-anchor="middle">⛔ 审批</text>
+
+        <rect x="724" y="40" width="32" height="30" rx="4" fill="#FFF1F1" stroke="#D14545" stroke-width="2"/>
+        <text x="740" y="59" font-family="JetBrains Mono" font-size="10" font-weight="700" fill="#D14545" text-anchor="middle">N7</text>
+        <text x="740" y="90" font-family="Inter" font-size="10" fill="#D14545" text-anchor="middle">⛔ 2 轮</text>
+
+        <rect x="834" y="40" width="32" height="30" rx="4" fill="#FFF1F1" stroke="#D14545" stroke-width="2"/>
+        <text x="850" y="59" font-family="JetBrains Mono" font-size="10" font-weight="700" fill="#D14545" text-anchor="middle">N8</text>
+        <text x="850" y="90" font-family="Inter" font-size="10" fill="#D14545" text-anchor="middle">⛔ 分支 B</text>
+
+        <rect x="944" y="40" width="32" height="30" rx="4" fill="#FFF1F1" stroke="#D14545" stroke-width="2"/>
+        <text x="960" y="59" font-family="JetBrains Mono" font-size="10" font-weight="700" fill="#D14545" text-anchor="middle">N9</text>
+        <text x="960" y="90" font-family="Inter" font-size="10" fill="#D14545" text-anchor="middle">⛔ 报告</text>
+
+        <circle cx="1080" cy="55" r="16" fill="#fff" stroke="#00bebe" stroke-width="2"/>
+        <text x="1080" y="59" font-family="JetBrains Mono" font-size="11" font-weight="700" fill="#00bebe" text-anchor="middle">N10</text>
+        <text x="1080" y="90" font-family="Inter" font-size="10" fill="#5C7070" text-anchor="middle">ROI</text>
+      </svg>
+    </div>
+
+    <div class="trace-steps">
+      <div class="ts"><div class="ts-id">N1</div><div class="ts-content">需求方在 VESTA Agent 发起："想看 ET7 的 AEB 触发情况" · 类型判定 <code>一次性</code></div></div>
+      <div class="ts"><div class="ts-id">N2</div><div class="ts-content">检索 <code>AEB 触发 ET7 NT3</code> → 命中 3 份历史，但都是 ES6/ES8 · 需求方："参考但不复用"</div></div>
+      <div class="ts"><div class="ts-id">N3</div><div class="ts-content">填槽：NIO / NT3 / ET7 / "AEB 触发次数 = 状态 0→1 边沿计数" / 需求形态 = 聚合+明细</div></div>
+      <div class="ts bp"><div class="ts-id">N4</div><div class="ts-content"><b>断点命中</b>：模糊匹配 → 需求方选定 <code>AEB_State</code>（SOA 事件型）→ 本地表未命中 → IDC 表"待接入" → <span class="bp-pill">飞书联系 DS 万亮</span> · 半天后接入 → 回 N4 复查 → 通过</div></div>
+      <div class="ts skip"><div class="ts-id">N5</div><div class="ts-content">跳过（一次性需求不经 N5）</div></div>
+      <div class="ts gate"><div class="ts-id">N6</div><div class="ts-content">AI 建单 → 项目 Code <code>CV2026</code> 对应 BO 审批通过 → JSON 阶段1字段冻结</div></div>
+      <div class="ts gate"><div class="ts-id">N7</div><div class="ts-content">验证 SQL 试跑（6/15 14-15 点）→ 23 条触发 → 需求方反馈"加'触发后是否减速到 0'" → AI 调 SQL → 通过 · <b>2 轮</b></div></div>
+      <div class="ts gate"><div class="ts-id">N8</div><div class="ts-content">分支 B：30 天 × ET7 ≈ 12 亿行 · 建表 <code>ads_aeb_trigger_et7_30d</code> + 聚合视图 · 10 分片串行 2.5 小时完成</div></div>
+      <div class="ts gate"><div class="ts-id">N9</div><div class="ts-content">报告 Skill 拉聚合视图 + 抽 1000 条明细 → 分析师 review 修一处口径 → 上传 VESTA → 飞书推送 → 需求方确认</div></div>
+      <div class="ts"><div class="ts-id">N10</div><div class="ts-content">1 周后需求方 ROI 反馈："已纳入 ET7 6 月版本规划评审" → 完整 JSON 入历史库 → 反哺 N2</div></div>
+    </div>
+
+    <div class="verdict">
+      <b>验证：</b> 路径连通；N4 的"未上云 → 联系 DS → 回 N4"断点显式画出；N5 对一次性需求跳过与 N1 的分流约定一致；4 个闸口都在该停的地方停。
+    </div>
+
+  </div>
+
+  <!-- INST B -->
+  <div id="iB" class="inst-panel">
+
+    <div class="inst-card">
+      <div><div class="ik">需求方</div><div class="iv">动力系统 · 三电组</div></div>
+      <div><div class="ik">类型</div><div class="iv">监控类 · 路径 β</div></div>
+      <div><div class="ik">路径</div><div class="iv">N1→N2→N3→N4→N5(β)→N6→N7→N8→N9→N10</div></div>
+      <div><div class="ik">断点</div><div class="iv">N8 · VESTA 编辑模式无 API</div></div>
+      <div class="iv full"><div class="ik">需求描述</div>NT2 ES6 v2.5：电池模组温度 &gt; 55℃ 持续 5 分钟告警，小时级监控，6 个月截止。看板要"按地区"+"按版本"分布。</div>
+    </div>
+
+    <div class="trace-svg-wrap">
+      <svg viewBox="0 0 1200 110" xmlns="http://www.w3.org/2000/svg">
+        <line x1="60" y1="55" x2="1140" y2="55" stroke="#D8EEEE" stroke-width="1.5"/>
+
+        <circle cx="80" cy="55" r="16" fill="#fff" stroke="#00bebe" stroke-width="2"/>
+        <text x="80" y="59" font-family="JetBrains Mono" font-size="11" font-weight="700" fill="#00bebe" text-anchor="middle">N1</text>
+        <text x="80" y="90" font-family="Inter" font-size="10" fill="#5C7070" text-anchor="middle">监控类</text>
+
+        <circle cx="190" cy="55" r="16" fill="#fff" stroke="#00bebe" stroke-width="2"/>
+        <text x="190" y="59" font-family="JetBrains Mono" font-size="11" font-weight="700" fill="#00bebe" text-anchor="middle">N2</text>
+        <text x="190" y="90" font-family="Inter" font-size="10" fill="#5C7070" text-anchor="middle">不复用</text>
+
+        <circle cx="300" cy="55" r="16" fill="#fff" stroke="#00bebe" stroke-width="2"/>
+        <text x="300" y="59" font-family="JetBrains Mono" font-size="11" font-weight="700" fill="#00bebe" text-anchor="middle">N3</text>
+        <text x="300" y="90" font-family="Inter" font-size="10" fill="#5C7070" text-anchor="middle">填槽</text>
+
+        <circle cx="410" cy="55" r="16" fill="#fff" stroke="#00bebe" stroke-width="2"/>
+        <text x="410" y="59" font-family="JetBrains Mono" font-size="11" font-weight="700" fill="#00bebe" text-anchor="middle">N4</text>
+        <text x="410" y="90" font-family="Inter" font-size="10" fill="#5C7070" text-anchor="middle">CAN/已上云</text>
+
+        <rect x="504" y="38" width="32" height="34" rx="4" fill="#EFEAFE" stroke="#7B6CE8" stroke-width="2" stroke-dasharray="3,2"/>
+        <text x="520" y="59" font-family="JetBrains Mono" font-size="10" font-weight="700" fill="#7B6CE8" text-anchor="middle">N5</text>
+        <text x="520" y="90" font-family="Inter" font-size="10" fill="#7B6CE8" text-anchor="middle" font-weight="600">→ β</text>
+
+        <rect x="614" y="40" width="32" height="30" rx="4" fill="#FFF1F1" stroke="#D14545" stroke-width="2"/>
+        <text x="630" y="59" font-family="JetBrains Mono" font-size="10" font-weight="700" fill="#D14545" text-anchor="middle">N6</text>
+        <text x="630" y="90" font-family="Inter" font-size="10" fill="#D14545" text-anchor="middle">⛔ 审批</text>
+
+        <rect x="724" y="40" width="32" height="30" rx="4" fill="#FFF1F1" stroke="#D14545" stroke-width="2"/>
+        <text x="740" y="59" font-family="JetBrains Mono" font-size="10" font-weight="700" fill="#D14545" text-anchor="middle">N7</text>
+        <text x="740" y="90" font-family="Inter" font-size="10" fill="#D14545" text-anchor="middle">⛔ 1 轮</text>
+
+        <rect x="834" y="40" width="32" height="30" rx="4" fill="#FFFBEB" stroke="#E8B947" stroke-width="2"/>
+        <text x="850" y="59" font-family="JetBrains Mono" font-size="10" font-weight="700" fill="#1A1F1F" text-anchor="middle">N8</text>
+        <text x="850" y="90" font-family="Inter" font-size="10" fill="#E8B947" text-anchor="middle" font-weight="600">⛔ 手工</text>
+
+        <rect x="944" y="40" width="32" height="30" rx="4" fill="#FFF1F1" stroke="#D14545" stroke-width="2"/>
+        <text x="960" y="59" font-family="JetBrains Mono" font-size="10" font-weight="700" fill="#D14545" text-anchor="middle">N9</text>
+        <text x="960" y="90" font-family="Inter" font-size="10" fill="#D14545" text-anchor="middle">⛔ 确认</text>
+
+        <circle cx="1080" cy="55" r="16" fill="#fff" stroke="#00bebe" stroke-width="2"/>
+        <text x="1080" y="59" font-family="JetBrains Mono" font-size="11" font-weight="700" fill="#00bebe" text-anchor="middle">N10</text>
+        <text x="1080" y="90" font-family="Inter" font-size="10" fill="#5C7070" text-anchor="middle">生命周期</text>
+      </svg>
+    </div>
+
+    <div class="trace-steps">
+      <div class="ts"><div class="ts-id">N1</div><div class="ts-content">需求方拉群提需求 · "持续触发 + 频率 + 截止时间"特征 → 类型判定 <code>监控类</code> · 主线 + 必经 N5</div></div>
+      <div class="ts"><div class="ts-id">N2</div><div class="ts-content">检索 <code>电池温度 监控 NT2 ES6</code> → 命中 v2.0 类似监控但阈值不同 · 需求方："参考但不复用"</div></div>
+      <div class="ts"><div class="ts-id">N3</div><div class="ts-content">填槽：NIO/NT2/ES6/v2.5 · 触发 <code>BatteryModuleTemp&gt;55℃ ≥300s</code> · 小时级 · 6 个月截止 · 看板要"地区+版本"</div></div>
+      <div class="ts"><div class="ts-id">N4</div><div class="ts-content">模糊匹配 → 需求方选 <code>BMS_ModuleTemp_Max</code>（NT2 CAN 1Hz）→ 本地飞书云同步层（v2.5 专属清单）命中 · 直接上云通过</div></div>
+      <div class="ts branch"><div class="ts-id">N5</div><div class="ts-content"><b>路径分流</b>：VESTA 7 字段 <b>不含"地区"</b> 但可由 <code>vehicle_id</code> JOIN 派生 · 需 5 分钟滑窗 · 单信号阈值不够 → 选 <span class="bp-pill" style="color:#7B6CE8;background:#EFEAFE;border-color:#7B6CE8;">β 路径</span></div></div>
+      <div class="ts gate"><div class="ts-id">N6</div><div class="ts-content">建单 → 审批通过 → JSON 阶段1字段（含路径 = β）冻结</div></div>
+      <div class="ts gate"><div class="ts-id">N7</div><div class="ts-content">监控 SQL：滑窗 + JOIN 车主表 + 输出列匹配 VESTA schema · 试跑 6/14 全天 → 47 辆车 · review 发现多 1 列 → 改正 · <b>1 轮</b> · 沉淀踩坑"β 输出字段必须严格匹配 schema"</div></div>
+      <div class="ts bp"><div class="ts-id">N8</div><div class="ts-content"><b>断点命中</b>：<span class="bp-pill">VESTA 编辑模式无 API</span> · AI 生成"配置说明文档" · 分析师手工粘贴 SQL · 配命中即推送到飞书群 "ES6 三电监控群"</div></div>
+      <div class="ts gate"><div class="ts-id">N9</div><div class="ts-content">分析师把链接 + 24h 命中截图发需求方 → 确认监控效果 + 推送频率合理</div></div>
+      <div class="ts"><div class="ts-id">N10</div><div class="ts-content">入监控资产台账 · AI 定时巡检（距截止 / 零命中 / 资源异常）· 到期 → 飞书提醒续期 / 下线 · JSON 入历史库</div></div>
+    </div>
+
+    <div class="verdict">
+      <b>验证：</b> N5 路径判定边界条件清楚（看板字段是否在 7 类默认字段 + 规则复杂度）；N8 "VESTA 无 API → 人工"断点显式；监控类截止时间 + 生命周期闭环在 N10 落地；与一次性链路在 N5/N7/N8 的内部分流上结构清晰、不串味。
+    </div>
+
+  </div>
+</section>
+
+<footer class="doc-footer">
+  <span>DA AGENT · PROCESS MODEL · <b>v0.3</b></span>
+  <span>本文档 = <b>L1</b>（不是 ontology）· L2 通过节点 <b>↗ 引用</b> 接入</span>
+</footer>
+
+<script>
+  document.querySelectorAll('.inst-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.inst-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.inst-panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById(tab.dataset.target).classList.add('active');
+    });
+  });
+</script>
+
+</body>
+</html>

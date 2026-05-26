@@ -22,29 +22,108 @@ Turn local artifacts into a hosted Artifacta project. The user does **not** need
 
 | User goal | Path | Upload shape |
 |-----------|------|----------------|
-| Dashboard + data + optional scheduled pull script | **Bundle (recommended)** | One ZIP; `artifacta.json` + `scripts/sync.py` |
-| Quick single-file demo | Legacy HTML | `dashboard.html` only |
+| Static dashboard, data won't change (≤ ~500 rows / ~100KB) | **Single HTML, data inlined** | `dashboard.html` only |
+| Dashboard + data that updates (sync, replace, or multi-file assets) | **Bundle** | One ZIP; `artifacta.json` + optional `scripts/sync.py` |
 | Replace data on existing project | Dataset API | `artifacta datasets upload/replace` |
 | URL / COS / Presto sync without custom code | Sync JSON | `artifacta datasets sync set` |
 
-**Default to bundle** whenever the dashboard references assets, multiple data files, or scheduled pulls.
+**Default to single HTML with inlined data** for one-shot dashboards where the data is a fixed snapshot. **Default to bundle** as soon as the data needs to update over time, the dashboard has separate CSS/JS assets, or there are multiple datasets / sync scripts.
 
 ---
 
-## One-sentence workflow (bundle — preferred)
+## Decision: does the data ever update?
+
+Ask this **before** scaffolding files. It chooses the path for you.
+
+- **No, it's a fixed snapshot** (one-shot AI dashboard, frozen report, demo with hardcoded numbers) → inline the data into `<script>` inside the HTML file. Upload single HTML with `--file dashboard.html`. **No ZIP, no server, no `artifacta.json`.** User can double-click locally.
+- **Yes, via sync scripts / URL / COS / Presto** → real `.csv` / `.json` files + bundle + server preview (next section).
+- **Yes, via manual `datasets replace`** → real `.csv` / `.json` files + bundle + server preview.
+
+### Inline-data pattern (for the static case)
+
+Drop the data straight into a `<script>` block. The dashboard reads from a global, not from `fetch()`:
+
+```html
+<script>
+  // Data inlined — no fetch, works from file:// when double-clicked.
+  const METRICS = [
+    { stage: "visit",  users: 1200 },
+    { stage: "signup", users: 360 },
+    { stage: "paid",   users: 42 },
+  ];
+
+  // ...render code uses METRICS directly...
+</script>
+```
+
+For CSV-shaped data, inline as a JS array of objects (not as a CSV string) — that avoids dragging a CSV parser into a static dashboard.
+
+**Size rule of thumb:** ≤ ~500 rows or ~100KB of raw data inlines comfortably. Larger than that → use the bundle path so the HTML stays fast on first paint.
+
+**Why not convert CSV/JSON to a separate `data.js` file?** It saves the server step but forces you to either rewrite the dashboard's parsing code or string-escape the CSV. Inlining straight into `<script>` is simpler and lands on the same single-HTML upload path. Skip the intermediate file.
+
+The hosted upload for this case:
+
+```bash
+artifacta projects upload \
+  --file ./dashboard.html \
+  --name "..." \
+  --visibility team
+```
+
+See `examples/0-single-html/` for a single-HTML upload (its data is in markup, not a JS array — but the upload shape and hosting behavior are the same).
+
+---
+
+## One-sentence workflow (bundle — for data that updates)
+
+Use this when the data-update decision above sent you to the bundle path. For static dashboards, the upload is one command (`artifacta projects upload --file ./dashboard.html …`) and the steps below don't apply.
 
 Example: *「部署到 Artifacta 并每天 8 点拉数据」*
 
 1. Scaffold bundle layout (below) or adapt the user's folder.
 2. Write `artifacta.json` (`entrypoint`, `datasets[]`, optional `sync_scripts[]`).
 3. Add `scripts/sync.py` or `scripts/sync.mjs` that writes only declared `outputs` paths.
-4. Test locally with the env contract; confirm `index.html` reads relative data paths.
+4. **Preview locally over HTTP** (see "Local preview" below) and confirm every `fetch()` returns 200 in DevTools.
 5. Zip **bundle root** (not parent folder): `zip -r ../bundle.zip . -x "*.git*" -x "__MACOSX/*"`.
-6. `artifacta projects upload --file ../bundle.zip --name "..."` — **no** `--data-file` (CLI uses `POST /upload-sessions` + `manifest_mode=auto`).
+6. `artifacta projects upload --file ../bundle.zip --name "..."` — data files must be inside the ZIP (CLI uses `POST /upload-sessions`).
 7. Set secrets on the server with `artifacta sync-scripts set --config-file ./secrets.json`; never in the ZIP.
 8. Return `preview_url`, `project_id`, script ids, and what was configured.
 
-The Web upload UI skips the dataset wizard when `artifacta.json` is detected. Raw API users should pass `manifest_mode=auto` and `datasets=[]` when committing the upload session.
+Put CSV/JSON next to `index.html` in the ZIP, or declare paths in `artifacta.json`. The server imports bindings on commit; no separate dataset upload at create time.
+
+---
+
+## Local preview (required for the bundle path)
+
+Skip this section if you took the inline-data path above — `file://` is fine when nothing fetches.
+
+For bundle dashboards: **never** tell the user to double-click `index.html`. Browsers block `fetch()` from `file://` origins (origin is `null`), so any dashboard that reads bundle data will fail locally even though it works hosted.
+
+Use any standard static HTTP server. Tell the user to run one of:
+
+```bash
+cd my-dashboard
+npx serve .                       # Node available
+python3 -m http.server 5173       # Python available
+```
+
+Then open the printed URL and verify in DevTools → Network that every dataset request (CSV/JSON/etc.) returns `200`. Only after that, build the ZIP and upload.
+
+### Hard constraints (enforced by Artifacta hosting, not just style)
+
+These are platform behaviors enforced by code in `lib/server/storage.ts` and `lib/server/artifacts/`. Violations either 404 silently or get rejected at upload (`INVALID_BUNDLE`).
+
+1. **ZIP-required** for any dashboard that fetches sibling files. Single-file `.html` uploads have no asset route — `/api/v1/projects/:id/html/<path>` returns `409 ASSET_BLOCKED` with `reason: "not_zip_bundle"`. Bundle with `index.html` at the ZIP root, or set `entrypoint` in `artifacta.json` to a matching HTML file.
+2. **Single HTML page only.** Only the entrypoint HTML is reachable on hosted; sibling `.html`/`.htm` files return `409 ASSET_BLOCKED` with `reason: "html_sibling"`. Multi-HTML bundles are rejected at upload with `MULTIPLE_HTML_FILES`. Use URL hash routing if you need multiple "pages."
+3. **Relative paths only** in dashboard code (`data/sales.csv` or `./data/sales.csv`). A leading slash (`/data/sales.csv`) works locally but bypasses the injected `<base href>` on hosted and 404s.
+4. **Prefer CSV / JSON for datasets.** The hosted MIME map covers `.css/.js/.mjs/.json/.csv/.png/.jpg/.jpeg/.gif/.webp/.svg/.ico/.woff/.woff2/.ttf`. `.tsv`, `.jsonl`, `.parquet`, `.xlsx` fall back to `application/octet-stream` (the upload returns a `DATASET_MIME_FALLBACK` warning). They still work with CDN parsers (e.g. SheetJS for XLSX), but CSV / JSON is the smooth path.
+
+### Never use `<input type="file">` as the data-loading default
+
+A file picker is only legitimate when the product **is** a file-upload tool (e.g. the user picks a CSV they want to analyze). For BI dashboards that ship with their own data, use `fetch(relativePath)` — anything else means the dashboard is broken on first open and the agent worked around `file://` instead of fixing it.
+
+See `examples/2-html-csv/` and `examples/WALKTHROUGH.zh-CN.md` for flat user-style sample bundles.
 
 ---
 
@@ -229,19 +308,7 @@ artifacta projects update-html \
   --file ./bundle-v2.zip
 ```
 
-### Legacy: HTML + separate data file
-
-Still supported by the platform today; avoid for new work (path drift). Prefer bundle instead.
-
-```bash
-artifacta projects upload \
-  --file ./dashboard.html \
-  --name "Weekly Growth" \
-  --data-file ./growth.csv \
-  --visibility team
-```
-
-### Upload or replace a standalone dataset
+### Upload or replace a standalone dataset (after project exists)
 
 ```bash
 artifacta datasets upload \
@@ -312,9 +379,17 @@ Requires a worker with `ARTIFACTA_API_KEY` and Python 3 on the host (`ARTIFACTA_
 
 ## Agent checklist
 
-- [ ] Bundle path: manifest valid; script writes only `ARTIFACTA_OUTPUT_PATHS`
+Inline-data path (static):
+- [ ] Data does not need to update — confirmed with user or implied by request
+- [ ] Data inlined into `<script>` block; no `fetch()` against sibling files
+- [ ] Single HTML uploaded with `--file dashboard.html` (no ZIP, no `artifacta.json`)
+- [ ] User receives `preview_url` + `project_id`
+
+Bundle path (updates over time):
+- [ ] Manifest valid; script (if any) writes only `ARTIFACTA_OUTPUT_PATHS`
 - [ ] No secrets in repo or ZIP
-- [ ] Local script test passed
+- [ ] Local server preview passed (every `fetch()` returned 200 in DevTools)
+- [ ] Local script test passed (if `sync_scripts` declared)
 - [ ] Single ZIP upload (no `--data-file` for bundle path)
 - [ ] Server secrets set if sync needs auth (`sync-scripts set` or UI)
 - [ ] User receives `preview_url` + `project_id` + `sscript_*` ids when scripts exist

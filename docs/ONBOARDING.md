@@ -17,6 +17,28 @@ There is no requirement to create an Artifacta project locally first.
 
 The remote project is created on the server when the CLI uploads the first dashboard artifact.
 
+## Step 0: Preview Locally Over HTTP
+
+If your dashboard fetches sibling files (CSV/JSON datasets, etc.) you **must** preview it over HTTP before uploading. Double-clicking `index.html` opens it via `file://`, and browsers block `fetch()` from that origin — your data calls will fail locally even when the same code works on hosted.
+
+Use any static HTTP server:
+
+```bash
+cd my-dashboard
+npx serve .                       # Node available
+python3 -m http.server 5173       # Python available
+```
+
+Open the printed URL and confirm in DevTools → Network that every dataset request returns `200`.
+
+Three hosting constraints to know before you build:
+
+- **ZIP-required** for multi-file dashboards. Single-file `.html` uploads have no sibling asset route.
+- **One HTML per bundle.** Only the entrypoint is reachable on hosted; sibling `.html` files return `409 ASSET_BLOCKED` and multi-HTML bundles are rejected at upload with `MULTIPLE_HTML_FILES`.
+- **Relative paths only.** `fetch("data/x.csv")` works locally and hosted; `/data/x.csv` (leading slash) breaks hosted.
+
+See `examples/2-html-csv/` and `examples/WALKTHROUGH.zh-CN.md` for flat, user-style sample bundles.
+
 ## Step 1: Create an API Key
 
 In the Artifacta web app:
@@ -58,10 +80,10 @@ export ARTIFACTA_API_KEY=art_...
 Your local skill should write artifacts to a temporary or working directory, for example:
 
 - `dashboard.zip` with optional `artifacta.json` (recommended for multi-file dashboards and bundle datasets)
-- `dashboard.html` for single-file dashboards
-- `data.csv` only when using HTML + separate `data_files` upload (legacy path)
+- `dashboard.html` for single-file dashboards with inlined data only
+- `data.csv`, `metrics.json`, etc. **inside** the ZIP next to `index.html` when the dashboard uses `fetch()`
 
-For ZIP bundles, put datasets and optional `sync_scripts` in `artifacta.json` — see `docs/protocol/manifest-v1.md` and `docs/protocol/examples/script-sync-dashboard/artifacta.json`.
+For ZIP bundles, optionally declare datasets and `sync_scripts` in `artifacta.json` — see `docs/protocol/manifest-v1.md` and `docs/protocol/examples/script-sync-dashboard/artifacta.json`. Without a manifest, Artifacta auto-registers common data extensions from the bundle.
 
 ## Step 5: Create the Remote Project
 
@@ -74,19 +96,18 @@ artifacta projects upload \
   --visibility team
 ```
 
-The CLI uploads the ZIP via `POST /upload-sessions`, then publishes with `manifest_mode=auto`. You do **not** need `--data-file` when CSV/JSON paths are declared in `artifacta.json`.
+The CLI uploads the ZIP via `POST /upload-sessions`, then publishes the project. Data files must live inside the ZIP.
 
-**Single HTML + separate dataset:**
+**Single HTML (inlined data only):**
 
 ```bash
 artifacta projects upload \
   --file ./dashboard.html \
   --name "Weekly Growth" \
-  --data-file ./data.csv \
   --visibility team
 ```
 
-This creates the remote Artifacta project and returns a JSON payload that includes `id` and `preview_url`.
+This creates the remote Artifacta project and returns a JSON payload that includes `id` and `preview_url`. To attach CSV/JSON for `fetch()`, zip the HTML and data files instead.
 
 ## Step 6: Update an Existing Remote Project
 

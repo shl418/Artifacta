@@ -43,7 +43,7 @@ Usage:
   artifacta --json <command>
   artifacta doctor [--app-url http://localhost:3000]
   artifacta projects list [--search text]
-  artifacta projects upload --file dashboard.html --name "Sales" [--data-file data.csv] [--visibility team]
+  artifacta projects upload --file dashboard.html --name "Sales" [--visibility team]
   artifacta projects update-html --project-id proj_x --file dashboard.zip
   artifacta datasets list [--source manual|cos|presto]
   artifacta datasets upload --project-id proj_x --file data.csv [--name "Sales Data"]
@@ -56,7 +56,7 @@ Usage:
   artifacta bundle run-script --file ./scripts/sync.py --bundle-root ./dist [--runtime python]
 
 Legacy alias:
-  artifacta upload --file dashboard.html --name "Sales" [--data-file data.csv] [--visibility team]
+  artifacta upload --file dashboard.html --name "Sales" [--visibility team]
 
 Environment:
   ARTIFACTA_URL       Defaults to http://localhost:3000
@@ -157,11 +157,6 @@ async function uploadProject(options) {
   if (options["folder-id"]) form.append("folder_id", String(options["folder-id"]))
   await appendFile(form, "html_file", filePath)
 
-  const dataFiles = arrayOption(options, "data-file").concat(arrayOption(options, "data"))
-  for (const dataFile of dataFiles) {
-    await appendFile(form, "data_files", dataFile)
-  }
-
   const payload = await request("/projects", { method: "POST", body: form })
   const result = { id: payload.id, name: payload.name, preview_url: payload.preview_url }
   printOutput(result, () => printSummary("Project published", result))
@@ -180,8 +175,6 @@ async function publishZipBundle(options, filePath, projectId = null) {
   publishForm.append("visibility", String(options.visibility ?? "team"))
   if (options["folder-id"]) publishForm.append("folder_id", String(options["folder-id"]))
   publishForm.append("upload_session_id", session.session_id)
-  publishForm.append("manifest_mode", "auto")
-  publishForm.append("datasets", "[]")
 
   const payload = await request("/projects", { method: "POST", body: publishForm })
   const result = { id: payload.id, name: payload.name, preview_url: payload.preview_url, manifest_detected: session.manifest_detected ?? false }

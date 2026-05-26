@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SaaS 增长看板</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface2: #21262d;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --blue: #58a6ff;
+      --green: #3fb950;
+      --orange: #d29922;
+      --red: #f85149;
+      --violet: #a371f7;
+    }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+    .shell { max-width: 1200px; margin: 0 auto; padding: 32px 24px 56px; }
+
+    header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 32px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-icon {
+      width: 40px; height: 40px; border-radius: 10px;
+      background: linear-gradient(135deg, var(--blue), var(--violet));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+    .brand-text h1 { font-size: 1.25rem; font-weight: 700; }
+    .brand-text p { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
+    .badge {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .kpi {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 22px;
+      position: relative;
+      overflow: hidden;
+    }
+    .kpi::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(88,166,255,0.03), transparent);
+      pointer-events: none;
+    }
+    .kpi-label { font-size: 0.72rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+    .kpi-value { font-size: 2rem; font-weight: 700; margin: 8px 0 6px; font-variant-numeric: tabular-nums; }
+    .kpi-delta { font-size: 0.8rem; display: flex; align-items: center; gap: 4px; }
+    .up { color: var(--green); }
+    .down { color: var(--red); }
+    .neutral { color: var(--muted); }
+
+    .grid2 { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 24px; }
+    .grid2b { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 900px) { .grid2, .grid2b { grid-template-columns: 1fr; } }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 22px;
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .card-title { font-size: 0.85rem; font-weight: 600; }
+    .card-sub { font-size: 0.75rem; color: var(--muted); }
+    .chart-wrap { position: relative; height: 220px; }
+    .chart-wrap-sm { position: relative; height: 180px; }
+
+    .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--muted); }
+    .legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+    .table-wrap { overflow-x: auto; margin-top: 4px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+    th { text-align: left; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 0 12px 10px; }
+    td { padding: 10px 12px; border-top: 1px solid var(--border); }
+    tr:hover td { background: var(--surface2); }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body>
+<div class="shell">
+  <header>
+    <div class="brand">
+      <div class="brand-icon">📈</div>
+      <div class="brand-text">
+        <h1>SaaS 增长看板</h1>
+        <p>数据内联 · 单文件 · 无需服务器</p>
+      </div>
+    </div>
+    <div class="badge">2024 Q2 · 自动刷新</div>
+  </header>
+
+  <div class="kpis">
+    <div class="kpi">
+      <div class="kpi-label">月度经常性收入 MRR</div>
+      <div class="kpi-value" style="color:var(--blue)">¥428K</div>
+      <div class="kpi-delta up">↑ 18.4% 环比上月</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">付费用户</div>
+      <div class="kpi-value" style="color:var(--green)">3,840</div>
+      <div class="kpi-delta up">↑ 12.6% 环比上月</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">月度流失率</div>
+      <div class="kpi-value" style="color:var(--orange)">2.3%</div>
+      <div class="kpi-delta up">↓ 0.4pp 环比改善</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">净收入留存 NRR</div>
+      <div class="kpi-value" style="color:var(--violet)">118%</div>
+      <div class="kpi-delta neutral">连续 6 个月 &gt;110%</div>
+    </div>
+  </div>
+
+  <div class="grid2" style="margin-bottom:16px">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">月度 MRR 趋势</div>
+          <div class="card-sub">近 6 个月 · 千元</div>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="mrrChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">流量来源</div>
+          <div class="card-sub">本月新增用户</div>
+        </div>
+      </div>
+      <div class="chart-wrap-sm"><canvas id="sourceChart"></canvas></div>
+      <div class="legend" id="sourceLegend"></div>
+    </div>
+  </div>
+
+  <div class="grid2b">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">新增注册 vs 付费转化</div>
+          <div class="card-sub">近 6 个月</div>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="signupChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">套餐分布</div>
+          <div class="card-sub">按 ARR 贡献</div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>套餐</th><th class="num">用户数</th><th class="num">ARR 贡献</th><th class="num">环比</th></tr></thead>
+          <tbody id="planTable"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // All data is inlined — no fetch(), works double-click from file://
+  const MRR = [
+    { month: '1月', mrr: 241 },
+    { month: '2月', mrr: 268 },
+    { month: '3月', mrr: 302 },
+    { month: '4月', mrr: 341 },
+    { month: '5月', mrr: 387 },
+    { month: '6月', mrr: 428 },
+  ];
+
+  const SIGNUPS = [
+    { month: '1月', signup: 820, paid: 148 },
+    { month: '2月', signup: 940, paid: 172 },
+    { month: '3月', signup: 1080, paid: 204 },
+    { month: '4月', signup: 1240, paid: 241 },
+    { month: '5月', signup: 1420, paid: 278 },
+    { month: '6月', signup: 1680, paid: 324 },
+  ];
+
+  const SOURCES = [
+    { label: '自然搜索', value: 38, color: '#58a6ff' },
+    { label: '付费广告', value: 24, color: '#a371f7' },
+    { label: '口碑推荐', value: 21, color: '#3fb950' },
+    { label: '内容营销', value: 11, color: '#d29922' },
+    { label: '其他', value: 6, color: '#6e7681' },
+  ];
+
+  const PLANS = [
+    { name: '初创版', users: 1840, arr: '¥88K', delta: '+8.2%', color: '#58a6ff' },
+    { name: '成长版', users: 1240, arr: '¥198K', delta: '+14.1%', color: '#3fb950' },
+    { name: '企业版', users: 560, arr: '¥142K', delta: '+24.6%', color: '#a371f7' },
+    { name: '定制版', users: 200, arr: '¥124K', delta: '+31.2%', color: '#d29922' },
+  ];
+
+  Chart.defaults.color = '#8b949e';
+  Chart.defaults.borderColor = '#30363d';
+  Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+
+  // MRR Line Chart
+  new Chart(document.getElementById('mrrChart'), {
+    type: 'line',
+    data: {
+      labels: MRR.map(d => d.month),
+      datasets: [{
+        label: 'MRR (千元)',
+        data: MRR.map(d => d.mrr),
+        borderColor: '#58a6ff',
+        backgroundColor: 'rgba(88,166,255,0.08)',
+        borderWidth: 2,
+        pointRadius: 4,
+        pointBackgroundColor: '#58a6ff',
+        fill: true,
+        tension: 0.4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: '#21262d' } },
+        y: { grid: { color: '#21262d' }, ticks: { callback: v => '¥' + v + 'K' } }
+      }
+    }
+  });
+
+  // Source Doughnut
+  new Chart(document.getElementById('sourceChart'), {
+    type: 'doughnut',
+    data: {
+      labels: SOURCES.map(d => d.label),
+      datasets: [{
+        data: SOURCES.map(d => d.value),
+        backgroundColor: SOURCES.map(d => d.color),
+        borderWidth: 2,
+        borderColor: '#161b22',
+        hoverOffset: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      cutout: '65%',
+      plugins: { legend: { display: false } }
+    }
+  });
+
+  const legend = document.getElementById('sourceLegend');
+  SOURCES.forEach(s => {
+    legend.innerHTML += `<span class="legend-item"><span class="legend-dot" style="background:${s.color}"></span>${s.label} ${s.value}%</span>`;
+  });
+
+  // Signup Bar Chart
+  new Chart(document.getElementById('signupChart'), {
+    type: 'bar',
+    data: {
+      labels: SIGNUPS.map(d => d.month),
+      datasets: [
+        {
+          label: '注册',
+          data: SIGNUPS.map(d => d.signup),
+          backgroundColor: 'rgba(88,166,255,0.6)',
+          borderRadius: 4,
+        },
+        {
+          label: '付费转化',
+          data: SIGNUPS.map(d => d.paid),
+          backgroundColor: 'rgba(63,185,80,0.8)',
+          borderRadius: 4,
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top', labels: { boxWidth: 10, padding: 16 } } },
+      scales: {
+        x: { grid: { color: '#21262d' } },
+        y: { grid: { color: '#21262d' } }
+      }
+    }
+  });
+
+  // Plan Table
+  const tbody = document.getElementById('planTable');
+  PLANS.forEach(p => {
+    tbody.innerHTML += `<tr>
+      <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:8px"></span>${p.name}</td>
+      <td class="num">${p.users.toLocaleString()}</td>
+      <td class="num">${p.arr}</td>
+      <td class="num" style="color:var(--green)">${p.delta}</td>
+    </tr>`;
+  });
+</script>
+</body>
+</html>

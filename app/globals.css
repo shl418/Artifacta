@@ -1,6 +1,8 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
+@source not "../.codegraph";
+
 @custom-variant dark (&:is(.dark *));
 
 /* NIOFlow Light Theme - Islands Design */

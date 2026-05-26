@@ -22,7 +22,7 @@ This file is the maintenance checklist for keeping code and documentation in syn
 | Projects | `GET/POST /api/v1/projects`, `GET/PATCH/DELETE /api/v1/projects/:projectId`, `PATCH /api/v1/projects/:projectId/folder` | Responses use snake_case through serializers. |
 | Dashboard artifacts | `PUT /api/v1/projects/:projectId/html`, `GET /api/v1/projects/:projectId/html/render`, `GET /api/v1/projects/:projectId/html/:assetPath` | Single `.html` updates via `PUT /html`. ZIP create/update uses upload sessions only. |
 | Dashboard versions and embeds | `GET /api/v1/projects/:projectId/versions`, `POST /api/v1/projects/:projectId/versions/:versionId/rollback`, `POST /api/v1/projects/:projectId/embed-token`, `GET /embed/:projectId` | Embed access uses signed short-lived tokens and sandboxed previews. |
-| Upload sessions | `POST /api/v1/upload-sessions` | ZIP inspect + commit via `POST /projects` with `upload_session_id`. Returns `manifest_detected` when `artifacta.json` is present. Supports `manifest_mode=auto` and `project_id` for updates. |
+| Upload sessions | `POST /api/v1/upload-sessions` | ZIP inspect + commit via `POST /projects` with `upload_session_id`. Returns `manifest_detected` when `artifacta.json` is present. Bundle datasets imported from manifest or auto-discovered. Supports `project_id` for updates. |
 | Bundle manifest import | `lib/server/artifacts/manifest.ts`, `manifest-import.ts`, `upload-session.ts` | Bundled `artifacta.json` is preserved when valid; server generates manifest only when missing. See `docs/protocol/manifest-v1.md`. |
 | Bundle script sync | `GET/PUT /api/v1/projects/:projectId/sync-scripts`, `.../test`, `.../trigger`, `.../status`, `.../history`, `POST /api/v1/sync/script-jobs/claim` | Python/Node scripts run in extracted bundle; multi-output history; one queued/running job per project. |
 | Folders | `GET/POST /api/v1/folders`, `PATCH/DELETE /api/v1/folders/:folderId` | Deleting a folder moves projects to root or `move_to`. |
@@ -39,7 +39,7 @@ This file is the maintenance checklist for keeping code and documentation in syn
 | Command | API Used | Documented In |
 | --- | --- | --- |
 | `artifacta projects list [--search text]` | `GET /projects` | `docs/API.md`, `packages/cli/README.md` |
-| `artifacta projects upload --file ...` (`.html` direct, `.zip` via upload session + `manifest_mode=auto`) | `POST /upload-sessions`, `POST /projects` | `README.md`, `docs/ONBOARDING.md`, `docs/API.md` |
+| `artifacta projects upload --file ...` (`.html` direct, `.zip` via upload session) | `POST /upload-sessions`, `POST /projects` | `README.md`, `docs/ONBOARDING.md`, `docs/API.md` |
 | `artifacta projects update-html --project-id ... --file ...` (`.html` → `PUT /html`; `.zip` → upload session) | `PUT /projects/:id/html` or upload session | `README.md`, `docs/API.md` |
 | `artifacta sync-scripts list|set|trigger|status --project-id ... [--script-id ...]` | `/projects/:id/sync-scripts/*` | `docs/API.md`, `packages/cli/README.md` |
 | `artifacta bundle run-script --file ... --bundle-root ...` | Local dev helper (sets `ARTIFACTA_*` env, spawns script) | `packages/cli/README.md` |
@@ -72,10 +72,25 @@ This file is the maintenance checklist for keeping code and documentation in syn
 | Action | Recommended path |
 | --- | --- |
 | Create ZIP project | `POST /upload-sessions` → `POST /projects` with `upload_session_id` |
-| ZIP with `artifacta.json` | Same; set `manifest_mode=auto` (CLI does this automatically) |
+| ZIP with `artifacta.json` | Same; manifest drives dataset bindings on commit |
 | Update ZIP project | `POST /upload-sessions` with `project_id` → commit with `upload_session_id` |
 | Replace single HTML file | `PUT /projects/:id/html` with `.html` only |
 | Direct `POST /projects` with ZIP | **Rejected** (`400 DEPRECATED`) — use upload session |
+
+### Hosting Constraints (enforced)
+
+| Rule | Enforcement | Error code |
+| --- | --- | --- |
+| Bundle entrypoint resolution: manifest `entrypoint` → root `index.html` → nested `index.html` | `lib/server/artifacts/entrypoint.ts`, `lib/server/storage.ts`, `lib/server/artifacts/upload-session.ts` | `MANIFEST_ENTRYPOINT_MISSING`, `NO_ENTRYPOINT` |
+| Single HTML per bundle | `lib/server/artifacts/bundle-validation.ts`, blocked at runtime by `classifyDashboardAssetRequest` | `MULTIPLE_HTML_FILES` (upload), `ASSET_BLOCKED` (`reason: "html_sibling"` runtime) |
+| Single-file `.html` upload has no asset route | `lib/server/artifacts/asset-routing.ts` | `ASSET_BLOCKED` (`reason: "not_zip_bundle"`) |
+| Dataset `kind` matches path extension | `lib/server/artifacts/manifest.ts` superRefine | `INVALID_BUNDLED_MANIFEST` containing `DATASET_KIND_EXTENSION_MISMATCH` |
+| Dataset extensions outside the MIME map fall back to `application/octet-stream` | `lib/server/artifacts/bundle-validation.ts` | Returned as `warnings[].code = "DATASET_MIME_FALLBACK"` in upload response |
+| Asset Cache-Control respects project visibility | `lib/server/artifacts/cache-control.ts` | `private, max-age=300` for `private`/`team`; `public, max-age=300` for `public` |
+
+## Examples
+
+- `examples/`: flat walkthrough bundles (`1-html-json` … `5-html-csv-cos`) in `examples/WALKTHROUGH.zh-CN.md`; no pre-made `artifacta.json`.
 
 ## Not Implemented Yet
 

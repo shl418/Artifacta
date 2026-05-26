@@ -54,10 +54,9 @@ npm install -g @artifacta/cli
 # 仓库内开发者
 pnpm cli -- projects list`
 
-const cliExample = `# 创建项目并上传 HTML + 数据文件
+const cliExample = `# 创建项目（ZIP 内含 HTML 与数据；单 HTML 仅适合内联数据）
 artifacta projects upload \
-  --file ./dashboard.html \
-  --data-file ./sales.csv \
+  --file ./dashboard.zip \
   --name "Q2 销售看板" \
   --visibility team
 
@@ -76,12 +75,15 @@ artifacta datasets sync set \
 # 或直接使用 API Key 列项目
 ARTIFACTA_API_KEY=art_live_xxx artifacta projects list`
 
-const apiExample = `curl -X POST http://localhost:3000/api/v1/projects \
-  -H "Authorization: Bearer $ARTIFACTA_API_KEY" \
-  -F "name=Q2 销售看板" \
-  -F "visibility=team" \
-  -F "html_file=@./dashboard.html" \
-  -F "data_files=@./sales.csv"`
+const apiExample = `curl -X POST http://localhost:3000/api/v1/upload-sessions \\
+  -H "Authorization: Bearer $ARTIFACTA_API_KEY" \\
+  -F "file=@./dashboard.zip"
+# 使用返回的 session_id：
+curl -X POST http://localhost:3000/api/v1/projects \\
+  -H "Authorization: Bearer $ARTIFACTA_API_KEY" \\
+  -F "name=Q2 销售看板" \\
+  -F "visibility=team" \\
+  -F "upload_session_id=<session_id>"`
 
 export default function ApiDocsPage() {
   const [apiKeys, setApiKeys] = useState<ApiKeyRecord[]>([])

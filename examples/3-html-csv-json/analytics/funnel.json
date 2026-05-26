@@ -1,0 +1,7 @@
+[
+  { "stage": "曝光", "users": 48000 },
+  { "stage": "点击", "users": 14400 },
+  { "stage": "注册", "users": 4320 },
+  { "stage": "激活", "users": 2160 },
+  { "stage": "付费", "users": 648 }
+]
