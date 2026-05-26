@@ -1,14 +1,13 @@
 import { requireRequestAuth } from "@/lib/server/auth"
 import { canEditProject } from "@/lib/server/access"
-import { recordAudit } from "@/lib/server/audit"
-import { addActivity, now, readDatabase, updateDatabase } from "@/lib/server/db"
+import { now, readDatabase, updateDatabase } from "@/lib/server/db"
+import { dispatch } from "@/lib/server/dispatch"
 import { rateLimitResponse } from "@/lib/server/rate-limit"
 import { requestPayloadTooLarge } from "@/lib/server/request-size"
 import { apiError, ok } from "@/lib/server/responses"
 import { serializeProjectDetail } from "@/lib/server/serializers"
 import { saveProjectArtifact } from "@/lib/server/storage"
 import { recordDashboardVersion } from "@/lib/server/versions"
-import { emitWebhooks } from "@/lib/server/webhooks"
 
 export const runtime = "nodejs"
 
@@ -58,24 +57,8 @@ export async function PUT(request: Request, context: RouteContext) {
     recordDashboardVersion(mutable, record, auth.user.id, "Before dashboard artifact replacement")
     record.htmlArtifact = artifact
     record.updatedAt = now()
-    addActivity(mutable, {
-      organizationId: auth.user.organizationId,
-      type: "dashboard",
-      userId: auth.user.id,
-      action: "更新了看板文件",
-      target: record.name,
-    })
     recordDashboardVersion(mutable, record, auth.user.id, "Dashboard artifact replaced")
-    recordAudit(mutable, {
-      organizationId: auth.user.organizationId,
-      actorUserId: auth.user.id,
-      action: "project.html.update",
-      targetType: "project",
-      targetId: record.id,
-      summary: `Updated dashboard artifact for ${record.name}`,
-      metadata: { artifact_kind: artifact.kind, original_name: artifact.originalName },
-    })
-    emitWebhooks(mutable, auth.user.organizationId, "project.updated", { project_id: record.id, name: record.name })
+    dispatch(mutable, { type: "project.html.updated", organizationId: auth.user.organizationId, actorId: auth.user.id, project: { id: record.id, name: record.name }, meta: { artifact_kind: artifact.kind, original_name: artifact.originalName } })
     return record
   })
 

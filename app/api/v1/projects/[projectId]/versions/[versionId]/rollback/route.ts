@@ -1,7 +1,7 @@
 import { authenticateRequest } from "@/lib/server/auth"
 import { canEditProject } from "@/lib/server/access"
-import { recordAudit } from "@/lib/server/audit"
 import { now, readDatabase, updateDatabase } from "@/lib/server/db"
+import { dispatch } from "@/lib/server/dispatch"
 import { apiError, ok } from "@/lib/server/responses"
 import { serializeProjectDetail } from "@/lib/server/serializers"
 import { recordDashboardVersion } from "@/lib/server/versions"
@@ -26,15 +26,7 @@ export async function POST(request: Request, context: RouteContext) {
     recordDashboardVersion(mutable, record, auth.user.id, `Rollback point before ${version.id}`)
     record.htmlArtifact = version.htmlArtifact
     record.updatedAt = now()
-    recordAudit(mutable, {
-      organizationId: auth.user.organizationId,
-      actorUserId: auth.user.id,
-      action: "project.rollback",
-      targetType: "project",
-      targetId: projectId,
-      summary: `Rolled back ${record.name} to dashboard version ${version.version}`,
-      metadata: { version_id: version.id, version: version.version },
-    })
+    dispatch(mutable, { type: "project.rolled.back", organizationId: auth.user.organizationId, actorId: auth.user.id, project: { id: projectId, name: record.name }, meta: { version_id: version.id, version: version.version } })
     return record
   })
 

@@ -9,11 +9,11 @@ import {
   s3Region,
   s3SecretAccessKey,
 } from "@/lib/server/config"
-import { addActivity, now } from "@/lib/server/db"
+import { now } from "@/lib/server/db"
+import { dispatch } from "@/lib/server/dispatch"
 import { assertAllowedLocalPath, assertAllowedSyncUrl, assertAllowedUploadPath } from "@/lib/server/sync/source-policy"
 import { writeDatasetBuffer } from "@/lib/server/storage"
 import { recordDatasetVersion } from "@/lib/server/versions"
-import { emitWebhooks } from "@/lib/server/webhooks"
 
 interface RunDatasetSyncInput {
   projectId: string
@@ -78,22 +78,7 @@ export async function runDatasetSync(database: Database, input: RunDatasetSyncIn
   dataset.syncConfig.nextSyncAt = nextDailySync(completedAt)
   dataset.updatedAt = completedAt
 
-  if (input.userId) {
-    addActivity(database, {
-      organizationId: project.organizationId,
-      type: "dataset",
-      userId: input.userId,
-      action: status === "success" ? "完成了数据同步" : "数据同步失败",
-      target: dataset.name,
-    })
-  }
-  emitWebhooks(database, project.organizationId, status === "success" ? "sync.success" : "sync.failed", {
-    project_id: input.projectId,
-    dataset_id: input.datasetId,
-    sync_id: history.id,
-    rows_synced: rowsSynced,
-    error,
-  })
+  dispatch(database, { type: "dataset.synced", organizationId: project.organizationId, actorId: input.userId, dataset: { id: input.datasetId, name: dataset.name, projectId: input.projectId }, result: { status, syncId: history.id, rowsSynced, error } })
 
   return history
 }

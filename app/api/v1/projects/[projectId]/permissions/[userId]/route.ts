@@ -1,11 +1,10 @@
 import type { ProjectPermission } from "@/lib/types"
 import { authenticateRequest } from "@/lib/server/auth"
 import { canEditProject } from "@/lib/server/access"
-import { recordAudit } from "@/lib/server/audit"
-import { addActivity, readDatabase, updateDatabase } from "@/lib/server/db"
+import { readDatabase, updateDatabase } from "@/lib/server/db"
+import { dispatch } from "@/lib/server/dispatch"
 import { apiError, noContent, ok } from "@/lib/server/responses"
 import { serializeProjectMember } from "@/lib/server/serializers"
-import { emitWebhooks } from "@/lib/server/webhooks"
 
 export const runtime = "nodejs"
 
@@ -33,23 +32,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   const updated = await updateDatabase((mutable) => {
     const record = mutable.projectMembers.find((candidate) => candidate.projectId === projectId && candidate.userId === userId)!
     record.permission = permission as ProjectPermission
-    addActivity(mutable, {
-      organizationId: auth.user.organizationId,
-      type: "permission",
-      userId: auth.user.id,
-      action: "修改了项目权限",
-      target: userId,
-    })
-    recordAudit(mutable, {
-      organizationId: auth.user.organizationId,
-      actorUserId: auth.user.id,
-      action: "permission.update",
-      targetType: "project_member",
-      targetId: `${projectId}:${userId}`,
-      summary: `Updated project member ${userId} to ${permission}`,
-      metadata: { project_id: projectId, user_id: userId, permission },
-    })
-    emitWebhooks(mutable, auth.user.organizationId, "permission.changed", { project_id: projectId, user_id: userId, permission })
+    dispatch(mutable, { type: "permission.updated", organizationId: auth.user.organizationId, actorId: auth.user.id, projectId, userId, permission })
     return record
   })
 
@@ -72,16 +55,7 @@ export async function DELETE(request: Request, context: RouteContext) {
 
   await updateDatabase((mutable) => {
     mutable.projectMembers = mutable.projectMembers.filter((candidate) => !(candidate.projectId === projectId && candidate.userId === userId))
-    recordAudit(mutable, {
-      organizationId: auth.user.organizationId,
-      actorUserId: auth.user.id,
-      action: "permission.delete",
-      targetType: "project_member",
-      targetId: `${projectId}:${userId}`,
-      summary: `Removed project member ${userId}`,
-      metadata: { project_id: projectId, user_id: userId },
-    })
-    emitWebhooks(mutable, auth.user.organizationId, "permission.changed", { project_id: projectId, user_id: userId, permission: null })
+    dispatch(mutable, { type: "permission.revoked", organizationId: auth.user.organizationId, actorId: auth.user.id, projectId, userId })
   })
 
   return noContent()

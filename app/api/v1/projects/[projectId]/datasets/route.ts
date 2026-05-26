@@ -1,8 +1,8 @@
 import { requireRequestAuth } from "@/lib/server/auth"
 import { canEditProject, canViewProject } from "@/lib/server/access"
-import { recordAudit } from "@/lib/server/audit"
 import { buildDatasetRecord } from "@/lib/server/dataset-records"
-import { addActivity, readDatabase, updateDatabase } from "@/lib/server/db"
+import { readDatabase, updateDatabase } from "@/lib/server/db"
+import { dispatch } from "@/lib/server/dispatch"
 import { rateLimitResponse } from "@/lib/server/rate-limit"
 import { requestPayloadTooLarge } from "@/lib/server/request-size"
 import { apiError, created, ok } from "@/lib/server/responses"
@@ -64,22 +64,7 @@ export async function POST(request: Request, context: RouteContext) {
     recordDatasetVersion(mutable, dataset, auth.user.id)
     const record = mutable.projects.find((candidate) => candidate.id === projectId)
     if (record) record.updatedAt = dataset.updatedAt
-    addActivity(mutable, {
-      organizationId: auth.user.organizationId,
-      type: "dataset",
-      userId: auth.user.id,
-      action: "添加了数据集",
-      target: dataset.name,
-    })
-    recordAudit(mutable, {
-      organizationId: auth.user.organizationId,
-      actorUserId: auth.user.id,
-      action: "dataset.create",
-      targetType: "dataset",
-      targetId: dataset.id,
-      summary: `Added dataset ${dataset.name}`,
-      metadata: { project_id: projectId, file_type: dataset.fileType },
-    })
+    dispatch(mutable, { type: "dataset.created", organizationId: auth.user.organizationId, actorId: auth.user.id, dataset: { id: dataset.id, name: dataset.name, projectId, fileType: dataset.fileType } })
   })
 
   return created(serializeDataset(dataset))

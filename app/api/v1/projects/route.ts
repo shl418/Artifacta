@@ -1,17 +1,18 @@
 import type { Project, ProjectVisibility } from "@/lib/types"
 import { requireRequestAuth } from "@/lib/server/auth"
 import { canViewProject } from "@/lib/server/access"
-import { recordAudit } from "@/lib/server/audit"
-import { buildDatasetRecord } from "@/lib/server/dataset-records"
-import { addActivity, now, readDatabase, updateDatabase } from "@/lib/server/db"
+import { now, readDatabase, updateDatabase } from "@/lib/server/db"
+import { dispatch } from "@/lib/server/dispatch"
 import { apiError, created, ok, paginate, parsePagination } from "@/lib/server/responses"
 import { rateLimitResponse } from "@/lib/server/rate-limit"
 import { requestPayloadTooLarge } from "@/lib/server/request-size"
 import { serializeFolder, serializeProject, serializeProjectDetail } from "@/lib/server/serializers"
-import { commitUploadSession } from "@/lib/server/artifacts/upload-session"
+import type { BundleHostingIssue } from "@/lib/server/artifacts/bundle-validation"
+import { InvalidBundleError } from "@/lib/server/artifacts/entrypoint"
+import { InvalidBundledManifestError } from "@/lib/server/artifacts/errors"
+import { commitUploadSession } from "@/lib/server/artifacts/bundle-commit"
 import { saveProjectArtifact } from "@/lib/server/storage"
 import { recordDashboardVersion, recordDatasetVersion } from "@/lib/server/versions"
-import { emitWebhooks } from "@/lib/server/webhooks"
 
 export const runtime = "nodejs"
 
@@ -77,6 +78,15 @@ export async function POST(request: Request) {
   const form = await request.formData().catch(() => null)
   if (!form) return apiError(400, "INVALID_REQUEST", "请求体必须是 multipart/form-data。")
 
+  for (const field of ["data_files", "data_files[]", "data", "datasets", "manifest_mode"] as const) {
+    const values = form.getAll(field)
+    if (values.length > 0 && values.some((value) => value !== null && String(value).trim() !== "")) {
+      return apiError(400, "INVALID_REQUEST", `字段 ${field} 已移除；数据文件请放在 ZIP 包内，或通过 artifacta.json 声明。`, {
+        field,
+      })
+    }
+  }
+
   const name = String(form.get("name") ?? "").trim()
   const description = String(form.get("description") ?? "").trim()
   const visibilityInput = String(form.get("visibility") ?? "private")
@@ -90,24 +100,8 @@ export async function POST(request: Request) {
   }
 
   if (uploadSessionId) {
-    let datasetsConfig: Array<{ bundle_path: string; name: string; refresh: "manual" | "sync" }>
-    try {
-      datasetsConfig = JSON.parse(String(form.get("datasets") ?? "[]"))
-    } catch {
-      return apiError(400, "INVALID_REQUEST", "datasets 必须是 JSON 数组。", { field: "datasets" })
-    }
-
-    if (!Array.isArray(datasetsConfig)) {
-      return apiError(400, "INVALID_REQUEST", "datasets 必须是 JSON 数组。", { field: "datasets" })
-    }
-
-    const manifestModeInput = String(form.get("manifest_mode") ?? "").trim()
-    const manifestMode =
-      manifestModeInput === "auto" || manifestModeInput === "wizard"
-        ? (manifestModeInput as "auto" | "wizard")
-        : undefined
-
-    const project = await updateDatabase<Project | null>(async (database) => {
+    let commitWarnings: BundleHostingIssue[] = []
+    const project = await updateDatabase<Project | null | InvalidBundleError | InvalidBundledManifestError>(async (database) => {
       if (folderId && !database.folders.some((folder) => folder.id === folderId && folder.organizationId === auth.user.organizationId)) {
         throw new Error("FOLDER_NOT_FOUND")
       }
@@ -121,47 +115,42 @@ export async function POST(request: Request) {
           description,
           visibility: visibilityInput as ProjectVisibility,
           folderId,
-          datasets: datasetsConfig,
-          manifestMode,
         })
 
-        addActivity(database, {
-          organizationId: auth.user.organizationId,
-          type: "upload",
-          userId: auth.user.id,
-          action: "上传了新看板",
-          target: name,
-        })
+        commitWarnings = committed.warnings
+
         recordDashboardVersion(database, committed.project, auth.user.id, "Created from ZIP upload session")
         for (const dataset of committed.datasets) recordDatasetVersion(database, dataset, auth.user.id)
-        recordAudit(database, {
-          organizationId: auth.user.organizationId,
-          actorUserId: auth.user.id,
-          action: "project.create",
-          targetType: "project",
-          targetId: committed.project.id,
-          summary: `Created project ${name}`,
-          metadata: { upload_session_id: uploadSessionId, datasets_count: committed.datasets.length },
-        })
-        emitWebhooks(database, auth.user.organizationId, "project.created", { project_id: committed.project.id, name })
+        dispatch(database, { type: "project.created", organizationId: auth.user.organizationId, actorId: auth.user.id, project: { id: committed.project.id, name }, meta: { upload_session_id: uploadSessionId, datasets_count: committed.datasets.length } })
 
         return committed.project
       } catch (error) {
+        if (error instanceof InvalidBundleError) throw error
+        if (error instanceof InvalidBundledManifestError) throw error
         if (error instanceof Error && error.message === "UPLOAD_SESSION_NOT_FOUND") throw new Error("UPLOAD_SESSION_NOT_FOUND")
         if (error instanceof Error && error.message === "PROJECT_NOT_FOUND") throw new Error("PROJECT_NOT_FOUND")
-        if (error instanceof Error && error.message === "INVALID_BUNDLED_MANIFEST") throw new Error("INVALID_BUNDLED_MANIFEST")
         throw error
       }
     }).catch((error) => {
+      if (error instanceof InvalidBundleError) return error
+      if (error instanceof InvalidBundledManifestError) return error
       if (error instanceof Error && error.message === "FOLDER_NOT_FOUND") return null
       if (error instanceof Error && error.message === "UPLOAD_SESSION_NOT_FOUND") return "UPLOAD_SESSION_NOT_FOUND"
       if (error instanceof Error && error.message === "PROJECT_NOT_FOUND") return "PROJECT_NOT_FOUND"
-      if (error instanceof Error && error.message === "INVALID_BUNDLED_MANIFEST") return "INVALID_BUNDLED_MANIFEST"
       throw error
     })
 
-    if (project === "INVALID_BUNDLED_MANIFEST") {
-      return apiError(400, "INVALID_REQUEST", "ZIP 包内的 artifacta.json 无效。", { field: "upload_session_id" })
+    if (project instanceof InvalidBundleError) {
+      const issues = (project as unknown as { issues?: BundleHostingIssue[] }).issues ?? [
+        { code: project.code, message: project.message },
+      ]
+      return apiError(400, "INVALID_BUNDLE", project.message, { code: project.code, issues })
+    }
+    if (project instanceof InvalidBundledManifestError) {
+      return apiError(400, "INVALID_BUNDLED_MANIFEST", project.message, {
+        field: "upload_session_id",
+        issues: project.issues,
+      })
     }
     if (project === "UPLOAD_SESSION_NOT_FOUND") {
       return apiError(404, "NOT_FOUND", "上传会话不存在或已过期。", { field: "upload_session_id" })
@@ -170,7 +159,8 @@ export async function POST(request: Request) {
     if (!project) return apiError(404, "NOT_FOUND", "文件夹不存在。")
 
     const database = await readDatabase()
-    return created(serializeProjectDetail(database, project))
+    const payload = serializeProjectDetail(database, project)
+    return created(commitWarnings.length > 0 ? { ...payload, warnings: commitWarnings } : payload)
   }
 
   if (!htmlFile) return apiError(400, "INVALID_REQUEST", "请上传 html_file 或提供 upload_session_id。", { field: "html_file" })
@@ -190,19 +180,6 @@ export async function POST(request: Request) {
       { field: "html_file" }
     )
   }
-
-  const datasetFiles = [
-    ...form.getAll("data_files"),
-    ...form.getAll("data_files[]"),
-    ...form.getAll("data"),
-  ].map(asFile).filter(Boolean) as File[]
-  const datasets = await Promise.all(
-    datasetFiles.map((file) => buildDatasetRecord({ projectId, organizationId: auth.user.organizationId, file }))
-  ).catch((error) => {
-    if (error instanceof Error) return error
-    return new Error("数据集保存失败。")
-  })
-  if (datasets instanceof Error) return apiError(400, "INVALID_DATASET", datasets.message, { field: "data_files" })
 
   const project = await updateDatabase<Project>((database) => {
     if (folderId && !database.folders.some((folder) => folder.id === folderId && folder.organizationId === auth.user.organizationId)) {
@@ -225,26 +202,8 @@ export async function POST(request: Request) {
     }
 
     database.projects.push(record)
-    database.datasets.push(...datasets)
     recordDashboardVersion(database, record, auth.user.id, "Created from direct upload")
-    for (const dataset of datasets) recordDatasetVersion(database, dataset, auth.user.id)
-    addActivity(database, {
-      organizationId: auth.user.organizationId,
-      type: "upload",
-      userId: auth.user.id,
-      action: "上传了新看板",
-      target: name,
-    })
-    recordAudit(database, {
-      organizationId: auth.user.organizationId,
-      actorUserId: auth.user.id,
-      action: "project.create",
-      targetType: "project",
-      targetId: record.id,
-      summary: `Created project ${name}`,
-      metadata: { datasets_count: datasets.length },
-    })
-    emitWebhooks(database, auth.user.organizationId, "project.created", { project_id: record.id, name })
+    dispatch(database, { type: "project.created", organizationId: auth.user.organizationId, actorId: auth.user.id, project: { id: record.id, name } })
 
     return record
   }).catch((error) => {

@@ -1,11 +1,10 @@
 import type { ProjectPermission, User } from "@/lib/types"
 import { authenticateRequest } from "@/lib/server/auth"
 import { canEditProject, canViewProject } from "@/lib/server/access"
-import { recordAudit } from "@/lib/server/audit"
-import { addActivity, now, readDatabase, updateDatabase } from "@/lib/server/db"
+import { now, readDatabase, updateDatabase } from "@/lib/server/db"
+import { dispatch } from "@/lib/server/dispatch"
 import { apiError, created, ok } from "@/lib/server/responses"
 import { serializeProjectMember } from "@/lib/server/serializers"
-import { emitWebhooks } from "@/lib/server/webhooks"
 
 export const runtime = "nodejs"
 
@@ -83,23 +82,7 @@ export async function POST(request: Request, context: RouteContext) {
       projectMember.permission = permission as ProjectPermission
     }
 
-    addActivity(mutable, {
-      organizationId: auth.user.organizationId,
-      type: "permission",
-      userId: auth.user.id,
-      action: "更新了项目成员",
-      target: user.name,
-    })
-    recordAudit(mutable, {
-      organizationId: auth.user.organizationId,
-      actorUserId: auth.user.id,
-      action: "permission.upsert",
-      targetType: "project_member",
-      targetId: `${projectId}:${user.id}`,
-      summary: `Updated ${user.email} access to ${permission}`,
-      metadata: { project_id: projectId, user_id: user.id, permission },
-    })
-    emitWebhooks(mutable, auth.user.organizationId, "permission.changed", { project_id: projectId, user_id: user.id, permission })
+    dispatch(mutable, { type: "permission.upserted", organizationId: auth.user.organizationId, actorId: auth.user.id, projectId, user: { id: user.id, name: user.name, email: user.email }, permission })
 
     return projectMember
   })

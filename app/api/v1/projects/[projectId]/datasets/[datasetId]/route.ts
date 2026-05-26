@@ -1,8 +1,8 @@
 import { authenticateRequest, requireRequestAuth } from "@/lib/server/auth"
 import { canEditProject, canViewProject } from "@/lib/server/access"
-import { recordAudit } from "@/lib/server/audit"
 import { inspectDataset } from "@/lib/server/datasets"
-import { addActivity, now, readDatabase, updateDatabase } from "@/lib/server/db"
+import { now, readDatabase, updateDatabase } from "@/lib/server/db"
+import { dispatch } from "@/lib/server/dispatch"
 import { rateLimitResponse } from "@/lib/server/rate-limit"
 import { requestPayloadTooLarge } from "@/lib/server/request-size"
 import { apiError, noContent, ok } from "@/lib/server/responses"
@@ -56,23 +56,8 @@ export async function PUT(request: Request, context: RouteContext) {
     record.updatedAt = now()
     const projectRecord = mutable.projects.find((candidate) => candidate.id === projectId)
     if (projectRecord) projectRecord.updatedAt = record.updatedAt
-    addActivity(mutable, {
-      organizationId: auth.user.organizationId,
-      type: "dataset",
-      userId: auth.user.id,
-      action: "更新了数据集",
-      target: record.name,
-    })
     recordDatasetVersion(mutable, record, auth.user.id)
-    recordAudit(mutable, {
-      organizationId: auth.user.organizationId,
-      actorUserId: auth.user.id,
-      action: "dataset.replace",
-      targetType: "dataset",
-      targetId: record.id,
-      summary: `Replaced dataset ${record.name}`,
-      metadata: { project_id: projectId, version: record.version },
-    })
+    dispatch(mutable, { type: "dataset.replaced", organizationId: auth.user.organizationId, actorId: auth.user.id, dataset: { id: record.id, name: record.name, projectId, version: record.version } })
     return record
   })
 
@@ -96,15 +81,7 @@ export async function DELETE(request: Request, context: RouteContext) {
     mutable.syncHistory = mutable.syncHistory.filter((history) => history.datasetId !== datasetId)
     const record = mutable.projects.find((candidate) => candidate.id === projectId)
     if (record) record.updatedAt = now()
-    recordAudit(mutable, {
-      organizationId: auth.user.organizationId,
-      actorUserId: auth.user.id,
-      action: "dataset.delete",
-      targetType: "dataset",
-      targetId: datasetId,
-      summary: `Deleted dataset ${dataset.name}`,
-      metadata: { project_id: projectId },
-    })
+    dispatch(mutable, { type: "dataset.deleted", organizationId: auth.user.organizationId, actorId: auth.user.id, dataset: { id: datasetId, name: dataset.name, projectId } })
   })
 
   await removeDatasetArtifacts(projectId, datasetId)
