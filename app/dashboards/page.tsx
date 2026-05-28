@@ -524,7 +524,7 @@ export default function DashboardsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>删除项目</AlertDialogTitle>
             <AlertDialogDescription>
-              这会删除 "{pendingDelete?.name}" 及其数据集、权限和同步历史，操作完成后不可恢复。
+              这会删除 &quot;{pendingDelete?.name}&quot; 及其数据集、权限和同步历史，操作完成后不可恢复。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -541,7 +541,7 @@ export default function DashboardsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>删除数据集</AlertDialogTitle>
             <AlertDialogDescription>
-              这会删除 "{pendingDeleteDataset?.name}" 的文件、同步历史和版本记录，看板中引用它的代码不会自动修改。
+              这会删除 &quot;{pendingDeleteDataset?.name}&quot; 的文件、同步历史和版本记录，看板中引用它的代码不会自动修改。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -751,7 +751,7 @@ function DatasetConfigDialog({
           </TabsContent>
           <TabsContent value="sync" className="space-y-4 pt-4">
             <div className="rounded-lg border bg-secondary/20 p-3 text-xs text-muted-foreground">
-              当前数据集为静态数据。数据更新已统一为"项目同步脚本 + 手动触发"，请到项目详情页的"同步脚本"中配置脚本输出并执行更新。
+              当前数据集为静态数据。数据更新已统一为&quot;项目同步脚本 + 手动触发&quot;，请到项目详情页的&quot;同步脚本&quot;中配置脚本输出并执行更新。
             </div>
             {dataset && (
               <Button variant="outline" size="sm" asChild>
