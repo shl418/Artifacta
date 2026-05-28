@@ -1,50 +1,50 @@
 # Artifacta
 
-**Still dragging widgets to build BI dashboards in the AI era?**  
-That is last-generation production: slow, rigid, hard to collaborate, and hard to turn “insights the model just produced” into something you can actually ship.
+**在 AI 时代，还在用拖拉拽拼 BI 看板？**  
+那是上一代的生产方式：慢、僵、难协作，也很难把「模型刚吐出来的洞察」直接变成可交付物。
 
-Artifacta bets on a different path: **let AI write HTML dashboards**—charts, narrative, and interaction in one pass, an order of magnitude faster than dragging controls.
+Artifacta 相信另一件事：**让 AI 直接写 HTML 看板**——图表、叙事、交互一次成型，比拖控件快一个数量级。
 
 ---
 
-But you already know what HTML dashboards look like today:
+但你也知道，HTML 看板今天长什么样：
 
-- **Local file silos**—email attachments, shared drives, screenshots pasted into slides?
-- Colleagues want to **view online**, but your machine has to stay on and paths have to line up?
-- Data frozen in CSV files with **no scheduled refresh**, and no shared team source of truth?
+- 一堆 **本地文件孤岛**，发邮件、丢网盘、截图进 PPT？
+- 同事想 **在线看**，还得你本机开着、路径还得对？
+- 数据写死在 CSV 里，**没法定时更新**，更谈不上团队统一口径？
 
-**Artifacta fills that gap:** an **open protocol and hosting platform** for AI-generated data applications.
+**Artifacta 就是来填这个洞的：** 一个面向 AI 生成数据应用的 **开放协议 + 托管平台**。
 
-Upload your HTML or ZIP dashboard bundle, set who can see it and how data should update—especially well suited for:
+上传你的 HTML / ZIP 看板包，设好谁能看、数据怎么更——特别适合：
 
-- Team **HTML weekly or monthly reports**
-- **HTML slide decks** (more alive than static PPT)
-- Lightweight **BI dashboards**, analytics pages, and ops screens
-- Anything you **build locally with AI first**, then need the team to use online
+- 团队 **HTML 周报 / 月报**
+- **HTML 版演示稿**（比静态 PPT 活）
+- 轻量 **BI 看板**、分析页、运营大屏
+- 任何「本地 AI 先做出来，再要给团队线上用」的场景
 
-Generate with a local **Skill** in Cursor or Claude Code, then pack and upload with one CLI command; the platform handles hosting, permissions, dataset binding, and sync—turning “runs on my laptop” into “the team can open it anytime, and data can stay fresh.”
+本地用 Cursor / Claude Code 等 **Skill** 生成完，一条 CLI 就能打包上传；平台负责托管、权限、数据集绑定与同步更新，把「我电脑上能跑」变成「团队随时能看、数据还能跟着变」。
 
-[中文说明](README.zh-CN.md)
+[English README](README.md)
 
-## Preview
+## 项目预览
 
-![Artifacta overview](public/demo/overview.png)
+![Artifacta 概览](public/demo/overview.png)
 
-![Hosted dashboard preview](public/demo/dashboard-preview.png)
+![托管看板预览](public/demo/dashboard-preview.png)
 
-## What's Available Today
+## 当前已经可用
 
-- Upload a single `.html` dashboard or a `.zip` bundle with CSS, JS, images, and other static assets.
-- Preview dashboards in a sandboxed iframe with private, team, or public visibility.
-- Upload CSV/JSON datasets with automatic row, column, and schema inspection.
-- Manage folders, team members, project permissions, API keys, and dataset sync configuration.
-- Use signed Cookie sessions in the web console; use Bearer API keys for coding agents, CI, and the CLI.
-- Start with local JSON storage for zero friction, or switch to SQLite for a more production-like self-hosted setup.
-- Built-in `artifacta` CLI, sync worker, and API smoke tests.
+- 上传单文件 `.html` 看板，或上传包含 CSS、JS、图片等资源的 `.zip` 看板包。
+- 通过沙箱 iframe 预览看板，支持私有、团队、公开三种可见性。
+- 上传 CSV/JSON 数据集，自动解析行数、列数和字段类型。
+- 管理文件夹、团队成员、项目权限、API Key 和数据同步配置。
+- Web 控制台使用签名 Cookie Session，coding agent、CI、CLI 使用 Bearer API Key。
+- 默认使用本地 JSON 零门槛启动，也可以切到 SQLite 获得更接近生产的自托管体验。
+- 内置 `artifacta` CLI、同步 Worker 和 API smoke test。
 
-## Quick Start
+## 快速开始
 
-Artifacta uses Node `24.16.0` and `pnpm@11.1.3`. The repo includes `packageManager`, `.node-version`, and `.nvmrc` so Corepack, `fnm`, `nvm`, and other managers can switch versions automatically.
+Artifacta 使用 Node `24.16.0` 和 `pnpm@11.1.3`。仓库已经包含 `packageManager`、`.node-version`、`.nvmrc`，方便 Corepack、`fnm`、`nvm` 等工具自动切换。
 
 ```bash
 corepack enable
@@ -53,18 +53,18 @@ cp .env.example .env.local
 pnpm dev
 ```
 
-Open `http://localhost:3000` and sign in with either demo account:
+打开 `http://localhost:3000`，使用任一演示账号登录：
 
 - `admin@artifacta.local`
 - `lisi@artifacta.local`
 
-The first request seeds a demo organization, users, folders, datasets, polished example dashboards, and local runtime data under `.artifacta`.
+第一次请求会自动初始化演示组织、用户、文件夹、数据集、精美示例看板和 `.artifacta` 本地运行数据。
 
-If you still have an older `.datavision` directory from a previous checkout, rename it to `.artifacta`, or point `DATA_DIR`, `UPLOAD_DIR`, and `SQLITE_PATH` at your existing paths until you finish migrating.
+若你仍保留旧版本的 `.datavision` 目录，可将其重命名为 `.artifacta`，或通过 `DATA_DIR`、`UPLOAD_DIR`、`SQLITE_PATH` 指向旧路径直至完成迁移。
 
-## Running With SQLite
+## 使用 SQLite 运行
 
-JSON storage is the default for a quick first run. For a more production-like self-hosted setup, switch to SQLite:
+默认 JSON 存储适合第一次体验。如果要更接近真实自托管，可以切换到 SQLite：
 
 ```bash
 DATA_DRIVER=sqlite \
@@ -72,43 +72,43 @@ SQLITE_PATH=.artifacta/artifacta.sqlite \
 pnpm dev
 ```
 
-The SQLite adapter includes idempotent migrations and reuses the same API and UI logic.
+SQLite adapter 带幂等迁移，仍然复用当前 API 和页面逻辑。
 
-## CLI Workflow
+## CLI 工作流
 
-Create an API key under `Settings -> API & CLI`, then:
+在 `系统设置 -> API & CLI` 创建 API Key 后：
 
 ```bash
 export ARTIFACTA_URL=http://localhost:3000
 export ARTIFACTA_API_KEY=art_...
 
 pnpm cli -- projects list
-pnpm cli -- projects upload --file ./dashboard.zip --name "Weekly Growth" --visibility team
+pnpm cli -- projects upload --file ./dashboard.zip --name "增长周报" --visibility team
 pnpm cli -- projects update-html --project-id proj_123 --file ./dashboard-v2.zip
-pnpm cli -- datasets upload --project-id proj_123 --file ./growth.csv --name "Weekly Growth Data"
+pnpm cli -- datasets upload --project-id proj_123 --file ./growth.csv --name "增长周报数据"
 pnpm cli -- datasets sync set --project-id proj_123 --dataset-id ds_123 --source-type presto --config-file ./sync.json
 pnpm cli -- datasets list
 pnpm cli -- doctor
 pnpm cli -- --json projects list
 ```
 
-The standalone CLI is published on npm as [`@artifacta/cli`](https://www.npmjs.com/package/@artifacta/cli). External users can install it without cloning the app:
+独立 CLI 已发布到 npm（[`@artifacta/cli`](https://www.npmjs.com/package/@artifacta/cli)），外部用户无需克隆仓库即可安装：
 
 ```bash
 npx @artifacta/cli@latest --help
 ```
 
-Or install globally:
+或全局安装：
 
 ```bash
 npm install -g @artifacta/cli
 ```
 
-The CLI can create projects, replace dashboard HTML, upload or replace datasets, and submit dataset sync configuration JSON from a local skill or CI job.
+当前 CLI 已经可以让本地 skill 或 CI 直接创建项目、替换看板 HTML、上传/替换数据集，并提交数据同步配置 JSON。
 
-For the zero-repo end-user path, see [docs/ONBOARDING.md](docs/ONBOARDING.md). For a copyable Claude Code skill template, see [templates/claude-code-artifacta-publisher/SKILL.md](templates/claude-code-artifacta-publisher/SKILL.md). Maintainers bumping a new release should follow [docs/CLI-RELEASE.md](docs/CLI-RELEASE.md).
+零仓库用户接入流程见 [docs/ONBOARDING.zh-CN.md](docs/ONBOARDING.zh-CN.md)。可复制的 Claude Code skill 模板见 [templates/claude-code-artifacta-publisher/SKILL.md](templates/claude-code-artifacta-publisher/SKILL.md)。维护者发新版本见 [docs/CLI-RELEASE.md](docs/CLI-RELEASE.md)。
 
-## REST API Example
+## REST API 示例
 
 ```bash
 SESSION=$(curl -s -X POST http://localhost:3000/api/v1/upload-sessions \
@@ -116,20 +116,25 @@ SESSION=$(curl -s -X POST http://localhost:3000/api/v1/upload-sessions \
   -F "file=@./dashboard.zip" | jq -r .session_id)
 curl -X POST http://localhost:3000/api/v1/projects \
   -H "Authorization: Bearer $ARTIFACTA_API_KEY" \
-  -F "name=Sales Dashboard" \
+  -F "name=销售看板" \
   -F "visibility=team" \
   -F "upload_session_id=$SESSION"
 ```
 
-See [docs/API.md](docs/API.md) for routes, request fields, and response shapes. The stable ZIP/bundle contract is [docs/protocol/manifest-v1.md](docs/protocol/manifest-v1.md).
+完整路由、请求参数和响应格式见 [docs/API.md](docs/API.md)。稳定的 ZIP/Bundle 协议见 [docs/protocol/manifest-v1.md](docs/protocol/manifest-v1.md)。
 
-## Examples
+## 示例
 
-`examples/WALKTHROUGH.zh-CN.md` walks through sample bundles: single HTML, flat zips, nested `3-html-csv-json/`, script sync, and COS sync. Start with `examples/0-single-html/` or `examples/1-html-json/`.
+`examples/WALKTHROUGH.zh-CN.md` 提供走通示例：单 HTML、扁平 zip、带 `data/` 子目录的多数据集包、脚本同步、COS 同步；示例目录内**不含**预置的 `artifacta.json`（脚本示例需自建）。
 
-## Sync Worker
+```bash
+cd examples/0-single-html && artifacta projects upload --file index.html --name "单文件"
+# 更多见 examples/WALKTHROUGH.zh-CN.md
+```
 
-The worker drains bundle script jobs (`POST /sync/script-jobs/claim`), then per-dataset sync jobs, and enqueues due dataset syncs from `/datasets`.
+## 数据同步 Worker
+
+Worker 会扫描开启了同步的数据集，判断是否到期，然后调用和 API 手动触发相同的同步执行器。
 
 ```bash
 export ARTIFACTA_API_KEY=art_...
@@ -137,65 +142,65 @@ pnpm worker:once
 node scripts/sync-worker.mjs --interval 60
 ```
 
-The current sync executor supports local files, uploaded artifact paths, URL fetches, and `mock_rows`. Real COS/S3 and Presto/Trino clients are intended to land as connector adapters behind the executor.
+当前同步执行器支持本地文件、上传目录文件、URL 拉取和 `mock_rows`。真实 COS/S3、Presto/Trino 客户端建议作为 connector adapter 加到同步执行器后面。
 
-## Common Scripts
+## 常用脚本
 
 ```bash
-pnpm dev          # start the development server
-pnpm build        # production build
-pnpm start        # run the production build
-pnpm typecheck    # TypeScript check
+pnpm dev          # 启动开发服务器
+pnpm build        # 生产构建
+pnpm start        # 运行生产构建
+pnpm typecheck    # TypeScript 检查
 pnpm lint         # ESLint
-pnpm test         # contract, client, security, and unit tests
-pnpm test:api-contract # route / OpenAPI consistency guard
-pnpm test:client   # @artifacta/client tests
-pnpm test:security # ZIP, sync source, and upload-session security tests
-pnpm test:unit    # sync jobs, manifest, CSV, rate limit, embed token, versions
-pnpm test:smoke   # API smoke test against a running app
-pnpm worker:once  # run one sync worker pass
+pnpm test         # 合同、客户端、安全与单元测试
+pnpm test:api-contract # 路由 / OpenAPI 一致性检查
+pnpm test:client   # @artifacta/client 测试
+pnpm test:security # ZIP、同步来源、上传会话安全测试
+pnpm test:unit    # 同步任务、manifest、CSV、限流、嵌入令牌、版本历史
+pnpm test:smoke   # 对运行中的服务做 API 冒烟测试
+pnpm worker:once  # 执行一次同步 Worker
 ```
 
-## Configuration
+## 配置项
 
-| Variable | Default | Description |
+| 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `NEXT_PUBLIC_APP_URL` | `http://localhost:3000` | Public URL used when generating preview and API links. |
-| `AUTH_SECRET` | development fallback | Session signing secret; use a strong random value in shared environments. |
-| `DATA_DRIVER` | `json` | `json`, `sqlite`, or `postgres`. |
-| `DATA_DIR` | `.artifacta` | Local metadata directory and default SQLite parent directory. |
-| `SQLITE_PATH` | `.artifacta/artifacta.sqlite` | SQLite database path when `DATA_DRIVER=sqlite`. |
-| `POSTGRES_URL` / `DATABASE_URL` | unset | Postgres connection string when `DATA_DRIVER=postgres`. |
-| `UPLOAD_DIR` | `.artifacta/uploads` | Uploaded dashboard and dataset files. |
-| `STORAGE_DRIVER` | `local` | `local` or `s3`. |
-| `S3_BUCKET`, `S3_REGION`, `S3_ENDPOINT` | unset | S3-compatible object storage settings. |
-| `ARTIFACTA_MAX_ARTIFACT_BYTES` | `104857600` | Max dashboard upload size. |
-| `ARTIFACTA_MAX_DATASET_BYTES` | `52428800` | Max dataset upload size. |
-| `OIDC_ISSUER_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | unset | Optional OIDC login configuration. |
+| `NEXT_PUBLIC_APP_URL` | `http://localhost:3000` | 生成预览链接和 API 链接时使用的公开地址。 |
+| `AUTH_SECRET` | development fallback | Session 签名密钥，共享环境必须替换为强随机值。 |
+| `DATA_DRIVER` | `json` | 可选 `json`、`sqlite` 或 `postgres`。 |
+| `DATA_DIR` | `.artifacta` | 本地元数据目录，也是默认 SQLite 父目录。 |
+| `SQLITE_PATH` | `.artifacta/artifacta.sqlite` | `DATA_DRIVER=sqlite` 时的数据库路径。 |
+| `POSTGRES_URL` / `DATABASE_URL` | 未设置 | `DATA_DRIVER=postgres` 时的 Postgres 连接串。 |
+| `UPLOAD_DIR` | `.artifacta/uploads` | 上传的看板和数据集文件目录。 |
+| `STORAGE_DRIVER` | `local` | 可选 `local` 或 `s3`。 |
+| `S3_BUCKET`, `S3_REGION`, `S3_ENDPOINT` | 未设置 | S3 兼容对象存储配置。 |
+| `ARTIFACTA_MAX_ARTIFACT_BYTES` | `104857600` | 看板文件最大上传大小。 |
+| `ARTIFACTA_MAX_DATASET_BYTES` | `52428800` | 数据集最大上传大小。 |
+| `OIDC_ISSUER_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | 未设置 | 可选 OIDC 登录配置。 |
 
-## Code Layout
+## 代码结构
 
-- `app/`: Next.js App Router pages, preview UI, and REST API routes.
-- `lib/server/`: auth, access control, database adapters, storage, serializers, dataset inspection, and sync execution.
-- `packages/cli/`: standalone publishable CLI; `bin/artifacta.mjs` is the repo-local wrapper entrypoint.
-- `scripts/sync-worker.mjs`: API-key-driven sync worker.
-- `.artifacta/`: local runtime data (not committed to Git).
+- `app/`：Next.js App Router 页面、预览页和 REST API。
+- `lib/server/`：认证、权限、数据库 adapter、文件存储、序列化、数据集解析和同步执行器。
+- `packages/cli/`：对外发布的独立 CLI 包；`bin/artifacta.mjs` 保留为仓库内包装入口。
+- `scripts/sync-worker.mjs`：基于 API Key 的同步 Worker。
+- `.artifacta/`：本地运行数据，不提交到 Git。
 
-See [docs/plans/2026-05-21-open-source-excellence-roadmap.md](docs/plans/2026-05-21-open-source-excellence-roadmap.md) for the roadmap and [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for deployment. `docs/PLAN.md` is archived historical context.
+当前路线图见 [docs/plans/2026-05-21-open-source-excellence-roadmap.md](docs/plans/2026-05-21-open-source-excellence-roadmap.md)，部署说明见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。`docs/PLAN.md` 已作为历史计划归档。
 
-## Documentation
+## 文档索引
 
-- [docs/IMPLEMENTED-FEATURES.md](docs/IMPLEMENTED-FEATURES.md): code-to-docs checklist for pages, API routes, CLI, worker, and storage boundaries.
-- [docs/DEVELOPMENT-ENVIRONMENT.md](docs/DEVELOPMENT-ENVIRONMENT.md): `fnm`, Node, and `pnpm` setup, including non-interactive shells that miss the environment.
-- [docs/API.md](docs/API.md): human-readable API guide; [docs/openapi/artifacta.v1.yaml](docs/openapi/artifacta.v1.yaml): partial OpenAPI contract for integrations.
-- [docs/PRODUCT.md](docs/PRODUCT.md): current MVP vs roadmap and enterprise extension points.
-- [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [CHANGELOG.md](CHANGELOG.md): contribution, vulnerability reporting, and release notes.
+- [docs/IMPLEMENTED-FEATURES.md](docs/IMPLEMENTED-FEATURES.md)：代码和文档同步清单，覆盖页面、API 路由、CLI、Worker、存储边界。
+- [docs/DEVELOPMENT-ENVIRONMENT.md](docs/DEVELOPMENT-ENVIRONMENT.md)：记录 `fnm`、Node、`pnpm` 的开发环境要求，以及非交互 shell 没加载到环境时的处理方式。
+- [docs/API.md](docs/API.md)：人工可读 API 文档；[docs/openapi/artifacta.v1.yaml](docs/openapi/artifacta.v1.yaml)：当前用于集成的部分 OpenAPI 契约。
+- [docs/PRODUCT.md](docs/PRODUCT.md)：区分当前 MVP 已实现能力、路线图和企业扩展点。
+- [CONTRIBUTING.md](CONTRIBUTING.md)、[SECURITY.md](SECURITY.md)、[CHANGELOG.md](CHANGELOG.md)：贡献、漏洞报告和变更记录要求。
 
-## Current Boundaries
+## 当前边界
 
-- OIDC login works when configured; SAML remains an extension point.
-- SQLite suits self-hosted trials; Postgres metadata and S3-compatible object storage are available for production hardening.
-- The worker runs local file, URL, `mock_rows`, S3/COS object, and Presto/Trino HTTP sync branches.
+- 配置后可使用 OIDC 登录；SAML 仍保留为扩展点。
+- SQLite 适合自托管试用；Postgres 元数据和 S3 兼容对象存储已经可作为生产化路径。
+- Worker 支持本地文件、URL、`mock_rows`、S3/COS 对象和 Presto/Trino HTTP 同步分支。
 
 ## License
 
