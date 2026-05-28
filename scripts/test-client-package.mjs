@@ -44,11 +44,11 @@ globalThis.fetch = async (url, init = {}) => {
 
   if (String(url).endsWith("/api/v1/projects/proj_1/datasets/ds_1/sync")) {
     return Response.json({
-      enabled: true,
-      source_type: "presto",
-      source_config: { mock_rows: [] },
+      enabled: false,
+      source_type: "manual",
+      source_config: {},
       update_mode: "full",
-      schedule: "0 8 * * *",
+      schedule: null,
     })
   }
 
@@ -80,12 +80,12 @@ assert.deepEqual(datasets, { data: [] })
 const syncConfig = await client.setSyncConfig({
   projectId: "proj_1",
   datasetId: "ds_1",
-  enabled: true,
-  sourceType: "presto",
-  sourceConfig: { mock_rows: [] },
-  schedule: "0 8 * * *",
+  enabled: false,
+  sourceType: "manual",
+  sourceConfig: {},
+  schedule: null,
 })
-assert.equal(syncConfig.source_type, "presto")
+assert.equal(syncConfig.source_type, "manual")
 
 const uploaded = await client.uploadProject({
   name: "Smoke",

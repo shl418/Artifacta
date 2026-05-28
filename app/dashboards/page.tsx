@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
@@ -24,12 +24,14 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   ChevronLeft,
   ChevronRight,
   AlertCircle,
   Eye,
   FileBarChart,
+  FileSpreadsheet,
   Folder,
   FolderInput,
   FolderPlus,
@@ -81,6 +83,39 @@ interface ProjectsPayload {
   pagination: { page: number; per_page: number; total: number; total_pages: number }
 }
 
+interface DatasetRecord {
+  id: string
+  project_id: string
+  name: string
+  description: string
+  file_name: string
+  file_type: string
+  size: number
+  rows: number | null
+  columns: number | null
+  version: number
+  updated_at: string
+}
+
+interface DatasetPreviewPayload {
+  parsed: boolean
+  message?: string
+  schema: Array<{ name: string; type: string }>
+  rows: Array<Record<string, unknown>>
+}
+
+interface DatasetVersionPayload {
+  data: Array<{
+    id: string
+    version: number
+    file_name: string
+    file_type: string
+    rows: number | null
+    columns: number | null
+    created_at: string
+  }>
+}
+
 const permissionConfig = {
   private: { label: "私有", icon: Lock, color: "text-amber-600 bg-amber-50 border-amber-200" },
   team: { label: "团队", icon: Users, color: "text-primary bg-primary/5 border-primary/20" },
@@ -97,6 +132,12 @@ export default function DashboardsPage() {
   const [newFolderName, setNewFolderName] = useState("")
   const [error, setError] = useState("")
   const [pendingDelete, setPendingDelete] = useState<ProjectSummary | null>(null)
+
+  const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(new Set())
+  const [projectDatasets, setProjectDatasets] = useState<Record<string, DatasetRecord[]>>({})
+  const [loadingDatasetIds, setLoadingDatasetIds] = useState<Set<string>>(new Set())
+  const [selectedDataset, setSelectedDataset] = useState<{ dataset: DatasetRecord; projectName: string } | null>(null)
+  const [pendingDeleteDataset, setPendingDeleteDataset] = useState<DatasetRecord | null>(null)
 
   const currentFolder = useMemo(
     () => payload?.folders.find((folder) => folder.id === currentFolderId) ?? null,
@@ -124,6 +165,24 @@ export default function DashboardsPage() {
     })
   }, [loadProjects])
 
+  const toggleProjectExpand = useCallback(async (projectId: string) => {
+    if (expandedProjectIds.has(projectId)) {
+      setExpandedProjectIds((prev) => { const s = new Set(prev); s.delete(projectId); return s })
+      return
+    }
+    setExpandedProjectIds((prev) => new Set([...prev, projectId]))
+    if (!projectDatasets[projectId]) {
+      setLoadingDatasetIds((prev) => new Set([...prev, projectId]))
+      try {
+        const response = await fetch(`/api/v1/projects/${projectId}/datasets`)
+        const data = await response.json().catch(() => null)
+        if (response.ok) setProjectDatasets((prev) => ({ ...prev, [projectId]: data.data ?? [] }))
+      } finally {
+        setLoadingDatasetIds((prev) => { const s = new Set(prev); s.delete(projectId); return s })
+      }
+    }
+  }, [expandedProjectIds, projectDatasets])
+
   const createFolder = async () => {
     if (!newFolderName.trim()) return
     const response = await fetch("/api/v1/folders", {
@@ -136,8 +195,8 @@ export default function DashboardsPage() {
       setCreateFolderOpen(false)
       await loadProjects()
     } else {
-      const payload = await response.json().catch(() => null)
-      setError(payload?.error?.message ?? "创建文件夹失败。")
+      const data = await response.json().catch(() => null)
+      setError(data?.error?.message ?? "创建文件夹失败。")
     }
   }
 
@@ -148,8 +207,8 @@ export default function DashboardsPage() {
       body: JSON.stringify({ folder_id: folderId }),
     })
     if (!response.ok) {
-      const payload = await response.json().catch(() => null)
-      setError(payload?.error?.message ?? "移动项目失败。")
+      const data = await response.json().catch(() => null)
+      setError(data?.error?.message ?? "移动项目失败。")
       return
     }
     await loadProjects()
@@ -162,8 +221,8 @@ export default function DashboardsPage() {
       body: JSON.stringify({ visibility }),
     })
     if (!response.ok) {
-      const payload = await response.json().catch(() => null)
-      setError(payload?.error?.message ?? "更新可见性失败。")
+      const data = await response.json().catch(() => null)
+      setError(data?.error?.message ?? "更新可见性失败。")
       return
     }
     await loadProjects()
@@ -174,11 +233,27 @@ export default function DashboardsPage() {
     const response = await fetch(`/api/v1/projects/${pendingDelete.id}`, { method: "DELETE" })
     setPendingDelete(null)
     if (!response.ok) {
-      const payload = await response.json().catch(() => null)
-      setError(payload?.error?.message ?? "删除项目失败。")
+      const data = await response.json().catch(() => null)
+      setError(data?.error?.message ?? "删除项目失败。")
       return
     }
     await loadProjects()
+  }
+
+  const deleteDataset = async () => {
+    if (!pendingDeleteDataset) return
+    const { id, project_id } = pendingDeleteDataset
+    const response = await fetch(`/api/v1/projects/${project_id}/datasets/${id}`, { method: "DELETE" })
+    setPendingDeleteDataset(null)
+    if (!response.ok) {
+      const data = await response.json().catch(() => null)
+      setError(data?.error?.message ?? "删除数据集失败。")
+      return
+    }
+    setProjectDatasets((prev) => ({
+      ...prev,
+      [project_id]: (prev[project_id] ?? []).filter((ds) => ds.id !== id),
+    }))
   }
 
   return (
@@ -194,10 +269,7 @@ export default function DashboardsPage() {
                   variant="ghost"
                   size="sm"
                   className={cn("h-8 px-2 text-xs", currentFolderId === null && "font-medium text-primary")}
-                  onClick={() => {
-                    setCurrentFolderId(null)
-                    setCurrentPage(1)
-                  }}
+                  onClick={() => { setCurrentFolderId(null); setCurrentPage(1) }}
                 >
                   <Home className="h-3.5 w-3.5" />
                   全部
@@ -214,10 +286,7 @@ export default function DashboardsPage() {
                   <Input
                     placeholder="搜索看板..."
                     value={searchQuery}
-                    onChange={(event) => {
-                      setSearchQuery(event.target.value)
-                      setCurrentPage(1)
-                    }}
+                    onChange={(event) => { setSearchQuery(event.target.value); setCurrentPage(1) }}
                     className="h-8 pl-8 text-sm"
                   />
                   {searchQuery && (
@@ -227,13 +296,7 @@ export default function DashboardsPage() {
                   )}
                 </div>
 
-                <Select
-                  value={visibilityFilter}
-                  onValueChange={(value) => {
-                    setVisibilityFilter(value as "all" | Visibility)
-                    setCurrentPage(1)
-                  }}
-                >
+                <Select value={visibilityFilter} onValueChange={(value) => { setVisibilityFilter(value as "all" | Visibility); setCurrentPage(1) }}>
                   <SelectTrigger className="w-28 h-8 text-xs">
                     <SelectValue />
                   </SelectTrigger>
@@ -268,125 +331,155 @@ export default function DashboardsPage() {
 
             <div className="rounded-lg border border-border bg-card">
               <div className="overflow-x-auto">
-              <Table className="min-w-[720px]">
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="w-[40%]">名称</TableHead>
-                    <TableHead>权限</TableHead>
-                    <TableHead>创建者</TableHead>
-                    <TableHead>更新时间</TableHead>
-                    <TableHead className="text-right">浏览</TableHead>
-                    <TableHead className="w-10" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {currentFolderId === null && (payload?.folders ?? []).map((folder) => (
-                    <TableRow key={folder.id} className="cursor-pointer hover:bg-secondary/50" onClick={() => setCurrentFolderId(folder.id)}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
-                            <Folder className="h-4 w-4 text-amber-600" />
-                          </div>
-                          <div>
-                            <div className="font-medium text-sm">{folder.name}</div>
-                            <div className="text-xs text-muted-foreground">{folder.project_count} 个看板</div>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell colSpan={5} className="text-xs text-muted-foreground">文件夹</TableCell>
+                <Table className="min-w-[720px]">
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="w-[38%]">名称</TableHead>
+                      <TableHead>权限</TableHead>
+                      <TableHead>创建者</TableHead>
+                      <TableHead>更新时间</TableHead>
+                      <TableHead className="text-right">浏览</TableHead>
+                      <TableHead className="w-10" />
                     </TableRow>
-                  ))}
-
-                  {(payload?.data ?? []).map((project) => {
-                    const PermIcon = permissionConfig[project.visibility].icon
-                    return (
-                      <TableRow key={project.id} className="hover:bg-secondary/50 group">
+                  </TableHeader>
+                  <TableBody>
+                    {currentFolderId === null && (payload?.folders ?? []).map((folder) => (
+                      <TableRow key={folder.id} className="cursor-pointer hover:bg-secondary/50" onClick={() => setCurrentFolderId(folder.id)}>
                         <TableCell>
-                          <Link href={`/view/${project.id}`} className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                              <FileBarChart className="h-4 w-4 text-primary" />
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
+                              <Folder className="h-4 w-4 text-amber-600" />
                             </div>
-                            <div className="min-w-0">
-                              <div className="font-medium text-foreground truncate text-sm">{project.name}</div>
-                              <div className="text-xs text-muted-foreground truncate">{project.description}</div>
+                            <div>
+                              <div className="font-medium text-sm">{folder.name}</div>
+                              <div className="text-xs text-muted-foreground">{folder.project_count} 个看板</div>
                             </div>
-                          </Link>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={cn("gap-1 font-normal text-xs", permissionConfig[project.visibility].color)}>
-                            <PermIcon className="h-3 w-3" />
-                            {permissionConfig[project.visibility].label}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Avatar className="h-5 w-5">
-                              <AvatarFallback className="text-[10px] bg-primary/10 text-primary">{project.owner?.initials ?? "U"}</AvatarFallback>
-                            </Avatar>
-                            <span className="text-xs text-muted-foreground">{project.owner?.name ?? "Unknown"}</span>
                           </div>
                         </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{formatDate(project.updated_at)}</TableCell>
-                        <TableCell className="text-right text-xs text-muted-foreground">
-                          <span className="inline-flex items-center gap-1"><Eye className="h-3 w-3" />{project.views_count}</span>
-                        </TableCell>
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-7 w-7">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuSub>
-                                <DropdownMenuSubTrigger>
-                                  <FolderInput className="h-4 w-4 mr-2" />
-                                  移动到
-                                </DropdownMenuSubTrigger>
-                                <DropdownMenuSubContent>
-                                  <DropdownMenuItem onClick={() => moveProject(project.id, null)}>
-                                    <Home className="h-4 w-4 mr-2" />
-                                    根目录
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  {(payload?.folders ?? []).map((folder) => (
-                                    <DropdownMenuItem key={folder.id} onClick={() => moveProject(project.id, folder.id)}>
-                                      <Folder className="h-4 w-4 mr-2" />
-                                      {folder.name}
-                                    </DropdownMenuItem>
-                                  ))}
-                                </DropdownMenuSubContent>
-                              </DropdownMenuSub>
-                              <DropdownMenuItem asChild>
-                                <Link href={`/projects/${project.id}`}>
-                                  <Settings2 className="h-4 w-4 mr-2" />
-                                  管理项目
-                                </Link>
-                              </DropdownMenuItem>
-                              <DropdownMenuSub>
-                                <DropdownMenuSubTrigger>
-                                  <Settings2 className="h-4 w-4 mr-2" />
-                                  可见性
-                                </DropdownMenuSubTrigger>
-                                <DropdownMenuSubContent>
-                                  <DropdownMenuItem onClick={() => updateVisibility(project.id, "private")}>私有</DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => updateVisibility(project.id, "team")}>团队</DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => updateVisibility(project.id, "public")}>公开</DropdownMenuItem>
-                                </DropdownMenuSubContent>
-                              </DropdownMenuSub>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem className="text-destructive" onClick={() => setPendingDelete(project)}>
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                删除
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
+                        <TableCell colSpan={5} className="text-xs text-muted-foreground">文件夹</TableCell>
                       </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
+                    ))}
+
+                    {(payload?.data ?? []).map((project) => {
+                      const PermIcon = permissionConfig[project.visibility].icon
+                      const isExpanded = expandedProjectIds.has(project.id)
+                      const isLoadingDs = loadingDatasetIds.has(project.id)
+                      const datasets = projectDatasets[project.id]
+                      return (
+                        <React.Fragment key={project.id}>
+                          <TableRow className="hover:bg-secondary/50 group">
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 shrink-0 text-muted-foreground"
+                                  onClick={() => toggleProjectExpand(project.id)}
+                                >
+                                  <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", isExpanded && "rotate-90")} />
+                                </Button>
+                                <Link href={`/view/${project.id}`} className="flex items-center gap-2 min-w-0">
+                                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                                    <FileBarChart className="h-4 w-4 text-primary" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="font-medium text-foreground truncate text-sm">{project.name}</div>
+                                    <div className="text-xs text-muted-foreground truncate">{project.description}</div>
+                                  </div>
+                                </Link>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className={cn("gap-1 font-normal text-xs", permissionConfig[project.visibility].color)}>
+                                <PermIcon className="h-3 w-3" />
+                                {permissionConfig[project.visibility].label}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Avatar className="h-5 w-5">
+                                  <AvatarFallback className="text-[10px] bg-primary/10 text-primary">{project.owner?.initials ?? "U"}</AvatarFallback>
+                                </Avatar>
+                                <span className="text-xs text-muted-foreground">{project.owner?.name ?? "Unknown"}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{formatDate(project.updated_at)}</TableCell>
+                            <TableCell className="text-right text-xs text-muted-foreground">
+                              <span className="inline-flex items-center gap-1"><Eye className="h-3 w-3" />{project.views_count}</span>
+                            </TableCell>
+                            <TableCell>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuSub>
+                                    <DropdownMenuSubTrigger>
+                                      <FolderInput className="h-4 w-4 mr-2" />
+                                      移动到
+                                    </DropdownMenuSubTrigger>
+                                    <DropdownMenuSubContent>
+                                      <DropdownMenuItem onClick={() => moveProject(project.id, null)}>
+                                        <Home className="h-4 w-4 mr-2" />
+                                        根目录
+                                      </DropdownMenuItem>
+                                      <DropdownMenuSeparator />
+                                      {(payload?.folders ?? []).map((folder) => (
+                                        <DropdownMenuItem key={folder.id} onClick={() => moveProject(project.id, folder.id)}>
+                                          <Folder className="h-4 w-4 mr-2" />
+                                          {folder.name}
+                                        </DropdownMenuItem>
+                                      ))}
+                                    </DropdownMenuSubContent>
+                                  </DropdownMenuSub>
+                                  <DropdownMenuItem asChild>
+                                    <Link href={`/projects/${project.id}`}>
+                                      <Settings2 className="h-4 w-4 mr-2" />
+                                      管理项目
+                                    </Link>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSub>
+                                    <DropdownMenuSubTrigger>
+                                      <Settings2 className="h-4 w-4 mr-2" />
+                                      可见性
+                                    </DropdownMenuSubTrigger>
+                                    <DropdownMenuSubContent>
+                                      <DropdownMenuItem onClick={() => updateVisibility(project.id, "private")}>私有</DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => updateVisibility(project.id, "team")}>团队</DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => updateVisibility(project.id, "public")}>公开</DropdownMenuItem>
+                                    </DropdownMenuSubContent>
+                                  </DropdownMenuSub>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem className="text-destructive" onClick={() => setPendingDelete(project)}>
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    删除
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+
+                          {isExpanded && (
+                            <TableRow key={`${project.id}-datasets`} className="hover:bg-transparent">
+                              <TableCell colSpan={6} className="p-0 border-t-0">
+                                <ProjectDatasetsPanel
+                                  projectId={project.id}
+                                  projectName={project.name}
+                                  datasets={datasets}
+                                  isLoading={isLoadingDs}
+                                  onConfigure={(dataset) => setSelectedDataset({ dataset, projectName: project.name })}
+                                  onDelete={(dataset) => setPendingDeleteDataset(dataset)}
+                                />
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </React.Fragment>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
               </div>
 
               {!error && payload && payload.data.length === 0 && currentFolderId === null && payload.folders.length === 0 && (
@@ -419,6 +512,47 @@ export default function DashboardsPage() {
         </main>
       </div>
 
+      <DatasetConfigDialog
+        dataset={selectedDataset?.dataset ?? null}
+        projectName={selectedDataset?.projectName ?? ""}
+        open={!!selectedDataset}
+        onOpenChange={(open) => !open && setSelectedDataset(null)}
+      />
+
+      <AlertDialog open={!!pendingDelete} onOpenChange={(open) => !open && setPendingDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>删除项目</AlertDialogTitle>
+            <AlertDialogDescription>
+              这会删除 "{pendingDelete?.name}" 及其数据集、权限和同步历史，操作完成后不可恢复。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={deleteProject}>
+              删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!pendingDeleteDataset} onOpenChange={(open) => !open && setPendingDeleteDataset(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>删除数据集</AlertDialogTitle>
+            <AlertDialogDescription>
+              这会删除 "{pendingDeleteDataset?.name}" 的文件、同步历史和版本记录，看板中引用它的代码不会自动修改。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={deleteDataset}>
+              删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <Dialog open={createFolderOpen} onOpenChange={setCreateFolderOpen}>
         <DialogContent className="bg-card border-border max-w-sm">
           <DialogHeader>
@@ -437,27 +571,205 @@ export default function DashboardsPage() {
           </div>
         </DialogContent>
       </Dialog>
-
-      <AlertDialog open={!!pendingDelete} onOpenChange={(open) => !open && setPendingDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>删除项目</AlertDialogTitle>
-            <AlertDialogDescription>
-              这会删除 “{pendingDelete?.name}” 及其数据集、权限和同步历史，操作完成后不可恢复。
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={deleteProject}>
-              删除
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
+  )
+}
+
+function ProjectDatasetsPanel({
+  projectId,
+  projectName,
+  datasets,
+  isLoading,
+  onConfigure,
+  onDelete,
+}: {
+  projectId: string
+  projectName: string
+  datasets: DatasetRecord[] | undefined
+  isLoading: boolean
+  onConfigure: (dataset: DatasetRecord) => void
+  onDelete: (dataset: DatasetRecord) => void
+}) {
+  void projectId
+  void projectName
+  if (isLoading || datasets === undefined) {
+    return (
+      <div className="px-12 py-3 bg-secondary/20 text-xs text-muted-foreground">
+        加载数据集中…
+      </div>
+    )
+  }
+  if (datasets.length === 0) {
+    return (
+      <div className="px-12 py-3 bg-secondary/20 text-xs text-muted-foreground">
+        该看板暂无数据集。
+      </div>
+    )
+  }
+  return (
+    <div className="bg-secondary/10 border-t border-border/50">
+      <div className="px-4 py-2 flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
+        <FileSpreadsheet className="h-3.5 w-3.5" />
+        数据集 ({datasets.length})
+      </div>
+      <div className="pb-2 space-y-px">
+        {datasets.map((dataset) => (
+          <div key={dataset.id} className="mx-4 flex items-center gap-3 px-3 py-2 rounded-md hover:bg-secondary/50 transition-colors">
+            <FileSpreadsheet className="h-4 w-4 text-emerald-500 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium truncate">{dataset.name}</span>
+                <Badge variant="outline" className="text-xs shrink-0">{dataset.file_type}</Badge>
+                <span className="text-xs text-muted-foreground shrink-0">{formatSize(dataset.size)}</span>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {dataset.rows ?? "?"} 行 · {dataset.columns ?? "?"} 列 · v{dataset.version} · {formatDate(dataset.updated_at)}
+              </div>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onConfigure(dataset)}>
+                <Settings2 className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => onDelete(dataset)}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function DatasetConfigDialog({
+  dataset,
+  projectName,
+  open,
+  onOpenChange,
+}: {
+  dataset: DatasetRecord | null
+  projectName: string
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const [dialogError, setDialogError] = useState("")
+  const [preview, setPreview] = useState<DatasetPreviewPayload | null>(null)
+  const [versions, setVersions] = useState<DatasetVersionPayload["data"]>([])
+  const [syncHistory, setSyncHistory] = useState<Array<{
+    sync_id: string
+    status: string
+    started_at: string
+    completed_at: string | null
+    rows_synced: number
+    error: string | null
+  }>>([])
+
+  useEffect(() => {
+    if (!dataset) return
+    setDialogError("")
+    setPreview(null)
+    setVersions([])
+    setSyncHistory([])
+    Promise.all([
+      fetch(`/api/v1/projects/${dataset.project_id}/datasets/${dataset.id}/preview`).then((r) => r.json()),
+      fetch(`/api/v1/projects/${dataset.project_id}/datasets/${dataset.id}/versions`).then((r) => r.json()),
+      fetch(`/api/v1/projects/${dataset.project_id}/datasets/${dataset.id}/sync/history?per_page=10`).then((r) => r.json()),
+    ])
+      .then(([previewPayload, versionPayload, historyPayload]) => {
+        if (previewPayload?.error) setDialogError(previewPayload.error.message)
+        else setPreview(previewPayload)
+        if (versionPayload?.data) setVersions(versionPayload.data)
+        setSyncHistory(historyPayload?.data ?? [])
+      })
+      .catch(() => setDialogError("无法加载数据集详情。"))
+  }, [dataset])
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>{dataset?.name ?? "数据集详情"}</DialogTitle>
+          {projectName && <DialogDescription>所属看板：{projectName}</DialogDescription>}
+        </DialogHeader>
+        {dialogError && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>加载失败</AlertTitle>
+            <AlertDescription>{dialogError}</AlertDescription>
+          </Alert>
+        )}
+        <Tabs defaultValue="preview" className="py-4">
+          <TabsList className="flex-wrap h-auto">
+            <TabsTrigger value="preview">预览</TabsTrigger>
+            <TabsTrigger value="history">版本</TabsTrigger>
+            <TabsTrigger value="runs">同步记录</TabsTrigger>
+            <TabsTrigger value="sync">数据更新</TabsTrigger>
+          </TabsList>
+          <TabsContent value="preview" className="pt-4">
+            {preview?.parsed === false && <p className="text-sm text-muted-foreground">{preview.message}</p>}
+            {preview?.schema?.length ? (
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  {preview.schema.map((col) => (
+                    <Badge key={col.name} variant="outline">{col.name}: {col.type}</Badge>
+                  ))}
+                </div>
+                <div className="max-h-64 overflow-auto rounded-lg border">
+                  <pre className="p-3 text-xs">{JSON.stringify(preview.rows, null, 2)}</pre>
+                </div>
+              </div>
+            ) : (
+              !dialogError && <p className="text-sm text-muted-foreground">暂无可结构化预览的字段。</p>
+            )}
+          </TabsContent>
+          <TabsContent value="history" className="pt-4">
+            <div className="space-y-2">
+              {versions.length === 0 && <p className="text-sm text-muted-foreground">暂无版本记录。</p>}
+              {versions.map((version) => (
+                <div key={version.id} className="flex items-center justify-between rounded-lg border p-3 text-sm">
+                  <div>
+                    <p className="font-medium">v{version.version} · {version.file_name}</p>
+                    <p className="text-xs text-muted-foreground">{version.rows ?? "?"} 行 · {version.columns ?? "?"} 列 · {version.file_type}</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{new Date(version.created_at).toLocaleString("zh-CN")}</p>
+                </div>
+              ))}
+            </div>
+          </TabsContent>
+          <TabsContent value="runs" className="pt-4 space-y-2">
+            {syncHistory.length === 0 && <p className="text-sm text-muted-foreground">还没有同步运行记录。</p>}
+            {syncHistory.map((run) => (
+              <div key={run.sync_id} className="rounded-lg border p-3 text-sm space-y-1">
+                <div className="flex items-center justify-between">
+                  <Badge variant={run.status === "success" ? "secondary" : run.status === "failed" ? "destructive" : "outline"}>{run.status}</Badge>
+                  <span className="text-xs text-muted-foreground">{new Date(run.started_at).toLocaleString("zh-CN")}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">同步 {run.rows_synced} 行</p>
+                {run.error && <p className="text-xs text-destructive">{run.error}</p>}
+              </div>
+            ))}
+          </TabsContent>
+          <TabsContent value="sync" className="space-y-4 pt-4">
+            <div className="rounded-lg border bg-secondary/20 p-3 text-xs text-muted-foreground">
+              当前数据集为静态数据。数据更新已统一为"项目同步脚本 + 手动触发"，请到项目详情页的"同步脚本"中配置脚本输出并执行更新。
+            </div>
+            {dataset && (
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/projects/${dataset.project_id}`}>前往项目管理页 →</Link>
+              </Button>
+            )}
+          </TabsContent>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
   )
 }
 
 function formatDate(value: string) {
   return new Date(value).toLocaleString("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+}
+
+function formatSize(size: number) {
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+  return `${(size / 1024 / 1024).toFixed(1)} MB`
 }

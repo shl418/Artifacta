@@ -43,31 +43,13 @@ async function runLoop(options, intervalSeconds) {
 }
 
 async function runOnce(options) {
-  let claimed = options["dry-run"] ? 0 : await drainScriptJobs()
-  claimed += options["dry-run"] ? 0 : await drainQueuedJobs()
-  const payload = await request("/datasets")
-  const datasets = payload.data.filter((dataset) => dataset.sync_config.enabled)
-  const dueDatasets = datasets.filter((dataset) => options.all || isDue(dataset))
-
-  if (dueDatasets.length === 0 && claimed === 0) {
-    console.log("No datasets due for sync.")
+  if (options["dry-run"]) {
+    console.log("DRY RUN no-op: worker only claims queued script jobs.")
+    return
   }
 
-  for (const dataset of dueDatasets) {
-    const label = `${dataset.project.name}/${dataset.name}`
-    if (options["dry-run"]) {
-      console.log(`DRY RUN enqueue ${label}`)
-      continue
-    }
-
-    const result = await request(`/projects/${dataset.project_id}/datasets/${dataset.id}/sync/trigger`, { method: "POST" })
-    console.log(`ENQUEUED ${label} -> ${result.status} job_id=${result.job_id}`)
-  }
-
-  if (!options["dry-run"]) {
-    claimed += await drainScriptJobs()
-    claimed += await drainQueuedJobs()
-  }
+  const claimed = await drainScriptJobs()
+  if (claimed === 0) console.log("No queued script jobs.")
 }
 
 async function drainScriptJobs() {
@@ -89,41 +71,6 @@ async function drainScriptJobs() {
   }
 
   return claimed
-}
-
-async function drainQueuedJobs() {
-  let claimed = 0
-
-  try {
-    for (let index = 0; index < 100; index += 1) {
-      const result = await request("/sync/jobs/claim", { method: "POST" })
-      if (!result.job) break
-
-      claimed += 1
-      const job = result.job
-      console.log(
-        `CLAIMED ${job.project_id}/${job.dataset_id} -> ${job.status} rows=${job.rows_synced} error=${job.error ?? ""}`
-      )
-    }
-  } catch (error) {
-    console.error(`Claim failed: ${error instanceof Error ? error.message : error}`)
-  }
-
-  return claimed
-}
-
-function isDue(dataset) {
-  const nextSyncAt = dataset.sync_config.next_sync_at
-  if (nextSyncAt && Date.parse(nextSyncAt) <= Date.now()) return true
-
-  const lastSyncAt = dataset.sync_config.last_sync_at
-  if (!lastSyncAt) return true
-
-  const lastTime = Date.parse(lastSyncAt)
-  if (!Number.isFinite(lastTime)) return true
-
-  const hoursSinceLastSync = (Date.now() - lastTime) / 1000 / 60 / 60
-  return hoursSinceLastSync >= 24
 }
 
 async function request(route, init = {}) {

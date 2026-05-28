@@ -4,7 +4,7 @@ export interface ArtifactaClientOptions {
 }
 
 export type ArtifactaProjectVisibility = "private" | "team" | "public"
-export type ArtifactaSourceType = "manual" | "cos" | "presto"
+export type ArtifactaSourceType = "manual"
 export type ArtifactaUpdateMode = "full" | "incremental"
 
 export interface ArtifactaProject {

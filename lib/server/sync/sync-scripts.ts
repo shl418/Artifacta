@@ -1,7 +1,6 @@
 import type { ArtifactManifest } from "@/lib/server/artifacts/manifest"
 import type { Database, ProjectSyncScript } from "@/lib/types"
 import { now } from "@/lib/server/db"
-import { computeNextCronRun } from "@/lib/server/sync/cron"
 
 export function listProjectSyncScripts(database: Database, projectId: string) {
   return (database.projectSyncScripts ?? []).filter((script) => script.projectId === projectId)
@@ -25,9 +24,6 @@ export function upsertProjectSyncScriptsFromManifest(
   for (const manifestScript of manifestScripts) {
     seenManifestIds.add(manifestScript.id)
     const current = existing.find((script) => script.manifestId === manifestScript.id)
-    const schedule = manifestScript.schedule ?? null
-    const nextRunAt = schedule ? computeNextCronRun(schedule) : null
-
     if (current) {
       current.scriptPath = manifestScript.path
       current.runtime = manifestScript.runtime
@@ -42,12 +38,12 @@ export function upsertProjectSyncScriptsFromManifest(
       scriptPath: manifestScript.path,
       runtime: manifestScript.runtime,
       outputs: [...manifestScript.outputs],
-      schedule,
+      schedule: null,
       enabled: true,
       sourceConfig: {},
       lastRunAt: null,
       lastRunStatus: null,
-      nextRunAt,
+      nextRunAt: null,
       createdAt: timestamp,
       updatedAt: timestamp,
     })
@@ -61,15 +57,13 @@ export function upsertProjectSyncScriptsFromManifest(
 export function updateProjectSyncScript(
   database: Database,
   script: ProjectSyncScript,
-  patch: Partial<Pick<ProjectSyncScript, "enabled" | "schedule" | "outputs" | "sourceConfig">>
+  patch: Partial<Pick<ProjectSyncScript, "enabled" | "outputs" | "sourceConfig">>
 ) {
   if (typeof patch.enabled === "boolean") script.enabled = patch.enabled
   if (patch.outputs) script.outputs = [...patch.outputs]
   if (patch.sourceConfig) script.sourceConfig = { ...patch.sourceConfig }
-  if ("schedule" in patch) {
-    script.schedule = patch.schedule ?? null
-    script.nextRunAt = script.schedule ? computeNextCronRun(script.schedule) : null
-  }
+  script.schedule = null
+  script.nextRunAt = null
   script.updatedAt = now()
   return script
 }

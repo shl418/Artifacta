@@ -229,3 +229,55 @@ function injectBaseHref(html: string, baseHref: string) {
   return `${base}${html}`
 }
 
+/**
+ * Injects a small inline script that patches window.fetch so every relative
+ * or same-origin request automatically carries `?embed_token=<token>`.
+ *
+ * This is necessary because the HTML is served inside a sandboxed iframe
+ * (no allow-same-origin), giving the document a null/opaque origin.  Default
+ * fetch behaviour does NOT send credentials for cross-origin requests, so the
+ * asset route would see an unauthenticated request and return 403.  The embed
+ * token in the query string lets the asset route authenticate without cookies.
+ *
+ * The patch is injected right after the <base> tag (which readDashboardHtml
+ * always injects first) so it runs before any user script.
+ */
+export function injectEmbedFetchPatch(html: string, embedToken: string): string {
+  const script = buildFetchPatchScript(embedToken)
+
+  // Prefer injecting immediately after the <base> tag so the patch runs as
+  // early as possible with the correct baseURI already set.
+  if (/<base\s[^>]*>/i.test(html)) {
+    return html.replace(/(<base\s[^>]*>)/i, `$1${script}`)
+  }
+
+  // Fallback: start of <head>
+  if (/<head[^>]*>/i.test(html)) {
+    return html.replace(/<head([^>]*)>/i, `<head$1>${script}`)
+  }
+
+  return `${script}${html}`
+}
+
+function buildFetchPatchScript(token: string): string {
+  // JSON.stringify safely quotes the token string (base64url chars only, no escaping needed).
+  const t = JSON.stringify(token)
+  return (
+    `<script>(function(){` +
+    `try{` +
+    `var t=${t},` +
+    `o=new URL(document.baseURI).origin,` +
+    `f=window.fetch;` +
+    `window.fetch=function(r,i){` +
+    `try{` +
+    `var u=new URL(typeof r==="string"?r:r instanceof Request?r.url:String(r),document.baseURI);` +
+    `if(u.origin===o){u.searchParams.set("embed_token",t);` +
+    `r=typeof r==="string"?u.href:new Request(u.href,r);}` +
+    `}catch(e){}` +
+    `return f.call(this,r,i);` +
+    `};` +
+    `}catch(e){}` +
+    `})();</script>`
+  )
+}
+

@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 /**
- * Tests for source-adapters.ts that don't require network or S3 access.
- * Covers: loadFromMockRows, loadFromLocalPath, loadFromUploadPath (via temp files),
- * and the loadDatasetSource dispatch table (mock_rows path).
+ * Tests for source-adapters.ts that don't require network access.
+ * Covers: loadFromMockRows, loadFromLocalPath, loadFromUploadPath (via temp files).
  */
 import assert from "node:assert/strict"
 import { mkdir, rm, writeFile } from "node:fs/promises"
@@ -77,18 +76,6 @@ try {
     assert.equal(await adapters.loadFromUploadPath({}), null)
   }
 
-  // loadFromPresto — returns null when config is incomplete (no endpoint)
-  {
-    const result = await adapters.loadFromPresto({ query: "SELECT 1" })
-    assert.equal(result, null)
-  }
-
-  // loadFromObjectStorage — returns null when config is incomplete (no bucket)
-  {
-    const result = await adapters.loadFromObjectStorage({ key: "my-file.csv" })
-    assert.equal(result, null)
-  }
-
   // loadFromUrl — returns null when no url key
   {
     const result = await adapters.loadFromUrl({})
@@ -106,18 +93,8 @@ async function loadModule() {
 
   await mkdir(tempDir, { recursive: true })
 
-  // Stub out the problematic imports so the module loads without real infra
+  // Stub out imports so the module loads without real infra
   const stubbed = source
-    // Replace S3Client import with a stub
-    .replace(
-      /import \{ GetObjectCommand, S3Client \} from "@aws-sdk\/client-s3"/,
-      "// stubbed S3Client"
-    )
-    // Replace config import with stubs
-    .replace(
-      /import \{[^}]+\} from "@\/lib\/server\/config"/,
-      "const s3AccessKeyId = null, s3Endpoint = null, s3ForcePathStyle = false, s3Region = 'us-east-1', s3SecretAccessKey = null"
-    )
     // Replace source-policy import with stubs that do basic passthrough
     .replace(
       /import \{ assertAllowedLocalPath, assertAllowedSyncUrl, assertAllowedUploadPath \} from "@\/lib\/server\/sync\/source-policy"/,
@@ -129,11 +106,6 @@ const assertAllowedUploadPath = (p) => p
     )
     // Replace Dataset type import
     .replace(/import type \{ Dataset \} from "@\/lib\/types"/, "")
-    // Stub S3Client usage (the constructor call)
-    .replace(
-      /const client = new S3Client\(\{[\s\S]*?\}\)/m,
-      "throw new Error('S3Client not available in test')"
-    )
 
   const result = ts.transpileModule(stubbed, {
     compilerOptions: {

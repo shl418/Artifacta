@@ -8,7 +8,6 @@ import { cn } from "@/lib/utils"
 import {
   LayoutDashboard,
   FileBarChart,
-  Database,
   Upload,
   Settings,
   ChevronDown,
@@ -33,7 +32,6 @@ const mainNavigation = [
   { name: "概览", href: "/", icon: LayoutDashboard },
   { name: "BI 看板", href: "/dashboards", icon: FileBarChart },
   { name: "创建项目", href: "/upload", icon: Upload },
-  { name: "数据集", href: "/datasets", icon: Database },
 ]
 
 const baseSettingsNavigation = [

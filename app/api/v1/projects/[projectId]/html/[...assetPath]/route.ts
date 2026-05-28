@@ -36,6 +36,11 @@ export async function GET(request: Request, context: RouteContext) {
     headers: {
       "Content-Type": asset.contentType,
       "Cache-Control": cacheControlForVisibility(project.visibility),
+      // Required so the sandboxed iframe (null/opaque origin) can read the
+      // response.  The iframe has no allow-same-origin, so every fetch from
+      // it is cross-origin from the browser's perspective.  Auth is handled
+      // by the embed_token query param injected by injectEmbedFetchPatch.
+      "Access-Control-Allow-Origin": "*",
     },
   })
 }

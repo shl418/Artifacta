@@ -59,7 +59,6 @@ export async function PUT(request: Request, context: RouteContext) {
     if (!record) throw new Error("SCRIPT_NOT_FOUND")
     const patch: Parameters<typeof updateProjectSyncScript>[2] = {}
     if (body && "enabled" in body) patch.enabled = Boolean(body.enabled)
-    if (body && "schedule" in body) patch.schedule = body.schedule ? String(body.schedule) : null
     if (outputs) patch.outputs = outputs
     const sourceConfig = (body?.source_config ?? body?.sourceConfig) as Record<string, unknown> | undefined
     if (sourceConfig) patch.sourceConfig = sourceConfig

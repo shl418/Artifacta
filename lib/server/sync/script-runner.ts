@@ -8,7 +8,6 @@ import { readStorageObject } from "@/lib/server/object-storage"
 import { absoluteUploadPath } from "@/lib/server/config"
 import { recordDatasetVersion } from "@/lib/server/versions"
 import { findProjectSyncScript } from "@/lib/server/sync/sync-scripts"
-import { computeNextCronRun } from "@/lib/server/sync/cron"
 
 const SCRIPT_TIMEOUT_MS = Number(process.env.ARTIFACTA_SCRIPT_TIMEOUT_MS ?? 300_000)
 const SCRIPT_RSS_LIMIT_BYTES = Number(process.env.ARTIFACTA_SCRIPT_RSS_LIMIT_MB ?? 512) * 1024 * 1024
@@ -95,7 +94,8 @@ export async function runScriptSync(database: Database, input: RunScriptSyncInpu
   const completedAt = now()
   script.lastRunAt = completedAt
   script.lastRunStatus = status
-  script.nextRunAt = script.schedule ? computeNextCronRun(script.schedule, new Date(Date.parse(completedAt))) : null
+  script.schedule = null
+  script.nextRunAt = null
   script.updatedAt = completedAt
 
   const history: ScriptSyncHistory = {

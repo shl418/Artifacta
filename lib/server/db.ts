@@ -186,13 +186,13 @@ function seedDatabase(): Database {
         version: 1,
         origin: "upload",
         syncConfig: {
-          enabled: true,
-          sourceType: "presto",
-          sourceConfig: { query: "SELECT step, users FROM growth_funnel_daily" },
+          enabled: false,
+          sourceType: "manual",
+          sourceConfig: {},
           updateMode: "full",
-          schedule: "0 8 * * *",
-          lastSyncAt: createdAt,
-          lastSyncStatus: "success",
+          schedule: null,
+          lastSyncAt: undefined,
+          lastSyncStatus: undefined,
         },
         createdAt,
         updatedAt: createdAt,
@@ -634,6 +634,13 @@ function normalizeDatabase(database: Database) {
   database.auditLogs ??= []
   for (const dataset of database.datasets) {
     dataset.origin ??= "upload"
+    const st = dataset.syncConfig?.sourceType as string | undefined
+    if (st === "cos" || st === "presto") {
+      dataset.syncConfig.sourceType = "manual"
+      dataset.syncConfig.enabled = false
+      dataset.syncConfig.sourceConfig = {}
+      dataset.syncConfig.schedule = null
+    }
   }
   return database
 }

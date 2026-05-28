@@ -25,32 +25,14 @@ try {
   assert(renderedCss.includes("background"), "ZIP asset route should serve CSS.")
 
   const dataset = project.datasets[0]
-  await jsonRequest(`/projects/${project.id}/datasets/${dataset.id}/sync`, {
-    method: "PUT",
-    body: JSON.stringify({
-      enabled: true,
-      source_type: "presto",
-      update_mode: "full",
-      schedule: "0 8 * * *",
-      source_config: {
-        mock_rows: [
-          { stage: "visit", users: 10 },
-          { stage: "paid", users: 3 },
-        ],
-      },
-    }),
-    headers: { "Content-Type": "application/json" },
-  })
+  const syncConfig = await jsonRequest(`/projects/${project.id}/datasets/${dataset.id}/sync`)
+  assert(syncConfig.source_type === "manual", "Dataset sync config source type should be manual.")
 
-  const sync = await jsonRequestWithStatus(`/projects/${project.id}/datasets/${dataset.id}/sync/trigger`, { method: "POST" })
-  assert(sync.status === 202, "Sync trigger should enqueue a job.")
-  assert(sync.payload.job_id, "Sync trigger should return a job_id.")
-  assert(sync.payload.status === "queued", "Sync trigger should return queued status.")
+  const syncTrigger = await jsonRequestWithStatus(`/projects/${project.id}/datasets/${dataset.id}/sync/trigger`, { method: "POST" })
+  assert(syncTrigger.status === 410, "Dataset sync trigger should return 410 (replaced by sync scripts).")
 
   const claim = await jsonRequest("/sync/jobs/claim", { method: "POST" })
-  assert(claim.job?.job_id === sync.payload.job_id, "Claim should run the enqueued sync job.")
-  assert(claim.job.status === "success", "Claimed sync job should finish successfully.")
-  assert(claim.job.rows_synced === 2, "Claimed sync job should write mock_rows data.")
+  assert(claim.job === null, "Sync job claim should return null (no dataset sync jobs).")
 
   const preview = await jsonRequest(`/projects/${project.id}/datasets/${dataset.id}/preview`)
   assert(preview.parsed === true, "CSV preview should parse uploaded dataset.")
@@ -67,7 +49,7 @@ try {
   assert(embed.status === 201, "Embed token creation should return 201.")
   assert(embed.payload.embed_url?.includes(project.id), "Embed URL should target the project.")
 
-  console.log("Smoke API passed: login, API key, ZIP hosting, assets, sync, preview, versions, embed token, cleanup.")
+  console.log("Smoke API passed: login, API key, ZIP hosting, assets, dataset sync config, preview, versions, embed token, cleanup.")
 } finally {
   if (projectId && apiKey) await jsonRequest(`/projects/${projectId}`, { method: "DELETE" }).catch(() => null)
   if (apiKeyId && apiKey) await jsonRequest(`/api-keys/${apiKeyId}`, { method: "DELETE" }).catch(() => null)

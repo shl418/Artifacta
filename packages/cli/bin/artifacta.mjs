@@ -45,10 +45,9 @@ Usage:
   artifacta projects list [--search text]
   artifacta projects upload --file dashboard.html --name "Sales" [--visibility team]
   artifacta projects update-html --project-id proj_x --file dashboard.zip
-  artifacta datasets list [--source manual|cos|presto]
+  artifacta datasets list
   artifacta datasets upload --project-id proj_x --file data.csv [--name "Sales Data"]
   artifacta datasets replace --project-id proj_x --dataset-id ds_x --file data.csv
-  artifacta datasets sync set --project-id proj_x --dataset-id ds_x --source-type presto --config-file ./sync.json
   artifacta sync trigger --project-id proj_x --dataset-id ds_x
   artifacta sync-scripts list --project-id proj_x
   artifacta sync-scripts trigger --project-id proj_x --script-id sscript_x
@@ -227,7 +226,7 @@ async function replaceDataset(options) {
 async function datasetSyncCommand(syncArgs) {
   const subcommand = syncArgs[0]
   if (subcommand !== "set") {
-    throw new Error("Usage: artifacta datasets sync set --project-id proj_x --dataset-id ds_x [--source-type presto] [--config-file ./sync.json]")
+    throw new Error("Usage: artifacta datasets sync set --project-id proj_x --dataset-id ds_x [--config-file ./sync.json]")
   }
 
   const options = parseOptions(syncArgs.slice(1))
@@ -235,12 +234,11 @@ async function datasetSyncCommand(syncArgs) {
   const datasetId = requiredOption(options, "dataset-id")
   const sourceType = String(options["source-type"] ?? options.source ?? "manual")
   const body = {
-    enabled: resolveSyncEnabled(options, sourceType),
-    source_type: sourceType,
-    source_config: await readJsonConfig(options),
-    update_mode: String(options["update-mode"] ?? "full"),
-    schedule: sourceType === "manual" ? null : optionalString(options, "schedule") ?? "0 8 * * *",
-    next_sync_at: optionalString(options, "next-sync-at") ?? undefined,
+    enabled: false,
+    source_type: "manual",
+    source_config: {},
+    update_mode: "full",
+    schedule: null,
   }
 
   const payload = await request(`/projects/${projectId}/datasets/${datasetId}/sync`, {
@@ -417,11 +415,6 @@ async function readJsonConfig(options) {
   return config
 }
 
-function resolveSyncEnabled(options, sourceType) {
-  if (options.disabled || options.disable) return false
-  if (options.enabled || options.enable) return sourceType !== "manual"
-  return sourceType !== "manual"
-}
 
 async function appendFile(form, field, filePath) {
   const absolutePath = path.resolve(filePath)

@@ -2,9 +2,9 @@ import { NextResponse } from "next/server"
 import { authenticateRequest } from "@/lib/server/auth"
 import { canViewProject } from "@/lib/server/access"
 import { readDatabase, updateDatabase } from "@/lib/server/db"
-import { embedCookie, embedTokenFromRequest, verifyEmbedToken } from "@/lib/server/embed"
+import { createEmbedToken, embedCookie, embedTokenFromRequest, verifyEmbedToken } from "@/lib/server/embed"
 import { apiError } from "@/lib/server/responses"
-import { BundleIncompleteError, readDashboardHtml } from "@/lib/server/storage"
+import { BundleIncompleteError, injectEmbedFetchPatch, readDashboardHtml } from "@/lib/server/storage"
 
 export const runtime = "nodejs"
 
@@ -31,6 +31,15 @@ export async function GET(request: Request, context: RouteContext) {
     throw error
   }
 
+  // The HTML is served inside a sandboxed iframe (no allow-same-origin), which
+  // gives the document a null/opaque origin.  Relative fetch() calls resolve
+  // via <base href> to the same server but are treated as cross-origin requests
+  // and therefore carry no session cookies.  We inject a token into the HTML
+  // so that the fetch patch can attach it to every same-origin request, letting
+  // the asset route authenticate without needing a session cookie.
+  const assetToken = createEmbedToken(projectId)
+  html = injectEmbedFetchPatch(html, assetToken)
+
   await updateDatabase((mutable) => {
     const record = mutable.projects.find((candidate) => candidate.id === projectId)
     if (record) record.viewsCount += 1
@@ -40,7 +49,7 @@ export async function GET(request: Request, context: RouteContext) {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
       "Cache-Control": "no-store",
-      "Content-Security-Policy": "sandbox allow-scripts allow-forms allow-popups allow-downloads; default-src 'self' https: data: blob: 'unsafe-inline'; script-src https: data: blob: 'unsafe-inline' 'unsafe-eval'; style-src https: data: blob: 'unsafe-inline'; img-src https: data: blob:; font-src https: data: blob:; connect-src https: data: blob:;",
+      "Content-Security-Policy": "sandbox allow-scripts allow-forms allow-popups allow-downloads; default-src 'self' https: data: blob: 'unsafe-inline'; script-src https: data: blob: 'unsafe-inline' 'unsafe-eval'; style-src https: data: blob: 'unsafe-inline'; img-src https: data: blob:; font-src https: data: blob:; connect-src 'self' http: https: data: blob:;",
     },
   })
   if (hasEmbedAccess && embedToken) response.headers.append("Set-Cookie", embedCookie(embedToken))

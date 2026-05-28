@@ -65,12 +65,10 @@ artifacta projects update-html \
   --project-id proj_123 \
   --file ./dashboard-v2.zip
 
-# 给数据集提交同步配置 JSON
-artifacta datasets sync set \
+# 手动触发项目同步脚本
+artifacta sync-scripts trigger \
   --project-id proj_123 \
-  --dataset-id ds_456 \
-  --source-type presto \
-  --config-file ./sync.json
+  --script-id sscript_456
 
 # 或直接使用 API Key 列项目
 ARTIFACTA_API_KEY=art_live_xxx artifacta projects list`
