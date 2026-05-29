@@ -29,6 +29,8 @@ export function emitWebhooks(database: Database, organizationId: string, event: 
   }
 }
 
+const RETRY_DELAYS_MS = [1_000, 3_000, 9_000]
+
 async function deliverWebhook(endpoint: WebhookEndpoint, event: WebhookEvent, payload: Record<string, unknown>) {
   const body = JSON.stringify({
     event,
@@ -36,21 +38,29 @@ async function deliverWebhook(endpoint: WebhookEndpoint, event: WebhookEvent, pa
     delivered_at: now(),
   })
   const signature = crypto.createHmac("sha256", endpoint.secret).update(body).digest("hex")
-
-  try {
-    const response = await fetch(endpoint.url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Artifacta-Event": event,
-        "X-Artifacta-Signature": `sha256=${signature}`,
-      },
-      body,
-    })
-    await markDelivery(endpoint.id, response.ok ? "success" : "failed")
-  } catch {
-    await markDelivery(endpoint.id, "failed")
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Artifacta-Event": event,
+    "X-Artifacta-Signature": `sha256=${signature}`,
   }
+
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      const response = await fetch(endpoint.url, { method: "POST", headers, body })
+      if (response.ok) {
+        await markDelivery(endpoint.id, "success")
+        return
+      }
+    } catch {
+      // network error — fall through to retry
+    }
+
+    if (attempt < RETRY_DELAYS_MS.length) {
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt]))
+    }
+  }
+
+  await markDelivery(endpoint.id, "failed")
 }
 
 async function markDelivery(endpointId: string, status: "success" | "failed") {

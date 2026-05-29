@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { Button } from "@/components/ui/button"
@@ -31,44 +31,46 @@ import {
   Trash2,
   AlertTriangle,
 } from "lucide-react"
+import { useLanguage } from "@/lib/i18n/context"
 
 export default function SettingsPage() {
+  const { t } = useLanguage()
   const [profile, setProfile] = useState<{ name: string; email: string; role: string; initials: string } | null>(null)
   const [error, setError] = useState("")
 
-  const loadProfile = () =>
+  const loadProfile = useCallback(() =>
     fetch("/api/v1/auth/me")
       .then(async (response) => {
         const payload = await response.json().catch(() => null)
-        if (!response.ok) throw new Error(payload?.error?.message ?? "无法加载个人资料。")
+        if (!response.ok) throw new Error(payload?.error?.message ?? t("settings.load.error"))
         setProfile(payload)
         setError("")
       })
       .catch((reason) => {
         setProfile(null)
-        setError(reason instanceof Error ? reason.message : "无法加载个人资料。")
-      })
+        setError(reason instanceof Error ? reason.message : t("settings.load.error"))
+      }), [t])
 
   useEffect(() => {
     loadProfile()
-  }, [])
+  }, [loadProfile])
 
   return (
     <div className="flex h-screen bg-background">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0 p-2 pl-0">
         <main className="flex-1 flex flex-col bg-card rounded-xl shadow-sm overflow-hidden">
-          <Header title="系统设置" />
+          <Header title={t("nav.settings")} />
           <div className="flex-1 overflow-y-auto p-6">
           {error && (
             <Alert variant="destructive" className="mb-4">
               <AlertCircle className="h-4 w-4" />
-              <AlertTitle>设置加载失败</AlertTitle>
+              <AlertTitle>{t("settings.load.error.title")}</AlertTitle>
               <AlertDescription>
                 <p>{error}</p>
                 <Button variant="outline" size="sm" className="mt-2" onClick={loadProfile}>
                   <RefreshCw className="h-3.5 w-3.5" />
-                  重试
+                  {t("common.retry")}
                 </Button>
               </AlertDescription>
             </Alert>
@@ -77,20 +79,19 @@ export default function SettingsPage() {
             <TabsList className="bg-secondary/50">
               <TabsTrigger value="profile" className="gap-2">
                 <User className="h-4 w-4" />
-                个人资料
+                {t("settings.tab.profile")}
               </TabsTrigger>
               <TabsTrigger value="organization" className="gap-2">
                 <Building2 className="h-4 w-4" />
-                组织设置
+                {t("settings.tab.org")}
               </TabsTrigger>
-              
               <TabsTrigger value="appearance" className="gap-2">
                 <Palette className="h-4 w-4" />
-                外观
+                {t("settings.tab.appearance")}
               </TabsTrigger>
               <TabsTrigger value="storage" className="gap-2">
                 <HardDrive className="h-4 w-4" />
-                存储
+                {t("settings.tab.storage")}
               </TabsTrigger>
             </TabsList>
 
@@ -98,8 +99,8 @@ export default function SettingsPage() {
             <TabsContent value="profile" className="space-y-6">
               <Card className="bg-card border-border">
                 <CardHeader>
-                  <CardTitle>个人资料</CardTitle>
-                  <CardDescription>管理您的个人信息和账户设置</CardDescription>
+                  <CardTitle>{t("settings.profile.title")}</CardTitle>
+                  <CardDescription>{t("settings.profile.desc")}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   {/* Avatar */}
@@ -113,10 +114,10 @@ export default function SettingsPage() {
                     <div className="space-y-2">
                       <Button variant="secondary" size="sm">
                         <Upload className="h-4 w-4 mr-2" />
-                        更换头像
+                        {t("settings.profile.avatar")}
                       </Button>
                       <p className="text-xs text-muted-foreground">
-                        支持 JPG、PNG 格式，最大 2MB
+                        {t("settings.profile.avatar.hint")}
                       </p>
                     </div>
                   </div>
@@ -124,7 +125,7 @@ export default function SettingsPage() {
                   {/* Form */}
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="name">姓名</Label>
+                      <Label htmlFor="name">{t("settings.profile.name")}</Label>
                       <Input
                         id="name"
                         defaultValue={profile?.name ?? ""}
@@ -133,7 +134,7 @@ export default function SettingsPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="email">邮箱</Label>
+                      <Label htmlFor="email">{t("settings.profile.email")}</Label>
                       <Input
                         id="email"
                         type="email"
@@ -143,16 +144,16 @@ export default function SettingsPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="title">职位</Label>
+                      <Label htmlFor="title">{t("settings.profile.role_label")}</Label>
                       <Input
                         id="title"
-                        defaultValue={profile?.role === "admin" ? "管理员" : "成员"}
+                        defaultValue={profile?.role === "admin" ? t("common.role.admin") : t("common.role.member")}
                         readOnly
                         className="bg-secondary/50"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="department">部门</Label>
+                      <Label htmlFor="department">{t("settings.profile.dept")}</Label>
                       <Select defaultValue="data">
                         <SelectTrigger className="bg-secondary/50">
                           <SelectValue />
@@ -168,10 +169,10 @@ export default function SettingsPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="bio">个人简介</Label>
+                    <Label htmlFor="bio">{t("settings.profile.bio")}</Label>
                     <Textarea
                       id="bio"
-                      placeholder="介绍一下自己..."
+                      placeholder={t("settings.profile.bio.placeholder")}
                       className="bg-secondary/50 resize-none"
                       rows={3}
                     />
@@ -180,7 +181,7 @@ export default function SettingsPage() {
                   <div className="flex justify-end">
                     <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
                       <Save className="h-4 w-4 mr-2" />
-                      保存更改
+                      {t("settings.profile.save")}
                     </Button>
                   </div>
                 </CardContent>
@@ -191,23 +192,23 @@ export default function SettingsPage() {
                 <CardHeader>
                   <CardTitle className="text-destructive flex items-center gap-2">
                     <AlertTriangle className="h-5 w-5" />
-                    危险操作
+                    {t("settings.danger.title")}
                   </CardTitle>
                   <CardDescription>
-                    以下操作不可撤销，请谨慎操作
+                    {t("settings.danger.desc")}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="font-medium text-foreground">删除账户</p>
+                      <p className="font-medium text-foreground">{t("settings.danger.delete")}</p>
                       <p className="text-sm text-muted-foreground">
-                        永久删除您的账户和所有数据
+                        {t("settings.danger.delete.desc")}
                       </p>
                     </div>
                     <Button variant="destructive">
                       <Trash2 className="h-4 w-4 mr-2" />
-                      删除账户
+                      {t("settings.danger.delete")}
                     </Button>
                   </div>
                 </CardContent>
@@ -218,20 +219,20 @@ export default function SettingsPage() {
             <TabsContent value="organization" className="space-y-6">
               <Card className="bg-card border-border">
                 <CardHeader>
-                  <CardTitle>组织信息</CardTitle>
-                  <CardDescription>管理您的组织基本信息</CardDescription>
+                  <CardTitle>{t("settings.org.title")}</CardTitle>
+                  <CardDescription>{t("settings.org.desc")}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label>组织名称</Label>
+                      <Label>{t("settings.org.name")}</Label>
                       <Input
                         defaultValue="Artifacta Inc."
                         className="bg-secondary/50"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>组织 ID</Label>
+                      <Label>{t("settings.org.id")}</Label>
                       <Input
                         value="org_abc123xyz"
                         readOnly
@@ -240,7 +241,7 @@ export default function SettingsPage() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label>组织描述</Label>
+                    <Label>{t("settings.org.description")}</Label>
                     <Textarea
                       defaultValue="企业级数据可视化与 BI 分析平台"
                       className="bg-secondary/50 resize-none"
@@ -250,38 +251,36 @@ export default function SettingsPage() {
                   <div className="flex justify-end">
                     <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
                       <Save className="h-4 w-4 mr-2" />
-                      保存更改
+                      {t("settings.org.save")}
                     </Button>
                   </div>
                 </CardContent>
               </Card>
             </TabsContent>
 
-            
-
             {/* Appearance Tab */}
             <TabsContent value="appearance" className="space-y-6">
               <Card className="bg-card border-border">
                 <CardHeader>
-                  <CardTitle>外观设置</CardTitle>
-                  <CardDescription>自定义您的界面外观</CardDescription>
+                  <CardTitle>{t("settings.appearance.title")}</CardTitle>
+                  <CardDescription>{t("settings.appearance.desc")}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="space-y-2">
-                    <Label>主题</Label>
+                    <Label>{t("settings.appearance.theme")}</Label>
                     <Select defaultValue="light">
                       <SelectTrigger className="w-48 bg-secondary/50">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="light">浅色</SelectItem>
-                        <SelectItem value="dark">深色</SelectItem>
-                        <SelectItem value="system">跟随系统</SelectItem>
+                        <SelectItem value="light">{t("settings.appearance.theme.light")}</SelectItem>
+                        <SelectItem value="dark">{t("settings.appearance.theme.dark")}</SelectItem>
+                        <SelectItem value="system">{t("settings.appearance.theme.system")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>语言</Label>
+                    <Label>{t("settings.appearance.lang")}</Label>
                     <Select defaultValue="zh">
                       <SelectTrigger className="w-48 bg-secondary/50">
                         <SelectValue />
@@ -301,13 +300,13 @@ export default function SettingsPage() {
             <TabsContent value="storage" className="space-y-6">
               <Card className="bg-card border-border">
                 <CardHeader>
-                  <CardTitle>存储使用情况</CardTitle>
-                  <CardDescription>查看和管理您的存储空间</CardDescription>
+                  <CardTitle>{t("settings.storage.title")}</CardTitle>
+                  <CardDescription>{t("settings.storage.desc")}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="text-foreground">已使用</span>
+                      <span className="text-foreground">{t("settings.storage.used")}</span>
                       <span className="text-muted-foreground">24.5 MB / 1 GB</span>
                     </div>
                     <div className="h-2 bg-secondary rounded-full overflow-hidden">
@@ -320,19 +319,19 @@ export default function SettingsPage() {
 
                   <div className="grid gap-4 md:grid-cols-3">
                     <div className="p-4 rounded-lg bg-secondary/30">
-                      <p className="text-sm text-muted-foreground">看板文件</p>
+                      <p className="text-sm text-muted-foreground">{t("settings.storage.dashboards")}</p>
                       <p className="text-xl font-semibold text-foreground mt-1">
                         18.2 MB
                       </p>
                     </div>
                     <div className="p-4 rounded-lg bg-secondary/30">
-                      <p className="text-sm text-muted-foreground">数据集</p>
+                      <p className="text-sm text-muted-foreground">{t("settings.storage.datasets")}</p>
                       <p className="text-xl font-semibold text-foreground mt-1">
                         6.3 MB
                       </p>
                     </div>
                     <div className="p-4 rounded-lg bg-secondary/30">
-                      <p className="text-sm text-muted-foreground">其他</p>
+                      <p className="text-sm text-muted-foreground">{t("settings.storage.other")}</p>
                       <p className="text-xl font-semibold text-foreground mt-1">
                         0 MB
                       </p>
@@ -341,9 +340,9 @@ export default function SettingsPage() {
 
                   <div className="flex justify-between items-center pt-4 border-t border-border">
                     <p className="text-sm text-muted-foreground">
-                      需要更多存储空间？
+                      {t("settings.storage.need_more")}
                     </p>
-                    <Button variant="secondary">升级套餐</Button>
+                    <Button variant="secondary">{t("settings.storage.upgrade")}</Button>
                   </div>
                 </CardContent>
               </Card>

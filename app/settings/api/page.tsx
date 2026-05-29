@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { Button } from "@/components/ui/button"
@@ -22,6 +22,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { AlertCircle, Check, Code2, Copy, Key, Plus, Terminal, Trash2 } from "lucide-react"
+import { useLanguage } from "@/lib/i18n/context"
 
 interface ApiKeyRecord {
   id: string
@@ -84,6 +85,7 @@ curl -X POST http://localhost:3000/api/v1/projects \\
   -F "upload_session_id=<session_id>"`
 
 export default function ApiDocsPage() {
+  const { t } = useLanguage()
   const [apiKeys, setApiKeys] = useState<ApiKeyRecord[]>([])
   const [newKeyName, setNewKeyName] = useState("CI/CD Pipeline")
   const [selectedScopes, setSelectedScopes] = useState<string[]>([])
@@ -91,23 +93,23 @@ export default function ApiDocsPage() {
   const [error, setError] = useState("")
   const [pendingDelete, setPendingDelete] = useState<ApiKeyRecord | null>(null)
 
-  const loadKeys = async () => {
+  const loadKeys = useCallback(async () => {
     const response = await fetch("/api/v1/api-keys")
     const payload = await response.json().catch(() => null)
     if (!response.ok) {
-      setError(payload?.error?.message ?? "无法加载 API Key。")
+      setError(payload?.error?.message ?? t("settings.api.load.error"))
       return
     }
     setError("")
     setApiKeys(payload.data)
-  }
+  }, [t])
 
   useEffect(() => {
     loadKeys().catch(() => {
       setApiKeys([])
-      setError("网络异常，无法加载 API Key。")
+      setError(t("common.error.network"))
     })
-  }, [])
+  }, [loadKeys, t])
 
   const createKey = async () => {
     const response = await fetch("/api/v1/api-keys", {
@@ -124,7 +126,7 @@ export default function ApiDocsPage() {
       await loadKeys()
     } else {
       const payload = await response.json().catch(() => null)
-      setError(payload?.error?.message ?? "创建 API Key 失败。")
+      setError(payload?.error?.message ?? t("settings.api.load.error"))
     }
   }
 
@@ -134,7 +136,7 @@ export default function ApiDocsPage() {
     setPendingDelete(null)
     if (!response.ok) {
       const payload = await response.json().catch(() => null)
-      setError(payload?.error?.message ?? "删除 API Key 失败。")
+      setError(payload?.error?.message ?? t("settings.api.load.error"))
       return
     }
     await loadKeys()
@@ -145,7 +147,7 @@ export default function ApiDocsPage() {
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0 p-2 pl-0">
         <main className="flex-1 flex flex-col bg-card rounded-xl shadow-sm overflow-hidden">
-          <Header title="API & CLI" />
+          <Header title={t("settings.api.title")} />
           <div className="flex-1 overflow-y-auto p-6">
             <div className="max-w-4xl mx-auto space-y-6">
               <Card className="border-border bg-card">
@@ -154,19 +156,19 @@ export default function ApiDocsPage() {
                     <Key className="h-5 w-5 text-primary" />
                     API Keys
                   </CardTitle>
-                  <CardDescription>创建 Bearer Token，用于 Coding Agent、CI/CD 和未来 CLI 调用 REST API。</CardDescription>
+                  <CardDescription>{t("settings.api.key.desc")}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex flex-col gap-3">
                     <div className="flex gap-2">
-                      <Input value={newKeyName} onChange={(event) => setNewKeyName(event.target.value)} placeholder="Key 名称" />
+                      <Input value={newKeyName} onChange={(event) => setNewKeyName(event.target.value)} placeholder={t("settings.api.key.placeholder")} />
                       <Button onClick={createKey} disabled={!newKeyName.trim()}>
                         <Plus className="h-4 w-4" />
-                        创建
+                        {t("common.create")}
                       </Button>
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-xs text-muted-foreground">权限范围（留空表示全部权限）</Label>
+                      <Label className="text-xs text-muted-foreground">{t("settings.api.scope.label")}</Label>
                       <div className="flex flex-wrap gap-2">
                         {scopeOptions.map((scope) => {
                           const active = selectedScopes.includes(scope.value)
@@ -193,14 +195,14 @@ export default function ApiDocsPage() {
                   {error && (
                     <Alert variant="destructive">
                       <AlertCircle className="h-4 w-4" />
-                      <AlertTitle>API Key 操作失败</AlertTitle>
+                      <AlertTitle>{t("settings.api.error.title")}</AlertTitle>
                       <AlertDescription>{error}</AlertDescription>
                     </Alert>
                   )}
 
                   {latestSecret && (
                     <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
-                      <Label className="text-xs text-muted-foreground">仅显示一次的新 Key</Label>
+                      <Label className="text-xs text-muted-foreground">{t("settings.api.key.once")}</Label>
                       <div className="flex items-center gap-2 mt-2">
                         <Input readOnly value={latestSecret} className="font-mono text-sm bg-background" />
                         <CopyButton value={latestSecret} />
@@ -213,8 +215,8 @@ export default function ApiDocsPage() {
                       <Empty className="border py-10">
                         <EmptyHeader>
                           <EmptyMedia variant="icon"><Key /></EmptyMedia>
-                          <EmptyTitle>还没有 API Key</EmptyTitle>
-                          <EmptyDescription>创建后可用于 CLI、CI、同步 Worker 和外部 agent。</EmptyDescription>
+                          <EmptyTitle>{t("settings.api.empty")}</EmptyTitle>
+                          <EmptyDescription>{t("settings.api.empty.hint")}</EmptyDescription>
                         </EmptyHeader>
                       </Empty>
                     )}
@@ -226,8 +228,8 @@ export default function ApiDocsPage() {
                             <Badge variant="secondary" className="font-mono text-xs">{apiKey.prefix}...{apiKey.last4}</Badge>
                           </div>
                           <p className="text-xs text-muted-foreground mt-1">
-                            创建于 {new Date(apiKey.created_at).toLocaleDateString("zh-CN")}
-                            {apiKey.expires_at ? ` · 到期 ${new Date(apiKey.expires_at).toLocaleDateString("zh-CN")}` : ""}
+                            {t("settings.api.key.created_at")} {new Date(apiKey.created_at).toLocaleDateString()}
+                            {apiKey.expires_at ? ` · ${t("settings.api.key.expires_at")} ${new Date(apiKey.expires_at).toLocaleDateString()}` : ""}
                           </p>
                           <div className="mt-2 flex flex-wrap gap-1">
                             {(apiKey.scopes ?? ["*"]).map((scope) => (
@@ -248,11 +250,11 @@ export default function ApiDocsPage() {
                 <TabsList className="bg-secondary/50">
                   <TabsTrigger value="cli" className="gap-2">
                     <Terminal className="h-4 w-4" />
-                    CLI 命令行
+                    {t("settings.api.cli.tab")}
                   </TabsTrigger>
                   <TabsTrigger value="api" className="gap-2">
                     <Code2 className="h-4 w-4" />
-                    REST API
+                    {t("settings.api.rest.tab")}
                   </TabsTrigger>
                 </TabsList>
 
@@ -297,15 +299,15 @@ export default function ApiDocsPage() {
       <AlertDialog open={!!pendingDelete} onOpenChange={(open) => !open && setPendingDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>删除 API Key</AlertDialogTitle>
+            <AlertDialogTitle>{t("settings.api.key.delete.title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              删除 “{pendingDelete?.name}” 后，使用这个 Bearer Token 的 CLI、CI 和 Worker 会立即失效。
+              {t("settings.api.key.delete.desc_prefix")} &quot;{pendingDelete?.name}&quot; {t("settings.api.key.delete.desc_suffix")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={deleteKey}>
-              删除
+              {t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

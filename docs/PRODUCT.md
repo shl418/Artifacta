@@ -85,21 +85,16 @@ Artifacta 不是要取代所有 BI 平台，而是补齐 AI 时代数据应用�
 - 通过 Web 界面或 API 上传新版本数据文件
 - 适合不定期更新的数据
 
-**方式二：通用文件/URL 同步**
-- 已实现本地文件、上传目录文件、远程 URL 拉取和 `mock_rows` 开发数据
-- 支持通过 `SYNC_LOCAL_BASE_DIR` 和 `SYNC_URL_ALLOWLIST` 收紧同步来源
-- 适合自托管 MVP 和 agent/CI 开发流程
-
-**方式三：预留 connector adapter**
-- `source_type` 已保留 `cos` 与 `presto`
-- 真实 COS/S3 和 Presto/Trino 客户端尚未内置，需要接到 `lib/server/sync-runner.ts` 后面
+**方式二：项目级 bundle 同步脚本**
+- 数据集本身视为静态数据；动态更新统一由项目级 `sync_scripts` 提供
+- Python/Node 脚本在解包后的 bundle 目录内运行，由用户在界面/API 手动触发
+- 按数据集来源的外部动态同步（URL / COS / Presto）已移除
 
 #### 2.3 同步调度
 
-- Cron 表达式配置更新频率
-- 支持手动触发同步
-- 同步状态和历史记录
-- 失败告警仍是后续扩展点
+- 当前为单节点阶段：仅支持手动触发，无 cron 定时、无自动回填
+- 同步状态和历史记录可查
+- 定时调度与失败告警仍是后续扩展点
 
 ### 3. 权限管理
 
@@ -166,10 +161,7 @@ pnpm cli -- projects upload --file ./dashboard.zip --name "销售看板"
 # 替换 ZIP 看板
 pnpm cli -- projects update-html --project-id proj_abc123 --file ./dashboard-v2.zip
 
-# 触发按数据集的外部同步
-pnpm cli -- sync trigger --project-id proj_abc123 --dataset-id ds_001
-
-# 触发 bundle 脚本同步
+# 触发 bundle 脚本同步（数据集动态更新的唯一方式）
 pnpm cli -- sync-scripts trigger --project-id proj_abc123 --script-id sscript_abc123
 
 # 列出项目
@@ -206,9 +198,9 @@ pnpm cli -- projects list
 
 ### 数据同步
 
-- **Worker**: API-driven Worker 领取脚本任务与按数据集任务并执行同步
+- **Worker**: API-driven Worker 领取排队中的脚本任务并执行同步
 - **Bundle 脚本**: ZIP 内 `sync_scripts` 在解包目录运行 Python/Node，一次可写多个 `outputs`
-- **按数据集来源**: 本地文件、上传目录文件、远程 URL、`mock_rows`、S3/COS、Presto/Trino HTTP
+- **数据集**: 默认静态数据；按数据集的外部动态来源（URL / S3 / Presto）已移除
 - **格式转换**: CSV/JSON/JSONL/TSV 自动解析；Parquet/XLSX 存储为主
 - **扩展点**: 脚本出站网络代理、完整 cron、SAML、分布式调度
 
@@ -273,7 +265,7 @@ pnpm cli -- projects list
 
 - [ ] SAML/OIDC 企业 SSO
 - [ ] Postgres/对象存储适配器
-- [ ] COS/S3 与真实 Presto/Trino connector
+- [ ] 关系型 Postgres（替代当前单行 JSONB blob）
 - [ ] Webhook 通知
 - [ ] 看板嵌入 (iframe embed)
 - [ ] 访问统计分析

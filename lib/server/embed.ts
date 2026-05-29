@@ -1,5 +1,6 @@
 import crypto from "node:crypto"
 import { authSecret, appUrl } from "@/lib/server/config"
+import { getCookie } from "@/lib/server/cookies"
 
 const embedCookieName = "artifacta_embed_token"
 
@@ -43,10 +44,3 @@ function sign(value: string) {
   return crypto.createHmac("sha256", authSecret).update(value).digest("base64url")
 }
 
-function getCookie(cookieHeader: string | null, name: string) {
-  return cookieHeader
-    ?.split(";")
-    .map((part) => part.trim())
-    .find((part) => part.startsWith(`${name}=`))
-    ?.slice(name.length + 1)
-}

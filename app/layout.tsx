@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import { LanguageProvider } from "@/lib/i18n/context"
 
 export const metadata: Metadata = {
   title: 'Artifacta — AI 时代的数据应用托管',
@@ -28,7 +29,9 @@ export default function RootLayout({
   return (
     <html lang="zh-CN" className="bg-background">
       <body className="font-sans antialiased bg-background text-foreground">
-        {children}
+        <LanguageProvider>
+          {children}
+        </LanguageProvider>
       </body>
     </html>
   )

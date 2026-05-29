@@ -10,7 +10,6 @@ import { recordDatasetVersion } from "@/lib/server/versions"
 import { findProjectSyncScript } from "@/lib/server/sync/sync-scripts"
 
 const SCRIPT_TIMEOUT_MS = Number(process.env.ARTIFACTA_SCRIPT_TIMEOUT_MS ?? 300_000)
-const SCRIPT_RSS_LIMIT_BYTES = Number(process.env.ARTIFACTA_SCRIPT_RSS_LIMIT_MB ?? 512) * 1024 * 1024
 
 function bundleAbsoluteRoot(assetRoot: string) {
   return path.resolve(absoluteUploadPath(assetRoot))
@@ -206,7 +205,6 @@ async function executeBundledScript(script: ProjectSyncScript, bundleRoot: strin
 
     child.on("close", (code) => {
       clearTimeout(timeout)
-      void SCRIPT_RSS_LIMIT_BYTES
       if (code === 0) {
         resolve()
         return

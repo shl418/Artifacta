@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { AlertCircle, RefreshCw, Webhook } from "lucide-react"
+import { useLanguage } from "@/lib/i18n/context"
 
 interface WebhookRow {
   id: string
@@ -30,6 +31,7 @@ interface AuditRow {
 }
 
 export default function OperationsPage() {
+  const { t } = useLanguage()
   const [webhooks, setWebhooks] = useState<WebhookRow[]>([])
   const [auditLogs, setAuditLogs] = useState<AuditRow[]>([])
   const [error, setError] = useState("")
@@ -44,17 +46,17 @@ export default function OperationsPage() {
     const webhookPayload = await webhookResponse.json().catch(() => null)
     const auditPayload = await auditResponse.json().catch(() => null)
     if (!webhookResponse.ok || !auditResponse.ok) {
-      setError(webhookPayload?.error?.message ?? auditPayload?.error?.message ?? "无法加载运维数据。")
+      setError(webhookPayload?.error?.message ?? auditPayload?.error?.message ?? t("settings.operations.load.error"))
       return
     }
     setError("")
     setWebhooks(webhookPayload.data ?? [])
     setAuditLogs(auditPayload.data ?? [])
-  }, [])
+  }, [t])
 
   useEffect(() => {
-    load().catch(() => setError("网络异常，无法加载运维数据。"))
-  }, [load])
+    load().catch(() => setError(t("settings.operations.load.error.network")))
+  }, [load, t])
 
   const createWebhook = async () => {
     const response = await fetch("/api/v1/webhooks", {
@@ -67,7 +69,7 @@ export default function OperationsPage() {
     })
     const payload = await response.json().catch(() => null)
     if (!response.ok) {
-      setError(payload?.error?.message ?? "创建 Webhook 失败。")
+      setError(payload?.error?.message ?? t("settings.operations.webhook.create.error"))
       return
     }
     setWebhookUrl("")
@@ -80,17 +82,17 @@ export default function OperationsPage() {
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0 p-2 pl-0">
         <main className="flex-1 flex flex-col bg-card rounded-xl shadow-sm overflow-hidden">
-          <Header title="运维" />
+          <Header title={t("settings.operations.title")} />
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
             {error && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle>运维面板加载失败</AlertTitle>
+                <AlertTitle>{t("settings.operations.error.title")}</AlertTitle>
                 <AlertDescription>
                   <p>{error}</p>
                   <Button variant="outline" size="sm" className="mt-2" onClick={load}>
                     <RefreshCw className="h-3.5 w-3.5" />
-                    重试
+                    {t("common.retry")}
                   </Button>
                 </AlertDescription>
               </Alert>
@@ -99,23 +101,23 @@ export default function OperationsPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2"><Webhook className="h-5 w-5" />Webhooks</CardTitle>
-                <CardDescription>接收项目创建、同步成功/失败和权限变更事件。</CardDescription>
+                <CardDescription>{t("settings.operations.webhook.desc")}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-3 md:grid-cols-[1fr_auto]">
                   <div className="space-y-2">
-                    <Label>回调 URL</Label>
+                    <Label>{t("settings.operations.webhook.url.label")}</Label>
                     <Input value={webhookUrl} onChange={(event) => setWebhookUrl(event.target.value)} placeholder="https://hooks.example.com/artifacta" />
                   </div>
                   <div className="flex items-end">
-                    <Button onClick={createWebhook}>添加 Webhook</Button>
+                    <Button onClick={createWebhook}>{t("settings.operations.webhook.add")}</Button>
                   </div>
                 </div>
                 {latestSecret && (
-                  <Textarea readOnly rows={2} value={`新 Webhook Secret（仅显示一次）：${latestSecret}`} />
+                  <Textarea readOnly rows={2} value={`${t("settings.operations.webhook.secret")}${latestSecret}`} />
                 )}
                 <div className="space-y-2">
-                  {webhooks.length === 0 && <p className="text-sm text-muted-foreground">还没有配置 Webhook。</p>}
+                  {webhooks.length === 0 && <p className="text-sm text-muted-foreground">{t("settings.operations.webhook.empty")}</p>}
                   {webhooks.map((webhook) => (
                     <div key={webhook.id} className="rounded-lg border p-3 text-sm space-y-2">
                       <p className="font-medium break-all">{webhook.url}</p>
@@ -125,7 +127,7 @@ export default function OperationsPage() {
                         ))}
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        最近投递：{webhook.last_delivery_status ?? "未投递"}
+                        {t("settings.operations.webhook.last")}{webhook.last_delivery_status ?? t("settings.operations.webhook.last_none")}
                       </p>
                     </div>
                   ))}
@@ -135,16 +137,16 @@ export default function OperationsPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>审计日志</CardTitle>
-                <CardDescription>最近的管理员可见操作记录。</CardDescription>
+                <CardTitle>{t("settings.operations.audit.title")}</CardTitle>
+                <CardDescription>{t("settings.operations.audit.desc")}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
-                {auditLogs.length === 0 && <p className="text-sm text-muted-foreground">还没有审计记录。</p>}
+                {auditLogs.length === 0 && <p className="text-sm text-muted-foreground">{t("settings.operations.audit.empty")}</p>}
                 {auditLogs.map((log) => (
                   <div key={log.id} className="rounded-lg border p-3 text-sm">
                     <div className="flex items-center justify-between gap-2">
                       <p className="font-medium">{log.summary}</p>
-                      <span className="text-xs text-muted-foreground">{new Date(log.created_at).toLocaleString("zh-CN")}</span>
+                      <span className="text-xs text-muted-foreground">{new Date(log.created_at).toLocaleString()}</span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">{log.action} · {log.target_type}:{log.target_id}</p>
                   </div>

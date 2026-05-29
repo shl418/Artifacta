@@ -6,7 +6,7 @@ This file is the maintenance checklist for keeping code and documentation in syn
 
 | Surface | Implemented Code | Primary Docs |
 | --- | --- | --- |
-| Web console shell, dashboard home, project list, upload, datasets, settings | `app/page.tsx`, `app/dashboards/page.tsx`, `app/upload/page.tsx`, `app/datasets/page.tsx`, `app/settings/**` | `README.md`, `README.zh-CN.md`, `docs/PRODUCT.md` |
+| Web console shell, dashboard home, project list, upload, settings | `app/page.tsx`, `app/dashboards/page.tsx`, `app/upload/page.tsx`, `app/settings/**` (`app/datasets/page.tsx` now redirects to `/dashboards`) | `README.md`, `README-EN.md`, `docs/PRODUCT.md` |
 | Project management surface (datasets + bundle sync scripts) | `app/projects/[projectId]/page.tsx` | `README.md`, `docs/API.md` |
 | Bundle ZIP upload wizard | `app/upload/page.tsx` | `docs/API.md`, `docs/ONBOARDING.md`, `docs/protocol/manifest-v1.md` |
 | Dashboard preview | `app/view/[projectId]/page.tsx`, `app/api/v1/projects/[projectId]/html/render/route.ts`, `app/api/v1/projects/[projectId]/html/[...assetPath]/route.ts` | `docs/API.md`, `docs/DEPLOYMENT.md` |
@@ -27,7 +27,7 @@ This file is the maintenance checklist for keeping code and documentation in syn
 | Bundle script sync | `GET/PUT /api/v1/projects/:projectId/sync-scripts`, `.../test`, `.../trigger`, `.../status`, `.../history`, `POST /api/v1/sync/script-jobs/claim` | Python/Node scripts run in extracted bundle; multi-output history; one queued/running job per project. |
 | Folders | `GET/POST /api/v1/folders`, `PATCH/DELETE /api/v1/folders/:folderId` | Deleting a folder moves projects to root or `move_to`. |
 | Datasets | `GET /api/v1/datasets`, `GET/POST /api/v1/projects/:projectId/datasets`, `GET/PUT/DELETE /api/v1/projects/:projectId/datasets/:datasetId`, `GET /api/v1/projects/:projectId/datasets/:datasetId/preview`, `GET /api/v1/projects/:projectId/datasets/:datasetId/versions` | CSV/TSV/JSON/JSONL get schema and sample preview; XLSX and other files are stored without structured parsing. |
-| Dataset sync (legacy sources) | `GET/PUT /api/v1/projects/:projectId/datasets/:datasetId/sync`, `POST .../test`, `POST .../trigger`, `GET .../status`, `GET .../history`, `POST /api/v1/sync/jobs/claim` | Per-dataset URL/COS/Presto/local file sources via `sync-runner.ts`. Parallel to bundle script sync. |
+| Dataset sync (manual-only / removed-source tombstone) | `GET/PUT /api/v1/projects/:projectId/datasets/:datasetId/sync`, `GET .../status`, `GET .../history`, `POST .../test`, `POST .../trigger`, `POST /api/v1/sync/jobs/claim` | `GET/PUT` only persist a `manual` static config; `status`/`history` read past runs; `test`/`trigger` return `410 SYNC_REMOVED`; `jobs/claim` is a `{ job: null }` stub. External URL/COS/Presto sources were removed — dynamic updates use bundle script sync. |
 | Permissions | `GET/POST /api/v1/projects/:projectId/permissions`, `PATCH/DELETE /api/v1/projects/:projectId/permissions/:userId` | Project member permissions are `view` or `edit`. |
 | Team | `GET/POST /api/v1/team/members`, `PATCH/DELETE /api/v1/team/members/:userId`, `POST /api/v1/team/invitations` | Admin-only writes. |
 | API keys | `GET/POST /api/v1/api-keys`, `DELETE /api/v1/api-keys/:keyId` | Secret value is returned only on create. Optional `scopes` restrict API key access. |
@@ -46,8 +46,8 @@ This file is the maintenance checklist for keeping code and documentation in syn
 | `artifacta datasets list [--source ...]` | `GET /datasets` | `README.md`, `docs/API.md` |
 | `artifacta datasets upload --project-id ... --file ... [--name ...]` | `POST /projects/:projectId/datasets` | `docs/API.md`, `packages/cli/README.md` |
 | `artifacta datasets replace --project-id ... --dataset-id ... --file ...` | `PUT /projects/:projectId/datasets/:datasetId` | `docs/API.md`, `packages/cli/README.md` |
-| `artifacta datasets sync set --project-id ... --dataset-id ... [--source-type ...] [--config-file ...] [--config-json ...]` | `PUT /projects/:projectId/datasets/:datasetId/sync` | `docs/API.md`, `packages/cli/README.md` |
-| `artifacta sync trigger --project-id ... --dataset-id ...` | `POST /projects/:projectId/datasets/:datasetId/sync/trigger` | `README.md`, `docs/API.md` |
+| `artifacta datasets sync set --project-id ... --dataset-id ...` (deprecated) | `PUT /projects/:projectId/datasets/:datasetId/sync` | Manual-only; external source types removed. Use `sync-scripts` for dynamic updates. |
+| `artifacta sync trigger --project-id ... --dataset-id ...` (deprecated) | `POST /projects/:projectId/datasets/:datasetId/sync/trigger` → `410 SYNC_REMOVED` | Use `sync-scripts trigger` instead. |
 | `artifacta doctor [--app-url ...]` | App root and `GET /projects` when API key is present | `README.md`, `packages/cli/README.md` |
 
 ## Storage And Runtime
@@ -63,9 +63,8 @@ This file is the maintenance checklist for keeping code and documentation in syn
 | Manifest parser (`sync_scripts`, widened dataset kinds) | `lib/server/artifacts/manifest.ts` | `docs/protocol/manifest-v1.md` |
 | Script sync runner | `lib/server/sync/script-runner.ts`, `script-jobs.ts`, `cron.ts` | `docs/API.md`, `docs/DEPLOYMENT.md` |
 | Re-upload path protection | `buildSyncProtectedPaths` in `upload-session.ts` | `docs/API.md`, `docs/plans/2026-05-24-custom-script-sync-and-bundle-upload.md` |
-| Sync source safety | `lib/server/sync/source-policy.ts` | `docs/DEPLOYMENT.md` |
 | Rate limiting | `lib/server/rate-limit.ts` | `docs/DEPLOYMENT.md`, `SECURITY.md` |
-| Seeded demo data and dashboards | `lib/server/demo-artifacts.ts` | `README.md`, `README.zh-CN.md` |
+| Seeded demo data and dashboards | `lib/server/demo-artifacts.ts` | `README.md`, `README-EN.md` |
 
 ## Bundle Upload Quick Reference
 
@@ -90,7 +89,7 @@ This file is the maintenance checklist for keeping code and documentation in syn
 
 ## Examples
 
-- `examples/`: flat walkthrough bundles (`1-html-json` … `5-html-csv-cos`) in `examples/WALKTHROUGH.zh-CN.md`; no pre-made `artifacta.json`.
+- `examples/`: flat walkthrough bundles (`0-single-html` … `4-html-csv-script`) in `examples/WALKTHROUGH.zh-CN.md`; no pre-made `artifacta.json`.
 
 ## Not Implemented Yet
 

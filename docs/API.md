@@ -15,14 +15,14 @@ Authorization: Bearer <API_KEY>
 
 ### 当前开源 MVP 状态
 
-- 已实现：登录、当前用户、项目 CRUD、HTML 上传/替换、HTML 预览渲染、文件夹、数据集上传/替换/删除、同步配置/触发/状态/历史、项目成员权限、团队成员、API Key。
+- 已实现：登录、当前用户、项目 CRUD、HTML 上传/替换、HTML 预览渲染、文件夹、数据集上传/替换/删除、数据集同步配置/状态/历史（数据集动态来源已移除，`test`/`trigger` 返回 410）、项目成员权限、团队成员、API Key。
 - 已实现：ZIP 看板包解包、入口 HTML 渲染、CSS/JS/图片等静态资源托管；ZIP **创建/更新** 统一走上传会话（`upload_session_id`），不再接受 `POST /projects` 或 `PUT /html` 直接传 ZIP。
 - 已实现：包内 `artifacta.json` 导入（`sync_scripts`、数据集绑定）；合法用户 manifest 在提交时**不会被服务端覆盖**。无 manifest 时按扩展名自动登记包内数据文件。
 - 已实现：Bundle 脚本同步（`sync_scripts`）：平台在解包目录内执行 Python/Node 脚本，一次运行可更新多个 `outputs` 路径。
-- 已实现：`DATA_DRIVER=json|sqlite|postgres` 元数据持久化，SQLite adapter 带幂等迁移，Postgres adapter 适合多实例元数据存储。
+- 已实现：`DATA_DRIVER=json|sqlite|postgres` 元数据持久化，SQLite adapter 带幂等迁移；`postgres` 当前为单行 JSONB blob（PoC，无行级索引，不建议生产）。
 - 已实现：`STORAGE_DRIVER=local|s3`，可使用 S3/COS/R2/MinIO 兼容对象存储保存看板和数据集文件。
 - 已实现：轻量 CLI、`--json` 输出、`artifacta doctor`、API-driven 同步 Worker、API smoke test。
-- 已接入同步执行器：本地文件、上传目录文件、URL 拉取、`mock_rows`、S3/COS 对象、Presto/Trino HTTP 查询。
+- 已接入同步执行器：项目级 `sync_scripts`（解包目录内运行 Python/Node 脚本，手动触发）。按数据集的 URL / S3 / Presto 外部同步已移除。
 - 已实现：审计日志、Webhook、数据集预览、版本记录、嵌入 token 和 OIDC 登录入口。
 - API 错误响应统一使用本文档底部的错误 envelope。
 
@@ -434,7 +434,7 @@ GET /datasets
 
 | 参数 | 类型 | 描述 |
 |------|------|------|
-| source | string | 按同步来源筛选：`manual`, `cos`, `presto`，或 `all` |
+| source | string | 按同步来源筛选：`manual` 或 `all`（动态来源已移除，数据集统一为 `manual`） |
 | search | string | 搜索数据集名称和描述 |
 
 **响应示例:**
@@ -572,7 +572,7 @@ POST /projects
 
 ## Bundle 同步脚本（sync_scripts）
 
-当 ZIP 内 `artifacta.json` 声明 `sync_scripts` 时，服务端会为项目创建 `ProjectSyncScript` 记录。脚本在解包目录（`projects/:id/bundle`）内执行，与按数据集配置的 URL/COS/Presto 同步**并行存在**。
+当 ZIP 内 `artifacta.json` 声明 `sync_scripts` 时，服务端会为项目创建 `ProjectSyncScript` 记录。脚本在解包目录（`projects/:id/bundle`）内执行，是当前**唯一**的数据集动态更新方式（按数据集的 URL/COS/Presto 同步已移除）。
 
 执行环境变量（子进程）:
 
@@ -634,13 +634,15 @@ GET /projects/:project_id/sync-scripts/:script_id/history
 POST /sync/script-jobs/claim
 ```
 
-与 `POST /sync/jobs/claim` 类似，领取后在本机执行 `runScriptSync`（Python 3 或 Node）。Worker 应先 drain 脚本队列再处理数据集任务（见 `scripts/sync-worker.mjs`）。
+领取后在本机执行 `runScriptSync`（Python 3 或 Node）。Worker 只 drain 脚本队列；按数据集的同步队列已移除（见 `scripts/sync-worker.mjs`）。
 
 **权限:** `trigger`、`claim`、`PUT` 配置需要 API Key scope `sync:run`（或管理员会话）。
 
 ---
 
-## 数据同步配置（按数据集 / 传统来源）
+## 数据同步配置（按数据集，manual-only）
+
+> 数据集默认是静态数据。按数据集的外部动态来源（URL / COS / Presto）已移除——动态更新请使用项目级 [Bundle 同步脚本](#bundle-同步脚本sync_scripts)。下列端点保留为兼容入口：`GET/PUT` 只读写一个 `manual` 静态配置，`status`/`history` 读取历史运行，`test`/`trigger` 返回 `410 SYNC_REMOVED`。
 
 ### 获取数据集同步配置
 
@@ -651,17 +653,13 @@ GET /projects/:project_id/datasets/:dataset_id/sync
 **响应示例:**
 ```json
 {
-  "enabled": true,
-  "source_type": "cos",
-  "source_config": {
-    "bucket": "my-bucket",
-    "region": "ap-shanghai",
-    "path": "/data/sales.csv"
-  },
-  "schedule": "0 8 * * *",
-  "last_sync_at": "2024-01-20T08:00:00Z",
-  "last_sync_status": "success",
-  "next_sync_at": "2024-01-21T08:00:00Z"
+  "enabled": false,
+  "source_type": "manual",
+  "source_config": {},
+  "schedule": null,
+  "last_sync_at": null,
+  "last_sync_status": null,
+  "next_sync_at": null
 }
 ```
 
@@ -671,62 +669,9 @@ GET /projects/:project_id/datasets/:dataset_id/sync
 PUT /projects/:project_id/datasets/:dataset_id/sync
 ```
 
+`source_type` 仅接受 `manual`；其它取值返回 `400 INVALID_REQUEST`。请求只会把数据集落为静态（`enabled: false`）配置。
+
 **请求体 (JSON):**
-
-当前 CLI 会把本地 JSON 文件直接传到 `source_config`，因此最适合和本地 skill / CI 一起使用。
-
-**方式一：已实现的本地文件/URL/mock 数据**
-```json
-{
-  "enabled": true,
-  "source_type": "presto",
-  "source_config": {
-    "url": "https://data.example.com/sales.csv"
-  },
-  "update_mode": "full",
-  "schedule": "0 8 * * *"
-}
-```
-
-也可以使用 `local_path` / `file_path` / `path` 读取允许目录中的本地文件、使用 `upload_path` 读取上传目录中的文件，或使用 `mock_rows` / `sample_rows` 生成 CSV。
-
-**方式二：预留 COS 对象存储配置**
-```json
-{
-  "enabled": true,
-  "source_type": "cos",
-  "source_config": {
-    "bucket": "my-bucket",
-    "region": "ap-shanghai",
-    "path": "/data/sales.csv",
-    "secret_id": "AKIDxxxx",
-    "secret_key": "xxxxxx"
-  },
-  "update_mode": "full",
-  "schedule": "0 8 * * *"
-}
-```
-
-> 当前 `source_type` 支持 `manual`、`cos`、`presto` 三类枚举。同步执行器已经实现的是通用 `source_config` 读取能力：`local_path` / `file_path` / `path` 本地文件、`upload_path` 上传目录文件、`url` / `endpoint` 远程 URL、`mock_rows` / `sample_rows` 生成 CSV。真实 COS/S3 与 Presto/Trino 客户端仍是后续 connector adapter。
-
-**方式三：预留 Presto SQL 配置**
-```json
-{
-  "enabled": true,
-  "source_type": "presto",
-  "source_config": {
-    "host": "presto.company.com",
-    "port": 8080,
-    "catalog": "hive",
-    "schema": "sales",
-    "query": "SELECT * FROM daily_sales WHERE dt = current_date"
-  },
-  "update_mode": "incremental",
-  "schedule": "0 9 * * *"
-}
-```
-
-**方式四：手动上传 (禁用自动同步)**
 ```json
 {
   "enabled": false,
@@ -734,55 +679,22 @@ PUT /projects/:project_id/datasets/:dataset_id/sync
 }
 ```
 
-**update_mode 可选值:**
-- `full` - 全量更新，每次同步完全替换现有数据
-- `incremental` - 增量更新，每次同步追加新数据到现有数据集
-
-**Schedule 格式:** Cron 表达式
-- `0 8 * * *` - 每天 8:00
-- `0 */6 * * *` - 每 6 小时
-- `0 0 * * 1` - 每周一 0:00
-
-### 手动触发同步
+### 测试 / 触发同步（已移除）
 
 ```
+POST /projects/:project_id/datasets/:dataset_id/sync/test
 POST /projects/:project_id/datasets/:dataset_id/sync/trigger
 ```
 
-**响应示例:**
-```json
-{
-  "job_id": "job_abc123",
-  "status": "queued"
-}
-```
+`test` 返回提示信息，`trigger` 返回 `410 SYNC_REMOVED`，二者都引导用户改用项目同步脚本并手动触发。
 
-该接口只负责入队并返回 HTTP `202`。同步 Worker 通过 `POST /sync/jobs/claim` 领取队列任务并执行实际同步。
-
-### Worker 领取同步任务
+### Worker 领取同步任务（已停用）
 
 ```
 POST /sync/jobs/claim
 ```
 
-Worker 使用 Bearer API Key 调用该接口。若有排队任务，接口会把任务标记为运行、执行同步并返回结果；若没有任务，返回 `{ "job": null }`。
-
-**响应示例:**
-```json
-{
-  "job": {
-    "job_id": "job_abc123",
-    "project_id": "proj_abc123",
-    "dataset_id": "ds_001",
-    "status": "success",
-    "trigger": "manual",
-    "created_at": "2024-01-20T14:29:59Z",
-    "started_at": "2024-01-20T14:30:00Z",
-    "completed_at": "2024-01-20T14:30:01Z",
-    "error": null
-  }
-}
-```
+按数据集的同步队列已移除，该端点恒返回 `{ "job": null }`。Worker 实际只领取脚本任务（`POST /sync/script-jobs/claim`）。
 
 ### 查询同步状态
 
@@ -1101,7 +1013,7 @@ GET /stats
 
 ## 尚未实现但预留的能力
 
-以下能力不在当前 route handlers 中，属于后续生产化扩展点：请求速率限制、Webhook、OIDC/SAML SSO、Postgres/MySQL、对象存储、真实 COS/S3 与 Presto/Trino connector。
+以下能力属于后续生产化扩展点：SAML SSO、MySQL 元数据 adapter、关系型 Postgres（当前为单行 JSONB blob）、脚本子进程出站网络 allowlist、完整 5 段 cron 调度、公开链接密码保护、项目所有者转移。（速率限制、Webhook、OIDC、S3/COS 对象存储已实现。按数据集的 URL/COS/Presto 同步已移除，动态更新改用 bundle 同步脚本。）
 
 ---
 
@@ -1170,7 +1082,7 @@ pnpm cli -- bundle run-script \
 **列出数据集**
 ```bash
 pnpm cli -- datasets list
-pnpm cli -- datasets list --source presto
+pnpm cli -- datasets list --source manual
 ```
 
 **上传 / 替换数据集**
@@ -1186,25 +1098,13 @@ pnpm cli -- datasets replace \
   --file ./sales-data-v2.csv
 ```
 
-**提交同步配置**
+**触发 bundle 脚本同步（数据集动态更新的唯一方式）**
 ```bash
-pnpm cli -- datasets sync set \
-  --project-id proj_abc123 \
-  --dataset-id ds_001 \
-  --source-type presto \
-  --config-file ./sync.json
-
-pnpm cli -- datasets sync set \
-  --project-id proj_abc123 \
-  --dataset-id ds_001 \
-  --source-type presto \
-  --config-json '{"mock_rows":[{"region":"华东","revenue":1000}]}'
+pnpm cli -- sync-scripts trigger --project-id proj_abc123 --script-id sscript_abc123
+pnpm cli -- sync-scripts status --project-id proj_abc123 --script-id sscript_abc123
 ```
 
-**触发数据同步**
-```bash
-pnpm cli -- sync trigger --project-id proj_abc123 --dataset-id ds_001
-```
+> 按数据集的 `datasets sync set --source-type` 与 `sync trigger` 已弃用：来源仅支持 `manual`，`sync trigger` 命中 `410 SYNC_REMOVED`。
 
 **Doctor 与 JSON 输出**
 ```bash
@@ -1214,13 +1114,11 @@ pnpm cli -- --json projects list
 
 ### 同步 Worker
 
-Worker 使用相同 API Key：
+Worker 使用 API Key 只领取一类任务：
 
-1. `POST /sync/script-jobs/claim` — 执行 bundle 脚本同步任务
-2. `POST /sync/jobs/claim` — 执行按数据集配置的传统同步任务
-3. `GET /datasets` + `POST .../sync/trigger` — 为到期的启用同步数据集入队
+1. `POST /sync/script-jobs/claim` — 执行排队中的 bundle 脚本同步任务
 
-脚本同步需要运行环境安装 **Python 3**（`ARTIFACTA_PYTHON` 可覆盖解释器路径）。
+按数据集的同步队列（`/sync/jobs/claim`）及到期调度已移除。脚本同步需要运行环境安装 **Python 3**（`ARTIFACTA_PYTHON` 可覆盖解释器路径）。
 
 ```bash
 export ARTIFACTA_API_KEY=art_live_xxxxxxxxxxxx
@@ -1238,7 +1136,7 @@ pnpm dev
 pnpm test:smoke
 ```
 
-该脚本会登录、创建 API Key、上传临时 ZIP 看板、验证 HTML 与静态资源渲染、配置 `mock_rows` 同步、触发同步，并清理临时项目。
+该脚本会登录、创建 API Key、上传临时 ZIP 看板、验证 HTML 与静态资源渲染、校验数据集同步配置为 `manual`（`trigger` 返回 410、`jobs/claim` 返回 null）、预览、版本与嵌入 token，并清理临时项目。
 
 ### 在 Coding Agent 中使用
 
@@ -1250,12 +1148,10 @@ pnpm cli -- projects upload \
   --name "AI 生成的增长周报" \
   --visibility team
 
-# 3. Agent 给数据集写同步配置
-pnpm cli -- datasets sync set \
+# 3. 需要动态更新数据时，触发 bundle 内的同步脚本
+pnpm cli -- sync-scripts trigger \
   --project-id proj_abc123 \
-  --dataset-id ds_001 \
-  --source-type presto \
-  --config-file ./sync.json
+  --script-id sscript_abc123
 ```
 
 ## 生产化与运维 API

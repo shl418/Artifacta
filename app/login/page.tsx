@@ -8,23 +8,34 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useLanguage } from "@/lib/i18n/context"
 
 const demoAccounts = [
-  { email: "admin@artifacta.local", name: "张三", label: "管理员" },
-  { email: "lisi@artifacta.local", name: "李四", label: "使用者" },
+  { email: "admin@artifacta.local", name: "张三", label: "管理员", labelEn: "Admin" },
+  { email: "lisi@artifacta.local", name: "李四", label: "使用者", labelEn: "Member" },
 ]
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<main className="min-h-screen bg-background grid place-items-center text-sm text-muted-foreground">加载登录页...</main>}>
+    <Suspense fallback={<LoginFallback />}>
       <LoginForm />
     </Suspense>
+  )
+}
+
+function LoginFallback() {
+  const { t } = useLanguage()
+  return (
+    <main className="min-h-screen bg-background grid place-items-center text-sm text-muted-foreground">
+      {t("login.loading")}
+    </main>
   )
 }
 
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { t, lang } = useLanguage()
   const [email, setEmail] = useState(demoAccounts[0].email)
   const [name, setName] = useState(demoAccounts[0].name)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -45,7 +56,7 @@ function LoginForm() {
 
     if (!response.ok) {
       const payload = await response.json().catch(() => null)
-      setError(payload?.error?.message ?? "登录失败，请稍后重试。")
+      setError(payload?.error?.message ?? t("login.error"))
       return
     }
 
@@ -60,7 +71,7 @@ function LoginForm() {
           <Logo size={40} />
           <div>
             <h1 className="text-xl font-semibold text-foreground">Artifacta</h1>
-            <p className="text-sm text-muted-foreground">AI 时代的数据应用托管与分发</p>
+            <p className="text-sm text-muted-foreground">{t("login.subtitle")}</p>
           </div>
         </div>
 
@@ -68,18 +79,18 @@ function LoginForm() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <ShieldCheck className="size-5 text-primary" />
-              登录工作台
+              {t("login.title")}
             </CardTitle>
-            <CardDescription>本地开源版使用开发 SSO 流程，生产环境可替换为 SAML/OIDC。</CardDescription>
+            <CardDescription>{t("login.description")}</CardDescription>
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={login}>
               <div className="space-y-2">
-                <Label htmlFor="email">邮箱</Label>
+                <Label htmlFor="email">{t("login.email")}</Label>
                 <Input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="name">姓名</Label>
+                <Label htmlFor="name">{t("login.name")}</Label>
                 <Input id="name" value={name} onChange={(event) => setName(event.target.value)} />
               </div>
 
@@ -87,7 +98,7 @@ function LoginForm() {
 
               <Button className="w-full" type="submit" disabled={isSubmitting}>
                 <LogIn className="size-4" />
-                {isSubmitting ? "登录中" : "进入 Artifacta"}
+                {isSubmitting ? t("login.submitting") : t("login.submit")}
               </Button>
             </form>
           </CardContent>
@@ -106,7 +117,9 @@ function LoginForm() {
             >
               <span className="text-left">
                 <span className="block text-sm font-medium">{account.name}</span>
-                <span className="block text-xs text-muted-foreground">{account.label}</span>
+                <span className="block text-xs text-muted-foreground">
+                  {lang === "zh" ? account.label : account.labelEn}
+                </span>
               </span>
             </Button>
           ))}

@@ -14,6 +14,8 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
+import { useLanguage } from "@/lib/i18n/context"
+import type { TranslationKey } from "@/lib/i18n/translations"
 import {
   AlertCircle,
   ArrowRight,
@@ -52,12 +54,19 @@ interface OverviewPayload {
 }
 
 const permissionConfig = {
-  private: { label: "私有", icon: Lock, color: "text-amber-600 bg-amber-100" },
-  team: { label: "团队", icon: Users, color: "text-primary bg-primary/10" },
-  public: { label: "公开", icon: Globe, color: "text-emerald-600 bg-emerald-100" },
+  private: { icon: Lock, color: "text-amber-600 bg-amber-100" },
+  team: { icon: Users, color: "text-primary bg-primary/10" },
+  public: { icon: Globe, color: "text-emerald-600 bg-emerald-100" },
+}
+
+const visibilityKey: Record<string, TranslationKey> = {
+  private: "common.visibility.private",
+  team: "common.visibility.team",
+  public: "common.visibility.public",
 }
 
 export default function HomePage() {
+  const { t } = useLanguage()
   const [payload, setPayload] = useState<OverviewPayload | null>(null)
   const [activeTab, setActiveTab] = useState("recent")
   const [error, setError] = useState("")
@@ -66,27 +75,27 @@ export default function HomePage() {
     const response = await fetch("/api/v1/stats")
     const nextPayload = await response.json().catch(() => null)
     if (!response.ok) {
-      setError(nextPayload?.error?.message ?? "无法加载概览数据。")
+      setError(nextPayload?.error?.message ?? t("overview.error"))
       setPayload(null)
       return
     }
     setError("")
     setPayload(nextPayload)
-  }, [])
+  }, [t])
 
   useEffect(() => {
     loadOverview().catch(() => {
       setPayload(null)
-      setError("网络异常，无法加载概览数据。")
+      setError(t("common.error.network"))
     })
-  }, [loadOverview])
+  }, [loadOverview, t])
 
   const projects = activeTab === "recent" ? payload?.recent_projects ?? [] : payload?.popular_projects ?? []
   const stats = [
-    { title: "看板总数", value: payload?.stats.projects ?? 0, change: { value: 0, label: "当前" }, icon: FileBarChart },
-    { title: "数据集", value: payload?.stats.datasets ?? 0, change: { value: 0, label: "当前" }, icon: Database },
-    { title: "团队成员", value: payload?.stats.members ?? 0, change: { value: 0, label: "当前" }, icon: Users },
-    { title: "累计浏览", value: payload?.stats.views ?? 0, change: { value: 0, label: "当前" }, icon: Eye },
+    { title: t("overview.stats.dashboards"), value: payload?.stats.projects ?? 0, change: { value: 0, label: t("overview.stats.current") }, icon: FileBarChart },
+    { title: t("overview.stats.datasets"), value: payload?.stats.datasets ?? 0, change: { value: 0, label: t("overview.stats.current") }, icon: Database },
+    { title: t("overview.stats.members"), value: payload?.stats.members ?? 0, change: { value: 0, label: t("overview.stats.current") }, icon: Users },
+    { title: t("overview.stats.views"), value: payload?.stats.views ?? 0, change: { value: 0, label: t("overview.stats.current") }, icon: Eye },
   ]
 
   return (
@@ -94,7 +103,7 @@ export default function HomePage() {
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0 p-2 pl-0">
         <main className="flex-1 flex flex-col bg-card rounded-xl shadow-sm overflow-hidden">
-          <Header title="概览" />
+          <Header title={t("overview.title")} />
           <div className="flex-1 overflow-y-auto p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
               {stats.map((stat) => (
@@ -105,12 +114,12 @@ export default function HomePage() {
             {error && (
               <Alert variant="destructive" className="mb-4">
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle>概览加载失败</AlertTitle>
+                <AlertTitle>{t("overview.error")}</AlertTitle>
                 <AlertDescription>
                   <p>{error}</p>
                   <Button variant="outline" size="sm" className="mt-2" onClick={loadOverview}>
                     <RefreshCw className="h-3.5 w-3.5" />
-                    重试
+                    {t("common.retry")}
                   </Button>
                 </AlertDescription>
               </Alert>
@@ -121,16 +130,16 @@ export default function HomePage() {
                 <TabsList className="bg-secondary/50">
                   <TabsTrigger value="recent" className="gap-2">
                     <Clock className="h-4 w-4" />
-                    最近更新
+                    {t("overview.tab.recent")}
                   </TabsTrigger>
                   <TabsTrigger value="popular" className="gap-2">
                     <TrendingUp className="h-4 w-4" />
-                    热门看板
+                    {t("overview.tab.popular")}
                   </TabsTrigger>
                 </TabsList>
                 <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
                   <Link href="/dashboards">
-                    查看全部
+                    {t("overview.view_all")}
                     <ArrowRight className="h-4 w-4 ml-1" />
                   </Link>
                 </Button>
@@ -141,11 +150,11 @@ export default function HomePage() {
                   <Empty className="border py-16">
                     <EmptyHeader>
                       <EmptyMedia variant="icon"><FileBarChart /></EmptyMedia>
-                      <EmptyTitle>还没有看板</EmptyTitle>
-                      <EmptyDescription>上传第一个 HTML 或 ZIP 看板后，这里会显示最近更新和热门项目。</EmptyDescription>
+                      <EmptyTitle>{t("overview.empty.title")}</EmptyTitle>
+                      <EmptyDescription>{t("overview.empty.desc")}</EmptyDescription>
                     </EmptyHeader>
                     <Button asChild className="mt-4">
-                      <Link href="/upload"><Upload className="h-4 w-4" />创建项目</Link>
+                      <Link href="/upload"><Upload className="h-4 w-4" />{t("overview.empty.action")}</Link>
                     </Button>
                   </Empty>
                 )}
@@ -172,7 +181,7 @@ export default function HomePage() {
                             <TableCell className="hidden w-[92px] sm:table-cell">
                               <Badge variant="secondary" className={cn("gap-1 font-normal text-xs", permissionConfig[project.visibility].color)}>
                                 <PermIcon className="h-3 w-3" />
-                                {permissionConfig[project.visibility].label}
+                                {t(visibilityKey[project.visibility] ?? "common.visibility.private")}
                               </Badge>
                             </TableCell>
                             <TableCell className="hidden w-[104px] md:table-cell">
@@ -182,7 +191,7 @@ export default function HomePage() {
                                     {project.owner?.initials ?? "U"}
                                   </AvatarFallback>
                                 </Avatar>
-                                <span className="text-xs text-muted-foreground">{project.owner?.name ?? "Unknown"}</span>
+                                <span className="text-xs text-muted-foreground">{project.owner?.name ?? t("common.unknown")}</span>
                               </div>
                             </TableCell>
                             <TableCell className="w-[64px] text-right">

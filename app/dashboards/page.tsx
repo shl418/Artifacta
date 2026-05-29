@@ -56,15 +56,16 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import type { ProjectVisibility } from "@/lib/types"
 import { cn } from "@/lib/utils"
-
-type Visibility = "private" | "team" | "public"
+import { useLanguage } from "@/lib/i18n/context"
+import type { TranslationKey } from "@/lib/i18n/translations"
 
 interface ProjectSummary {
   id: string
   name: string
   description: string
-  visibility: Visibility
+  visibility: ProjectVisibility
   folder_id: string | null
   owner: { name: string; initials: string } | null
   views_count: number
@@ -117,15 +118,22 @@ interface DatasetVersionPayload {
 }
 
 const permissionConfig = {
-  private: { label: "私有", icon: Lock, color: "text-amber-600 bg-amber-50 border-amber-200" },
-  team: { label: "团队", icon: Users, color: "text-primary bg-primary/5 border-primary/20" },
-  public: { label: "公开", icon: Globe, color: "text-emerald-600 bg-emerald-50 border-emerald-200" },
+  private: { icon: Lock, color: "text-amber-600 bg-amber-50 border-amber-200" },
+  team: { icon: Users, color: "text-primary bg-primary/5 border-primary/20" },
+  public: { icon: Globe, color: "text-emerald-600 bg-emerald-50 border-emerald-200" },
+}
+
+const visibilityKey: Record<string, TranslationKey> = {
+  private: "common.visibility.private",
+  team: "common.visibility.team",
+  public: "common.visibility.public",
 }
 
 export default function DashboardsPage() {
+  const { t } = useLanguage()
   const [payload, setPayload] = useState<ProjectsPayload | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
-  const [visibilityFilter, setVisibilityFilter] = useState<"all" | Visibility>("all")
+  const [visibilityFilter, setProjectVisibilityFilter] = useState<"all" | ProjectVisibility>("all")
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [createFolderOpen, setCreateFolderOpen] = useState(false)
@@ -151,19 +159,19 @@ export default function DashboardsPage() {
     const response = await fetch(`/api/v1/projects?${params.toString()}`)
     const nextPayload = await response.json().catch(() => null)
     if (!response.ok) {
-      setError(nextPayload?.error?.message ?? "无法加载看板列表。")
+      setError(nextPayload?.error?.message ?? t("dashboards.error"))
       return
     }
     setError("")
     setPayload(nextPayload)
-  }, [currentFolderId, currentPage, searchQuery, visibilityFilter])
+  }, [currentFolderId, currentPage, searchQuery, visibilityFilter, t])
 
   useEffect(() => {
     loadProjects().catch(() => {
       setPayload(null)
-      setError("网络异常，无法加载看板列表。")
+      setError(t("common.error.network"))
     })
-  }, [loadProjects])
+  }, [loadProjects, t])
 
   const toggleProjectExpand = useCallback(async (projectId: string) => {
     if (expandedProjectIds.has(projectId)) {
@@ -196,7 +204,7 @@ export default function DashboardsPage() {
       await loadProjects()
     } else {
       const data = await response.json().catch(() => null)
-      setError(data?.error?.message ?? "创建文件夹失败。")
+      setError(data?.error?.message ?? t("dashboards.error"))
     }
   }
 
@@ -208,13 +216,13 @@ export default function DashboardsPage() {
     })
     if (!response.ok) {
       const data = await response.json().catch(() => null)
-      setError(data?.error?.message ?? "移动项目失败。")
+      setError(data?.error?.message ?? t("dashboards.error"))
       return
     }
     await loadProjects()
   }
 
-  const updateVisibility = async (projectId: string, visibility: Visibility) => {
+  const updateProjectVisibility = async (projectId: string, visibility: ProjectVisibility) => {
     const response = await fetch(`/api/v1/projects/${projectId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -222,7 +230,7 @@ export default function DashboardsPage() {
     })
     if (!response.ok) {
       const data = await response.json().catch(() => null)
-      setError(data?.error?.message ?? "更新可见性失败。")
+      setError(data?.error?.message ?? t("dashboards.error"))
       return
     }
     await loadProjects()
@@ -234,7 +242,7 @@ export default function DashboardsPage() {
     setPendingDelete(null)
     if (!response.ok) {
       const data = await response.json().catch(() => null)
-      setError(data?.error?.message ?? "删除项目失败。")
+      setError(data?.error?.message ?? t("dashboards.error"))
       return
     }
     await loadProjects()
@@ -247,7 +255,7 @@ export default function DashboardsPage() {
     setPendingDeleteDataset(null)
     if (!response.ok) {
       const data = await response.json().catch(() => null)
-      setError(data?.error?.message ?? "删除数据集失败。")
+      setError(data?.error?.message ?? t("dashboards.error"))
       return
     }
     setProjectDatasets((prev) => ({
@@ -261,7 +269,7 @@ export default function DashboardsPage() {
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0 p-2 pl-0">
         <main className="flex-1 flex flex-col bg-card rounded-xl shadow-sm overflow-hidden">
-          <Header title="BI 看板" />
+          <Header title={t("dashboards.title")} />
           <div className="flex-1 p-6 overflow-y-auto">
             <div className="flex flex-col gap-4 mb-4 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex flex-wrap items-center gap-3">
@@ -272,7 +280,7 @@ export default function DashboardsPage() {
                   onClick={() => { setCurrentFolderId(null); setCurrentPage(1) }}
                 >
                   <Home className="h-3.5 w-3.5" />
-                  全部
+                  {t("dashboards.filter.all")}
                 </Button>
                 {currentFolder && (
                   <>
@@ -284,7 +292,7 @@ export default function DashboardsPage() {
                 <div className="relative w-64">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                   <Input
-                    placeholder="搜索看板..."
+                    placeholder={t("dashboards.search.placeholder")}
                     value={searchQuery}
                     onChange={(event) => { setSearchQuery(event.target.value); setCurrentPage(1) }}
                     className="h-8 pl-8 text-sm"
@@ -296,34 +304,34 @@ export default function DashboardsPage() {
                   )}
                 </div>
 
-                <Select value={visibilityFilter} onValueChange={(value) => { setVisibilityFilter(value as "all" | Visibility); setCurrentPage(1) }}>
+                <Select value={visibilityFilter} onValueChange={(value) => { setProjectVisibilityFilter(value as "all" | ProjectVisibility); setCurrentPage(1) }}>
                   <SelectTrigger className="w-28 h-8 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">全部权限</SelectItem>
-                    <SelectItem value="private">私有</SelectItem>
-                    <SelectItem value="team">团队</SelectItem>
-                    <SelectItem value="public">公开</SelectItem>
+                    <SelectItem value="all">{t("dashboards.filter.perm")}</SelectItem>
+                    <SelectItem value="private">{t("common.visibility.private")}</SelectItem>
+                    <SelectItem value="team">{t("common.visibility.team")}</SelectItem>
+                    <SelectItem value="public">{t("common.visibility.public")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <Button size="sm" className="h-8 gap-1.5" onClick={() => setCreateFolderOpen(true)}>
                 <FolderPlus className="h-3.5 w-3.5" />
-                新建文件夹
+                {t("dashboards.folder.new")}
               </Button>
             </div>
 
             {error && (
               <Alert variant="destructive" className="mb-4">
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle>操作失败</AlertTitle>
+                <AlertTitle>{t("dashboards.error.title")}</AlertTitle>
                 <AlertDescription>
                   <p>{error}</p>
                   <Button variant="outline" size="sm" className="mt-2" onClick={() => loadProjects()}>
                     <RefreshCw className="h-3.5 w-3.5" />
-                    重试
+                    {t("common.retry")}
                   </Button>
                 </AlertDescription>
               </Alert>
@@ -334,11 +342,11 @@ export default function DashboardsPage() {
                 <Table className="min-w-[720px]">
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
-                      <TableHead className="w-[38%]">名称</TableHead>
-                      <TableHead>权限</TableHead>
-                      <TableHead>创建者</TableHead>
-                      <TableHead>更新时间</TableHead>
-                      <TableHead className="text-right">浏览</TableHead>
+                      <TableHead className="w-[38%]">{t("dashboards.col.name")}</TableHead>
+                      <TableHead>{t("dashboards.col.perm")}</TableHead>
+                      <TableHead>{t("dashboards.col.owner")}</TableHead>
+                      <TableHead>{t("dashboards.col.updated")}</TableHead>
+                      <TableHead className="text-right">{t("dashboards.col.views")}</TableHead>
                       <TableHead className="w-10" />
                     </TableRow>
                   </TableHeader>
@@ -352,11 +360,11 @@ export default function DashboardsPage() {
                             </div>
                             <div>
                               <div className="font-medium text-sm">{folder.name}</div>
-                              <div className="text-xs text-muted-foreground">{folder.project_count} 个看板</div>
+                              <div className="text-xs text-muted-foreground">{folder.project_count} {t("dashboards.count")}</div>
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell colSpan={5} className="text-xs text-muted-foreground">文件夹</TableCell>
+                        <TableCell colSpan={5} className="text-xs text-muted-foreground">{t("dashboards.folder.type")}</TableCell>
                       </TableRow>
                     ))}
 
@@ -392,7 +400,7 @@ export default function DashboardsPage() {
                             <TableCell>
                               <Badge variant="outline" className={cn("gap-1 font-normal text-xs", permissionConfig[project.visibility].color)}>
                                 <PermIcon className="h-3 w-3" />
-                                {permissionConfig[project.visibility].label}
+                                {t(visibilityKey[project.visibility] ?? "common.visibility.private")}
                               </Badge>
                             </TableCell>
                             <TableCell>
@@ -400,7 +408,7 @@ export default function DashboardsPage() {
                                 <Avatar className="h-5 w-5">
                                   <AvatarFallback className="text-[10px] bg-primary/10 text-primary">{project.owner?.initials ?? "U"}</AvatarFallback>
                                 </Avatar>
-                                <span className="text-xs text-muted-foreground">{project.owner?.name ?? "Unknown"}</span>
+                                <span className="text-xs text-muted-foreground">{project.owner?.name ?? t("common.unknown")}</span>
                               </div>
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground">{formatDate(project.updated_at)}</TableCell>
@@ -418,12 +426,12 @@ export default function DashboardsPage() {
                                   <DropdownMenuSub>
                                     <DropdownMenuSubTrigger>
                                       <FolderInput className="h-4 w-4 mr-2" />
-                                      移动到
+                                      {t("dashboards.move_to")}
                                     </DropdownMenuSubTrigger>
                                     <DropdownMenuSubContent>
                                       <DropdownMenuItem onClick={() => moveProject(project.id, null)}>
                                         <Home className="h-4 w-4 mr-2" />
-                                        根目录
+                                        {t("dashboards.folder.root")}
                                       </DropdownMenuItem>
                                       <DropdownMenuSeparator />
                                       {(payload?.folders ?? []).map((folder) => (
@@ -437,24 +445,24 @@ export default function DashboardsPage() {
                                   <DropdownMenuItem asChild>
                                     <Link href={`/projects/${project.id}`}>
                                       <Settings2 className="h-4 w-4 mr-2" />
-                                      管理项目
+                                      {t("dashboards.manage")}
                                     </Link>
                                   </DropdownMenuItem>
                                   <DropdownMenuSub>
                                     <DropdownMenuSubTrigger>
                                       <Settings2 className="h-4 w-4 mr-2" />
-                                      可见性
+                                      {t("dashboards.visibility.change")}
                                     </DropdownMenuSubTrigger>
                                     <DropdownMenuSubContent>
-                                      <DropdownMenuItem onClick={() => updateVisibility(project.id, "private")}>私有</DropdownMenuItem>
-                                      <DropdownMenuItem onClick={() => updateVisibility(project.id, "team")}>团队</DropdownMenuItem>
-                                      <DropdownMenuItem onClick={() => updateVisibility(project.id, "public")}>公开</DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => updateProjectVisibility(project.id, "private")}>{t("common.visibility.private")}</DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => updateProjectVisibility(project.id, "team")}>{t("common.visibility.team")}</DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => updateProjectVisibility(project.id, "public")}>{t("common.visibility.public")}</DropdownMenuItem>
                                     </DropdownMenuSubContent>
                                   </DropdownMenuSub>
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem className="text-destructive" onClick={() => setPendingDelete(project)}>
                                     <Trash2 className="h-4 w-4 mr-2" />
-                                    删除
+                                    {t("common.delete")}
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
@@ -486,17 +494,17 @@ export default function DashboardsPage() {
                 <Empty className="border-0 py-16">
                   <EmptyHeader>
                     <EmptyMedia variant="icon"><FileBarChart /></EmptyMedia>
-                    <EmptyTitle>还没有看板</EmptyTitle>
-                    <EmptyDescription>上传 HTML 或 ZIP 应用后，团队会在这里看到可预览、可分享的项目。</EmptyDescription>
+                    <EmptyTitle>{t("dashboards.empty.title")}</EmptyTitle>
+                    <EmptyDescription>{t("dashboards.empty.desc")}</EmptyDescription>
                   </EmptyHeader>
                   <EmptyContent>
-                    <Button asChild><Link href="/upload">创建第一个项目</Link></Button>
+                    <Button asChild><Link href="/upload">{t("dashboards.empty.action")}</Link></Button>
                   </EmptyContent>
                 </Empty>
               )}
 
               <div className="flex items-center justify-between px-4 py-3 border-t border-border">
-                <div className="text-sm text-muted-foreground">共 {payload?.pagination.total ?? 0} 个看板</div>
+                <div className="text-sm text-muted-foreground">{payload?.pagination.total ?? 0} {t("dashboards.count")}</div>
                 <div className="flex items-center gap-2">
                   <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage <= 1} onClick={() => setCurrentPage((page) => page - 1)}>
                     <ChevronLeft className="h-4 w-4" />
@@ -522,15 +530,15 @@ export default function DashboardsPage() {
       <AlertDialog open={!!pendingDelete} onOpenChange={(open) => !open && setPendingDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>删除项目</AlertDialogTitle>
+            <AlertDialogTitle>{t("dashboards.delete.title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              这会删除 &quot;{pendingDelete?.name}&quot; 及其数据集、权限和同步历史，操作完成后不可恢复。
+              {t("dashboards.delete.desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={deleteProject}>
-              删除
+              {t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -539,15 +547,15 @@ export default function DashboardsPage() {
       <AlertDialog open={!!pendingDeleteDataset} onOpenChange={(open) => !open && setPendingDeleteDataset(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>删除数据集</AlertDialogTitle>
+            <AlertDialogTitle>{t("datasets.title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              这会删除 &quot;{pendingDeleteDataset?.name}&quot; 的文件、同步历史和版本记录，看板中引用它的代码不会自动修改。
+              {t("dashboards.delete.desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={deleteDataset}>
-              删除
+              {t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -556,17 +564,17 @@ export default function DashboardsPage() {
       <Dialog open={createFolderOpen} onOpenChange={setCreateFolderOpen}>
         <DialogContent className="bg-card border-border max-w-sm">
           <DialogHeader>
-            <DialogTitle>新建文件夹</DialogTitle>
-            <DialogDescription>创建一个文件夹来整理看板。</DialogDescription>
+            <DialogTitle>{t("dashboards.folder.new")}</DialogTitle>
+            <DialogDescription>{t("dashboards.folder.create.desc")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
-              <Label>文件夹名称</Label>
+              <Label>{t("dashboards.folder.new.name")}</Label>
               <Input value={newFolderName} onChange={(event) => setNewFolderName(event.target.value)} onKeyDown={(event) => event.key === "Enter" && createFolder()} />
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setCreateFolderOpen(false)}>取消</Button>
-              <Button onClick={createFolder} disabled={!newFolderName.trim()}>创建</Button>
+              <Button variant="outline" onClick={() => setCreateFolderOpen(false)}>{t("common.cancel")}</Button>
+              <Button onClick={createFolder} disabled={!newFolderName.trim()}>{t("common.create")}</Button>
             </div>
           </div>
         </DialogContent>
@@ -590,19 +598,20 @@ function ProjectDatasetsPanel({
   onConfigure: (dataset: DatasetRecord) => void
   onDelete: (dataset: DatasetRecord) => void
 }) {
+  const { t } = useLanguage()
   void projectId
   void projectName
   if (isLoading || datasets === undefined) {
     return (
       <div className="px-12 py-3 bg-secondary/20 text-xs text-muted-foreground">
-        加载数据集中…
+        {t("dashboards.ds.loading")}
       </div>
     )
   }
   if (datasets.length === 0) {
     return (
       <div className="px-12 py-3 bg-secondary/20 text-xs text-muted-foreground">
-        该看板暂无数据集。
+        {t("dashboards.ds.empty")}
       </div>
     )
   }
@@ -610,7 +619,7 @@ function ProjectDatasetsPanel({
     <div className="bg-secondary/10 border-t border-border/50">
       <div className="px-4 py-2 flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
         <FileSpreadsheet className="h-3.5 w-3.5" />
-        数据集 ({datasets.length})
+        {t("dashboards.ds.count")} ({datasets.length})
       </div>
       <div className="pb-2 space-y-px">
         {datasets.map((dataset) => (
@@ -623,7 +632,7 @@ function ProjectDatasetsPanel({
                 <span className="text-xs text-muted-foreground shrink-0">{formatSize(dataset.size)}</span>
               </div>
               <div className="text-xs text-muted-foreground">
-                {dataset.rows ?? "?"} 行 · {dataset.columns ?? "?"} 列 · v{dataset.version} · {formatDate(dataset.updated_at)}
+                {dataset.rows ?? "?"} {t("common.rows")} · {dataset.columns ?? "?"} {t("common.cols")} · v{dataset.version} · {formatDate(dataset.updated_at)}
               </div>
             </div>
             <div className="flex items-center gap-1 shrink-0">
@@ -652,6 +661,7 @@ function DatasetConfigDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
+  const { t } = useLanguage()
   const [dialogError, setDialogError] = useState("")
   const [preview, setPreview] = useState<DatasetPreviewPayload | null>(null)
   const [versions, setVersions] = useState<DatasetVersionPayload["data"]>([])
@@ -681,29 +691,29 @@ function DatasetConfigDialog({
         if (versionPayload?.data) setVersions(versionPayload.data)
         setSyncHistory(historyPayload?.data ?? [])
       })
-      .catch(() => setDialogError("无法加载数据集详情。"))
-  }, [dataset])
+      .catch(() => setDialogError(t("dashboards.ds.error")))
+  }, [dataset, t])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>{dataset?.name ?? "数据集详情"}</DialogTitle>
-          {projectName && <DialogDescription>所属看板：{projectName}</DialogDescription>}
+          <DialogTitle>{dataset?.name ?? t("dashboards.ds.count")}</DialogTitle>
+          {projectName && <DialogDescription>{t("dashboards.ds.owner")}{projectName}</DialogDescription>}
         </DialogHeader>
         {dialogError && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>加载失败</AlertTitle>
+            <AlertTitle>{t("dashboards.ds.error.title")}</AlertTitle>
             <AlertDescription>{dialogError}</AlertDescription>
           </Alert>
         )}
         <Tabs defaultValue="preview" className="py-4">
           <TabsList className="flex-wrap h-auto">
-            <TabsTrigger value="preview">预览</TabsTrigger>
-            <TabsTrigger value="history">版本</TabsTrigger>
-            <TabsTrigger value="runs">同步记录</TabsTrigger>
-            <TabsTrigger value="sync">数据更新</TabsTrigger>
+            <TabsTrigger value="preview">{t("dashboards.ds.tab.preview")}</TabsTrigger>
+            <TabsTrigger value="history">{t("dashboards.ds.tab.history")}</TabsTrigger>
+            <TabsTrigger value="runs">{t("dashboards.ds.tab.runs")}</TabsTrigger>
+            <TabsTrigger value="sync">{t("dashboards.ds.tab.sync")}</TabsTrigger>
           </TabsList>
           <TabsContent value="preview" className="pt-4">
             {preview?.parsed === false && <p className="text-sm text-muted-foreground">{preview.message}</p>}
@@ -719,43 +729,43 @@ function DatasetConfigDialog({
                 </div>
               </div>
             ) : (
-              !dialogError && <p className="text-sm text-muted-foreground">暂无可结构化预览的字段。</p>
+              !dialogError && <p className="text-sm text-muted-foreground">{t("dashboards.ds.preview.empty")}</p>
             )}
           </TabsContent>
           <TabsContent value="history" className="pt-4">
             <div className="space-y-2">
-              {versions.length === 0 && <p className="text-sm text-muted-foreground">暂无版本记录。</p>}
+              {versions.length === 0 && <p className="text-sm text-muted-foreground">{t("dashboards.ds.history.empty")}</p>}
               {versions.map((version) => (
                 <div key={version.id} className="flex items-center justify-between rounded-lg border p-3 text-sm">
                   <div>
                     <p className="font-medium">v{version.version} · {version.file_name}</p>
-                    <p className="text-xs text-muted-foreground">{version.rows ?? "?"} 行 · {version.columns ?? "?"} 列 · {version.file_type}</p>
+                    <p className="text-xs text-muted-foreground">{version.rows ?? "?"} {t("common.rows")} · {version.columns ?? "?"} {t("common.cols")} · {version.file_type}</p>
                   </div>
-                  <p className="text-xs text-muted-foreground">{new Date(version.created_at).toLocaleString("zh-CN")}</p>
+                  <p className="text-xs text-muted-foreground">{new Date(version.created_at).toLocaleString()}</p>
                 </div>
               ))}
             </div>
           </TabsContent>
           <TabsContent value="runs" className="pt-4 space-y-2">
-            {syncHistory.length === 0 && <p className="text-sm text-muted-foreground">还没有同步运行记录。</p>}
+            {syncHistory.length === 0 && <p className="text-sm text-muted-foreground">{t("dashboards.ds.runs.empty")}</p>}
             {syncHistory.map((run) => (
               <div key={run.sync_id} className="rounded-lg border p-3 text-sm space-y-1">
                 <div className="flex items-center justify-between">
                   <Badge variant={run.status === "success" ? "secondary" : run.status === "failed" ? "destructive" : "outline"}>{run.status}</Badge>
-                  <span className="text-xs text-muted-foreground">{new Date(run.started_at).toLocaleString("zh-CN")}</span>
+                  <span className="text-xs text-muted-foreground">{new Date(run.started_at).toLocaleString()}</span>
                 </div>
-                <p className="text-xs text-muted-foreground">同步 {run.rows_synced} 行</p>
+                <p className="text-xs text-muted-foreground">{t("dashboards.ds.synced_rows")} {run.rows_synced} {t("common.rows")}</p>
                 {run.error && <p className="text-xs text-destructive">{run.error}</p>}
               </div>
             ))}
           </TabsContent>
           <TabsContent value="sync" className="space-y-4 pt-4">
             <div className="rounded-lg border bg-secondary/20 p-3 text-xs text-muted-foreground">
-              当前数据集为静态数据。数据更新已统一为&quot;项目同步脚本 + 手动触发&quot;，请到项目详情页的&quot;同步脚本&quot;中配置脚本输出并执行更新。
+              {t("project.datasets.empty")}
             </div>
             {dataset && (
               <Button variant="outline" size="sm" asChild>
-                <Link href={`/projects/${dataset.project_id}`}>前往项目管理页 →</Link>
+                <Link href={`/projects/${dataset.project_id}`}>{t("dashboards.ds.goto_project")}</Link>
               </Button>
             )}
           </TabsContent>
@@ -766,7 +776,7 @@ function DatasetConfigDialog({
 }
 
 function formatDate(value: string) {
-  return new Date(value).toLocaleString("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+  return new Date(value).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
 }
 
 function formatSize(size: number) {

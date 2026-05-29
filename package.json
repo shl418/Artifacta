@@ -23,12 +23,12 @@
     "test": "pnpm test:api-contract && pnpm test:client && pnpm test:security && pnpm test:unit",
     "test:api-contract": "node scripts/test-api-contract.mjs",
     "test:client": "node scripts/test-client-package.mjs",
-    "test:unit": "node scripts/test-sync-jobs.mjs && node scripts/test-sync-job-persistence.mjs && node scripts/test-script-sync.mjs && node scripts/test-manifest-parser.mjs && node scripts/test-mime.mjs && node scripts/test-entrypoint.mjs && node scripts/test-validate-bundle.mjs && node scripts/test-get-project-by-id.mjs && node scripts/test-asset-routing.mjs && node scripts/test-csv-parser.mjs && node scripts/test-rate-limit.mjs && node scripts/test-request-size.mjs && node scripts/test-embed-token.mjs && node scripts/test-versions.mjs && node scripts/test-sync-config-validation.mjs && node scripts/test-api-key-scopes.mjs && node scripts/test-job-lifecycle.mjs && node scripts/test-source-adapters.mjs",
+    "test:unit": "node scripts/test-sync-job-persistence.mjs && node scripts/test-script-sync.mjs && node scripts/test-manifest-parser.mjs && node scripts/test-mime.mjs && node scripts/test-entrypoint.mjs && node scripts/test-validate-bundle.mjs && node scripts/test-get-project-by-id.mjs && node scripts/test-asset-routing.mjs && node scripts/test-csv-parser.mjs && node scripts/test-rate-limit.mjs && node scripts/test-request-size.mjs && node scripts/test-embed-token.mjs && node scripts/test-versions.mjs && node scripts/test-sync-config-validation.mjs && node scripts/test-api-key-scopes.mjs && node scripts/test-job-lifecycle.mjs",
     "cli:pack": "cd packages/cli && pnpm pack",
     "cli:publish:dry-run": "cd packages/cli && pnpm publish --dry-run --access public",
     "worker:once": "node scripts/sync-worker.mjs --once",
     "test:smoke": "node scripts/smoke-api.mjs",
-    "test:security": "node scripts/test-zip-security.mjs && node scripts/test-sync-source-policy.mjs && node scripts/test-upload-session.mjs && node scripts/test-cache-control.mjs"
+    "test:security": "node scripts/test-zip-security.mjs && node scripts/test-upload-session.mjs && node scripts/test-cache-control.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1050.0",

@@ -26,7 +26,7 @@ UPLOAD_DIR=/var/lib/Artifacta/uploads
 
 Mount `/var/lib/Artifacta` to durable storage. The app stores uploaded dashboard HTML, extracted ZIP assets, uploaded datasets, and SQLite metadata there.
 
-For multi-instance deployments, use Postgres and S3-compatible storage:
+For multi-instance deployments, use S3-compatible artifact storage. Postgres metadata is available but still a PoC (single-row JSONB blob), so prefer SQLite for a single writer until the normalized schema lands:
 
 ```bash
 DATA_DRIVER=postgres
@@ -45,7 +45,7 @@ S3_SECRET_ACCESS_KEY=...
 | --- | --- |
 | `DATA_DIR/artifacta.json` | JSON metadata database when `DATA_DRIVER=json`. |
 | `SQLITE_PATH` | SQLite metadata database when `DATA_DRIVER=sqlite`. |
-| `POSTGRES_URL` / `DATABASE_URL` | Postgres metadata database when `DATA_DRIVER=postgres`. |
+| `POSTGRES_URL` / `DATABASE_URL` | Postgres metadata database when `DATA_DRIVER=postgres` (PoC: single-row JSONB blob, not yet a normalized multi-writer schema). |
 | `UPLOAD_DIR/projects/:projectId/index.html` | Single-file dashboard uploads. |
 | `UPLOAD_DIR/projects/:projectId/bundle/...` | Extracted ZIP dashboard assets. |
 | `UPLOAD_DIR/projects/:projectId/datasets/...` | Uploaded or synced dataset files. |
@@ -58,7 +58,7 @@ Do not store these paths in an ephemeral container filesystem unless you are onl
 | --- | --- | --- |
 | `NEXT_PUBLIC_APP_URL` | Yes | Public URL used to generate preview and API URLs. |
 | `AUTH_SECRET` | Yes | Long random string for signing sessions. Rotating it invalidates existing sessions. |
-| `DATA_DRIVER` | Recommended | `json` for demos, `sqlite` for single-node self-hosting, `postgres` for multi-instance metadata. |
+| `DATA_DRIVER` | Recommended | `json` for demos, `sqlite` for single-node self-hosting, `postgres` for multi-instance metadata (PoC). |
 | `DATA_DIR` | Recommended | Persistent metadata directory. |
 | `SQLITE_PATH` | When SQLite | Path to the SQLite file. Defaults inside `DATA_DIR`. |
 | `UPLOAD_DIR` | Recommended | Persistent uploaded artifact directory. |
@@ -67,8 +67,6 @@ Do not store these paths in an ephemeral container filesystem unless you are onl
 | `ARTIFACTA_MAX_ARTIFACT_BYTES`, `ARTIFACTA_MAX_DATASET_BYTES` | Recommended | Upload limits surfaced in API errors and the UI. |
 | `ARTIFACTA_RATE_LIMIT_WINDOW_MS`, `ARTIFACTA_RATE_LIMIT_MAX` | Recommended | In-process rate limiting for auth, uploads, and sync triggers. |
 | `OIDC_ISSUER_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | Optional | OIDC login configuration. |
-| `SYNC_URL_ALLOWLIST` | Recommended for sync | Comma-separated host allowlist for dataset sync URL sources. Leave empty to disable remote URL sync in shared production deployments. |
-| `SYNC_LOCAL_BASE_DIR` | Recommended for sync | Base directory for local file sync sources. Paths outside this directory are rejected. Leave empty only for local development. |
 | `ARTIFACTA_API_KEY` | Worker only | API key used by `scripts/sync-worker.mjs`. |
 | `ARTIFACTA_PYTHON` | Script sync | Python interpreter for bundle `sync_scripts` with `runtime: python`. Defaults to `python3`. |
 | `ARTIFACTA_SCRIPT_TIMEOUT_MS` | Script sync | Subprocess timeout (default `300000`). |
@@ -113,37 +111,20 @@ ARTIFACTA_API_KEY=art_... \
 node scripts/sync-worker.mjs --interval 300
 ```
 
-Current sync runners support:
+The worker only drains one queue:
 
-- **Per-dataset jobs** (`POST /sync/jobs/claim`): local files, uploaded artifact paths, URL fetches, `mock_rows`, S3/COS objects, and Presto/Trino HTTP queries.
 - **Bundle script jobs** (`POST /sync/script-jobs/claim`): Python/Node scripts declared in `artifacta.json` `sync_scripts`, writing only to declared `outputs` paths inside the bundle directory.
 
-Bundle scripts do not use `SYNC_URL_ALLOWLIST`; they run as subprocesses with cwd set to the bundle root. Treat script code as trusted only if you control who can publish ZIPs.
+Per-dataset external sync (URL / S3 / Presto) has been removed; `POST /sync/jobs/claim` is a no-op stub that always returns `{ "job": null }`.
 
-## Dataset Sync Source Safety
+## Bundle Script Safety
 
-Dataset sync jobs can read from local file paths or remote URLs, so shared deployments should explicitly constrain both source types before enabling scheduled workers.
-
-### Remote URLs
-
-Set `SYNC_URL_ALLOWLIST` to a comma-separated list of lower-case hostnames that dataset sync jobs may fetch, for example `data.example.com,warehouse.example.com`. Artifacta only allows `http:` and `https:` URLs, rejects `localhost` and `.localhost`, and blocks private or link-local IP ranges such as `127.*`, `10.*`, `192.168.*`, `172.16-31.*`, `169.254.*`, and `::1`.
-
-When `SYNC_URL_ALLOWLIST` is empty, remote URL sync is rejected in production. In development, Artifacta DNS-resolves non-IP hostnames and rejects the URL if any resolved address is private or link-local.
-
-### Local File Paths
-
-Set `SYNC_LOCAL_BASE_DIR` to the directory that contains files workers are allowed to read, for example `/var/lib/Artifacta/sync-sources`. Relative paths are resolved from the process working directory, and configured local paths must equal or stay inside the base directory. Artifacta also rejects restricted system locations such as `/etc`, `/proc`, `/sys`, `/dev`, and `C:\Windows\System32`.
-
-When `SYNC_LOCAL_BASE_DIR` is empty, local file sync is rejected in production. Leaving it empty should be treated as a development-only convenience.
-
-### Known Limitation: DNS Rebinding
-
-The built-in remote URL checks validate the hostname and DNS answers before the request starts, but they do not pin the resolved address for the outbound `fetch`. A hostile DNS setup could change answers between validation and connection time. For shared or high-trust deployments, keep `SYNC_URL_ALLOWLIST` narrow and enforce equivalent egress controls at the network layer.
+Bundle scripts run as subprocesses with cwd set to the bundle root and write only to declared `outputs` paths. They have no built-in outbound network allowlist in v1, so treat script code as trusted only if you control who can publish ZIPs, and enforce egress controls at the network layer for shared deployments.
 
 ## Production Hardening Checklist
 
 - Configure OIDC for shared deployments; add SAML if your identity provider requires it.
-- Use Postgres metadata storage for multi-instance writes beyond SQLite.
+- Use Postgres metadata storage for multi-instance writes beyond SQLite (PoC today — single-row JSONB blob, not a normalized multi-writer schema).
 - Use S3/COS/R2/MinIO artifact storage for multi-instance deployments.
 - Add backup jobs for SQLite and uploaded artifacts.
 - Tune upload size limits and add malware scanning if accepting files from many users.
@@ -155,7 +136,7 @@ The built-in remote URL checks validate the hostname and DNS answers before the 
 
 Use this path when moving from a single-node disk deployment to shared object storage:
 
-1. Configure `STORAGE_DRIVER=s3`, bucket credentials, and `DATA_DRIVER=postgres` (recommended) or keep SQLite for a single writer.
+1. Configure `STORAGE_DRIVER=s3`, bucket credentials, and keep SQLite for a single writer (or `DATA_DRIVER=postgres` if you accept the PoC blob schema).
 2. Copy `UPLOAD_DIR/projects/**` into the bucket using your provider CLI, preserving the `projects/<projectId>/...` key layout.
 3. Start Artifacta with the new environment variables and verify one HTML preview, one ZIP asset route, and one dataset download.
 4. Keep the old `UPLOAD_DIR` volume read-only until you confirm sync jobs and uploads write to object storage.
@@ -166,7 +147,7 @@ Artifacta reads and writes artifacts exclusively through `lib/server/object-stor
 ## Suggested Growth Topology
 
 - Web: one or more Next.js app containers.
-- Metadata: SQLite for single-node self-hosting, Postgres for multi-node deployments.
+- Metadata: SQLite for single-node self-hosting; Postgres for multi-node deployments once the PoC blob schema is replaced by a normalized one.
 - Artifacts: local volume for single-node, S3-compatible object storage for multi-node.
 - Worker: separate process using API key authentication.
 - Identity: enterprise OIDC provider, with SAML as an extension point.

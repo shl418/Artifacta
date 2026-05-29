@@ -1,8 +1,9 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
+import type { ProjectVisibility } from "@/lib/types"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -10,16 +11,16 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AlertCircle, Clock, Database, Eye, FileBarChart, RefreshCw, Shield, Users } from "lucide-react"
-
-type Visibility = "private" | "team" | "public"
+import { useLanguage } from "@/lib/i18n/context"
 
 interface ProjectDetail {
   id: string
   name: string
   description: string
-  visibility: Visibility
+  visibility: ProjectVisibility
   preview_url: string
   html_url: string
   folder_id: string | null
@@ -52,11 +53,20 @@ interface ProjectDetail {
 
 export default function ProjectDetailPage() {
   const params = useParams<{ projectId: string }>()
+  const { t } = useLanguage()
   const [project, setProject] = useState<ProjectDetail | null>(null)
   const [versions, setVersions] = useState<Array<{ id: string; version: number; notes: string; created_at: string }>>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
   const [embedUrl, setEmbedUrl] = useState("")
   const [actionMessage, setActionMessage] = useState("")
+  const actionMessageTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const showActionMessage = (message: string) => {
+    setActionMessage(message)
+    if (actionMessageTimer.current) clearTimeout(actionMessageTimer.current)
+    actionMessageTimer.current = setTimeout(() => setActionMessage(""), 5000)
+  }
 
   const loadProject = useCallback(async () => {
     const [projectResponse, versionsResponse] = await Promise.all([
@@ -66,17 +76,22 @@ export default function ProjectDetailPage() {
     const projectPayload = await projectResponse.json().catch(() => null)
     const versionPayload = await versionsResponse.json().catch(() => null)
     if (!projectResponse.ok) {
-      setError(projectPayload?.error?.message ?? "无法加载项目详情。")
+      setError(projectPayload?.error?.message ?? t("project.load.error"))
+      setIsLoading(false)
       return
     }
     setError("")
     setProject(projectPayload)
     setVersions(versionPayload?.data ?? [])
-  }, [params.projectId])
+    setIsLoading(false)
+  }, [params.projectId, t])
 
   useEffect(() => {
-    loadProject().catch(() => setError("网络异常，无法加载项目详情。"))
-  }, [loadProject])
+    loadProject().catch(() => {
+      setError(t("common.error.network"))
+      setIsLoading(false)
+    })
+  }, [loadProject, t])
 
   const createEmbedLink = async () => {
     const response = await fetch(`/api/v1/projects/${params.projectId}/embed-token`, {
@@ -86,21 +101,21 @@ export default function ProjectDetailPage() {
     })
     const payload = await response.json().catch(() => null)
     if (!response.ok) {
-      setActionMessage(payload?.error?.message ?? "无法创建嵌入链接。")
+      showActionMessage(payload?.error?.message ?? t("project.embed.error"))
       return
     }
     setEmbedUrl(payload.embed_url)
-    setActionMessage("嵌入链接已生成，1 小时内有效。")
+    showActionMessage(t("project.embed.generated"))
   }
 
   const rollbackVersion = async (versionId: string) => {
     const response = await fetch(`/api/v1/projects/${params.projectId}/versions/${versionId}/rollback`, { method: "POST" })
     const payload = await response.json().catch(() => null)
     if (!response.ok) {
-      setActionMessage(payload?.error?.message ?? "回滚失败。")
+      showActionMessage(payload?.error?.message ?? t("project.versions.rollback.error"))
       return
     }
-    setActionMessage("看板已回滚到所选版本。")
+    showActionMessage(t("project.versions.rollback.success"))
     await loadProject()
   }
 
@@ -108,14 +123,14 @@ export default function ProjectDetailPage() {
     const response = await fetch(`/api/v1/projects/${params.projectId}/sync-scripts/${scriptId}/trigger`, { method: "POST" })
     const payload = await response.json().catch(() => null)
     if (!response.ok) {
-      setActionMessage(payload?.error?.message ?? "无法触发脚本同步。")
+      showActionMessage(payload?.error?.message ?? t("project.scripts.trigger.error"))
       return
     }
-    setActionMessage(`脚本同步已排队：${payload.job_id}`)
+    showActionMessage(`${t("project.scripts.trigger.success")}${payload.job_id}`)
     await loadProject()
   }
 
-  const updateVisibility = async (visibility: Visibility) => {
+  const updateVisibility = async (visibility: ProjectVisibility) => {
     const response = await fetch(`/api/v1/projects/${params.projectId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -123,7 +138,7 @@ export default function ProjectDetailPage() {
     })
     if (!response.ok) {
       const payload = await response.json().catch(() => null)
-      setError(payload?.error?.message ?? "更新项目失败。")
+      setError(payload?.error?.message ?? t("project.visibility.update.error"))
       return
     }
     await loadProject()
@@ -134,23 +149,43 @@ export default function ProjectDetailPage() {
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0 p-2 pl-0">
         <main className="flex-1 flex flex-col bg-card rounded-xl shadow-sm overflow-hidden">
-          <Header title="项目详情" />
+          <Header title={t("project.title")} />
           <div className="flex-1 overflow-y-auto p-6">
             {error && (
               <Alert variant="destructive" className="mb-4">
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle>项目详情加载失败</AlertTitle>
+                <AlertTitle>{t("project.load.error.title")}</AlertTitle>
                 <AlertDescription>
                   <p>{error}</p>
                   <Button variant="outline" size="sm" className="mt-2" onClick={loadProject}>
                     <RefreshCw className="h-3.5 w-3.5" />
-                    重试
+                    {t("common.retry")}
                   </Button>
                 </AlertDescription>
               </Alert>
             )}
 
-            {project && (
+            {isLoading && !error && (
+              <div className="mx-auto max-w-6xl space-y-6">
+                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                  <div className="space-y-2 flex-1">
+                    <Skeleton className="h-6 w-48" />
+                    <Skeleton className="h-4 w-80" />
+                  </div>
+                  <div className="flex gap-2">
+                    <Skeleton className="h-9 w-16" />
+                    <Skeleton className="h-9 w-20" />
+                    <Skeleton className="h-9 w-32" />
+                  </div>
+                </div>
+                <div className="grid gap-4 md:grid-cols-4">
+                  {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-20" />)}
+                </div>
+                <Skeleton className="h-64" />
+              </div>
+            )}
+
+            {!isLoading && project && (
               <div className="mx-auto max-w-6xl space-y-6">
                 <div className="space-y-4">
                   <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -160,17 +195,17 @@ export default function ProjectDetailPage() {
                         <h2 className="text-xl font-semibold">{project.name}</h2>
                         <Badge variant="outline">{project.visibility}</Badge>
                       </div>
-                      <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{project.description || "暂无描述"}</p>
+                      <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{project.description || t("project.no_desc")}</p>
                     </div>
                     <div className="flex shrink-0 flex-wrap gap-2">
-                      <Button asChild variant="outline" size="sm"><Link href={`/view/${project.id}`}>预览</Link></Button>
-                      <Button variant="outline" size="sm" onClick={createEmbedLink}>嵌入链接</Button>
-                      <Select value={project.visibility} onValueChange={(value) => updateVisibility(value as Visibility)}>
+                      <Button asChild variant="outline" size="sm"><Link href={`/view/${project.id}`}>{t("project.preview")}</Link></Button>
+                      <Button variant="outline" size="sm" onClick={createEmbedLink}>{t("project.embed")}</Button>
+                      <Select value={project.visibility} onValueChange={(value) => updateVisibility(value as ProjectVisibility)}>
                         <SelectTrigger className="h-9 w-32"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="private">私有</SelectItem>
-                          <SelectItem value="team">团队</SelectItem>
-                          <SelectItem value="public">公开</SelectItem>
+                          <SelectItem value="private">{t("common.visibility.private")}</SelectItem>
+                          <SelectItem value="team">{t("common.visibility.team")}</SelectItem>
+                          <SelectItem value="public">{t("common.visibility.public")}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -180,7 +215,7 @@ export default function ProjectDetailPage() {
                       {actionMessage && <p className="text-sm text-muted-foreground">{actionMessage}</p>}
                       {embedUrl && (
                         <p className="text-xs text-muted-foreground">
-                          <span className="font-medium">嵌入链接：</span>
+                          <span className="font-medium">{t("project.embed.label")}</span>
                           <a className="break-all text-primary underline" href={embedUrl} target="_blank" rel="noreferrer">
                             {embedUrl}
                           </a>
@@ -191,32 +226,32 @@ export default function ProjectDetailPage() {
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-4">
-                  <Metric icon={Eye} label="浏览" value={project.views_count} />
-                  <Metric icon={Database} label="数据集" value={project.datasets.length} />
-                  <Metric icon={Users} label="协作者" value={project.permissions.length} />
-                  <Metric icon={Shield} label="版本" value={versions.length} />
+                  <Metric icon={Eye} label={t("project.metric.views")} value={project.views_count} />
+                  <Metric icon={Database} label={t("project.metric.datasets")} value={project.datasets.length} />
+                  <Metric icon={Users} label={t("project.metric.members")} value={project.permissions.length} />
+                  <Metric icon={Shield} label={t("project.metric.versions")} value={versions.length} />
                 </div>
 
                 <Tabs defaultValue="overview">
                   <TabsList>
-                    <TabsTrigger value="overview">概览</TabsTrigger>
-                    <TabsTrigger value="datasets">数据集</TabsTrigger>
-                    <TabsTrigger value="sync-scripts">同步脚本</TabsTrigger>
-                    <TabsTrigger value="permissions">协作</TabsTrigger>
-                    <TabsTrigger value="versions">版本</TabsTrigger>
-                    <TabsTrigger value="activity">动态</TabsTrigger>
+                    <TabsTrigger value="overview">{t("project.tab.overview")}</TabsTrigger>
+                    <TabsTrigger value="datasets">{t("project.tab.datasets")}</TabsTrigger>
+                    <TabsTrigger value="sync-scripts">{t("project.tab.scripts")}</TabsTrigger>
+                    <TabsTrigger value="permissions">{t("project.tab.permissions")}</TabsTrigger>
+                    <TabsTrigger value="versions">{t("project.tab.versions")}</TabsTrigger>
+                    <TabsTrigger value="activity">{t("project.tab.activity")}</TabsTrigger>
                   </TabsList>
                   <TabsContent value="overview" className="mt-4">
                     <Card>
                       <CardHeader>
-                        <CardTitle>元数据</CardTitle>
-                        <CardDescription>项目、文件和最近更新信息。</CardDescription>
+                        <CardTitle>{t("project.overview.card.title")}</CardTitle>
+                        <CardDescription>{t("project.overview.card.desc")}</CardDescription>
                       </CardHeader>
                       <CardContent className="grid gap-3 text-sm md:grid-cols-2">
-                        <p><span className="text-muted-foreground">项目 ID：</span>{project.id}</p>
-                        <p><span className="text-muted-foreground">文件夹：</span>{project.folder_id ?? "根目录"}</p>
-                        <p><span className="text-muted-foreground">产物：</span>{project.artifact.original_name} · {project.artifact.kind}</p>
-                        <p><span className="text-muted-foreground">更新时间：</span>{new Date(project.updated_at).toLocaleString("zh-CN")}</p>
+                        <p><span className="text-muted-foreground">{t("project.overview.id")}</span>{project.id}</p>
+                        <p><span className="text-muted-foreground">{t("project.overview.folder")}</span>{project.folder_id ?? t("project.overview.folder.root")}</p>
+                        <p><span className="text-muted-foreground">{t("project.overview.artifact")}</span>{project.artifact.original_name} · {project.artifact.kind}</p>
+                        <p><span className="text-muted-foreground">{t("project.overview.updated")}</span>{new Date(project.updated_at).toLocaleString()}</p>
                       </CardContent>
                     </Card>
                   </TabsContent>
@@ -224,7 +259,7 @@ export default function ProjectDetailPage() {
                     {project.datasets.length === 0 && (
                       <Card>
                         <CardContent className="p-6 text-sm text-muted-foreground">
-                          该项目还没有绑定数据集。可在上传页添加数据文件，或在 ZIP 发布向导中绑定包内数据文件。
+                          {t("project.datasets.empty")}
                         </CardContent>
                       </Card>
                     )}
@@ -233,11 +268,11 @@ export default function ProjectDetailPage() {
                         <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
                           <div>
                             <p className="font-medium">{dataset.name}</p>
-                            <p className="text-xs text-muted-foreground">{dataset.file_type} · {dataset.rows ?? "?"} 行 · {dataset.columns ?? "?"} 列</p>
+                            <p className="text-xs text-muted-foreground">{dataset.file_type} · {dataset.rows ?? "?"} {t("common.rows")} · {dataset.columns ?? "?"} {t("common.cols")}</p>
                           </div>
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <Clock className="h-4 w-4" />
-                            {dataset.sync_config.enabled ? dataset.sync_config.last_sync_status ?? "等待同步" : "手动"}
+                            {dataset.sync_config.enabled ? dataset.sync_config.last_sync_status ?? t("project.datasets.sync.waiting") : t("project.datasets.sync.manual")}
                           </div>
                         </CardContent>
                       </Card>
@@ -247,7 +282,7 @@ export default function ProjectDetailPage() {
                     {(project.sync_scripts ?? []).length === 0 && (
                       <Card>
                         <CardContent className="p-6 text-sm text-muted-foreground">
-                          此项目没有 bundle 同步脚本。在 ZIP 内的 artifacta.json 中声明 sync_scripts 后重新发布即可导入。
+                          {t("project.scripts.empty")}
                         </CardContent>
                       </Card>
                     )}
@@ -260,14 +295,14 @@ export default function ProjectDetailPage() {
                               {script.script_path} · {script.runtime} · {script.outputs.join(", ")}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              计划：{script.schedule ?? "手动"} · 下次：{script.next_run_at ? new Date(script.next_run_at).toLocaleString("zh-CN") : "—"}
+                              {t("project.scripts.schedule")}{script.schedule ?? t("project.scripts.schedule.manual")} · {t("project.scripts.next")}{script.next_run_at ? new Date(script.next_run_at).toLocaleString() : t("project.scripts.never")}
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
-                            <Badge variant={script.enabled ? "default" : "secondary"}>{script.enabled ? "启用" : "禁用"}</Badge>
-                            <Badge variant="outline">{script.last_run_status ?? "未运行"}</Badge>
+                            <Badge variant={script.enabled ? "default" : "secondary"}>{script.enabled ? t("project.scripts.status.enabled") : t("project.scripts.status.disabled")}</Badge>
+                            <Badge variant="outline">{script.last_run_status ?? t("project.scripts.status.unrun")}</Badge>
                             <Button variant="outline" size="sm" disabled={!script.enabled} onClick={() => triggerScriptSync(script.id)}>
-                              触发同步
+                              {t("project.scripts.trigger")}
                             </Button>
                           </div>
                         </CardContent>
@@ -278,7 +313,7 @@ export default function ProjectDetailPage() {
                     {project.permissions.length === 0 && (
                       <Card>
                         <CardContent className="p-6 text-sm text-muted-foreground">
-                          还没有额外协作者。可在设置 → 权限管理 中为团队成员分配 view 或 edit 权限。
+                          {t("project.permissions.empty")}
                         </CardContent>
                       </Card>
                     )}
@@ -298,7 +333,7 @@ export default function ProjectDetailPage() {
                     {versions.length === 0 && (
                       <Card>
                         <CardContent className="p-6 text-sm text-muted-foreground">
-                          还没有记录看板版本。更新 HTML 或 ZIP 产物后会自动保存版本历史。
+                          {t("project.versions.empty")}
                         </CardContent>
                       </Card>
                     )}
@@ -310,8 +345,8 @@ export default function ProjectDetailPage() {
                             <p className="text-muted-foreground">{version.notes}</p>
                           </div>
                           <div className="flex items-center gap-2">
-                            <p className="text-xs text-muted-foreground">{new Date(version.created_at).toLocaleString("zh-CN")}</p>
-                            <Button variant="outline" size="sm" onClick={() => rollbackVersion(version.id)}>回滚</Button>
+                            <p className="text-xs text-muted-foreground">{new Date(version.created_at).toLocaleString()}</p>
+                            <Button variant="outline" size="sm" onClick={() => rollbackVersion(version.id)}>{t("project.versions.rollback")}</Button>
                           </div>
                         </CardContent>
                       </Card>
@@ -320,7 +355,7 @@ export default function ProjectDetailPage() {
                   <TabsContent value="activity" className="mt-4 space-y-3">
                     {(project.recent_activity ?? []).length === 0 && (
                       <Card>
-                        <CardContent className="p-6 text-sm text-muted-foreground">还没有项目相关动态。</CardContent>
+                        <CardContent className="p-6 text-sm text-muted-foreground">{t("project.activity.empty")}</CardContent>
                       </Card>
                     )}
                     {(project.recent_activity ?? []).map((item) => (
@@ -330,7 +365,7 @@ export default function ProjectDetailPage() {
                             <p className="font-medium">{item.action}</p>
                             <p className="text-muted-foreground">{item.target}</p>
                           </div>
-                          <p className="text-xs text-muted-foreground">{new Date(item.created_at).toLocaleString("zh-CN")}</p>
+                          <p className="text-xs text-muted-foreground">{new Date(item.created_at).toLocaleString()}</p>
                         </CardContent>
                       </Card>
                     ))}

@@ -139,31 +139,11 @@ artifacta datasets replace \
   --file ./data-v2.csv
 ```
 
-## Step 8: Submit Sync Configuration JSON
+## Step 8: Trigger a Bundle Sync Script
 
-If your workflow also needs dataset sync configuration:
-
-```bash
-artifacta datasets sync set \
-  --project-id proj_123 \
-  --dataset-id ds_123 \
-  --source-type presto \
-  --config-file ./sync.json
-```
-
-The CLI passes your local JSON object through to `source_config`.
-
-## Step 9: Trigger Sync
-
-**Per-dataset remote source (URL/COS/Presto):**
-
-```bash
-artifacta sync trigger \
-  --project-id proj_123 \
-  --dataset-id ds_123
-```
-
-**Bundle script from `artifacta.json`:**
+Datasets are static by default. Dynamic updates run through project-level bundle
+sync scripts declared in `artifacta.json` (`sync_scripts`). Per-dataset external
+sources (URL/COS/Presto) have been removed.
 
 ```bash
 artifacta sync-scripts trigger \
@@ -181,7 +161,7 @@ The recommended agent pattern is:
 2. Stage them in a predictable temp directory
 3. Call `artifacta projects upload` or `artifacta projects update-html`
 4. Optionally upload datasets
-5. Optionally submit `sync.json`
+5. Optionally trigger a bundle sync script (`sync-scripts trigger`) for dynamic data
 6. Return the Artifacta `preview_url` to the user
 
 Use `templates/claude-code-artifacta-publisher/SKILL.md` as the copyable starting point.

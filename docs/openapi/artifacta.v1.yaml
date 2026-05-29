@@ -865,7 +865,7 @@ components:
           type: boolean
         source_type:
           type: string
-          enum: [manual, cos, presto]
+          enum: [manual]
         source_config:
           type: object
         update_mode:

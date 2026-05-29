@@ -77,7 +77,8 @@ export function serializeProjectDetail(database: Database, project: Project) {
       .filter(
         (activity) =>
           activity.organizationId === project.organizationId &&
-          (activity.target === project.name || datasetNames.has(activity.target))
+          (activity.targetId === project.id ||
+            (!activity.targetId && (activity.target === project.name || datasetNames.has(activity.target))))
       )
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
       .slice(0, 20)

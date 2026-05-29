@@ -12,6 +12,7 @@ import {
   Settings,
   ChevronDown,
   LogOut,
+  Languages,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -27,29 +28,32 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { Logo } from "@/components/logo"
-
-const mainNavigation = [
-  { name: "概览", href: "/", icon: LayoutDashboard },
-  { name: "BI 看板", href: "/dashboards", icon: FileBarChart },
-  { name: "创建项目", href: "/upload", icon: Upload },
-]
-
-const baseSettingsNavigation = [
-  { name: "基本设置", href: "/settings" },
-  { name: "团队成员", href: "/settings/team" },
-  { name: "权限管理", href: "/settings/permissions" },
-  { name: "API & CLI", href: "/settings/api" },
-]
+import { useLanguage } from "@/lib/i18n/context"
+import type { TranslationKey } from "@/lib/i18n/translations"
 
 export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
+  const { t, lang, setLang } = useLanguage()
   const [settingsOpen, setSettingsOpen] = useState(pathname.startsWith("/settings"))
   const [user, setUser] = useState<{ name: string; role: string; initials: string } | null>(null)
 
+  const mainNavigation: Array<{ nameKey: TranslationKey; href: string; icon: typeof LayoutDashboard }> = [
+    { nameKey: "nav.overview", href: "/", icon: LayoutDashboard },
+    { nameKey: "nav.dashboards", href: "/dashboards", icon: FileBarChart },
+    { nameKey: "nav.upload", href: "/upload", icon: Upload },
+  ]
+
+  const baseSettingsNavigation: Array<{ nameKey: TranslationKey; href: string }> = [
+    { nameKey: "nav.settings.basic", href: "/settings" },
+    { nameKey: "nav.settings.team", href: "/settings/team" },
+    { nameKey: "nav.settings.permissions", href: "/settings/permissions" },
+    { nameKey: "nav.settings.api", href: "/settings/api" },
+  ]
+
   const isSettingsActive = pathname.startsWith("/settings")
   const settingsNavigation = user?.role === "admin"
-    ? [...baseSettingsNavigation, { name: "运维", href: "/settings/operations" }]
+    ? [...baseSettingsNavigation, { nameKey: "nav.settings.operations" as TranslationKey, href: "/settings/operations" }]
     : baseSettingsNavigation
 
   useEffect(() => {
@@ -67,7 +71,6 @@ export function Sidebar() {
 
   return (
     <TooltipProvider delayDuration={0}>
-      {/* Sidebar Island */}
       <aside className="w-16 md:w-64 h-screen p-2 shrink-0">
         <div className="flex flex-col h-full bg-sidebar rounded-xl shadow-sm">
           {/* Logo */}
@@ -82,14 +85,13 @@ export function Sidebar() {
 
           {/* Navigation */}
           <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
-            {/* Main Navigation */}
             {mainNavigation.map((item) => {
               const isActive = pathname === item.href
               const Icon = item.icon
 
               return (
                 <Link
-                  key={item.name}
+                  key={item.href}
                   href={item.href}
                   className={cn(
                     "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
@@ -99,7 +101,7 @@ export function Sidebar() {
                   )}
                 >
                   <Icon className="h-5 w-5 shrink-0" />
-                  <span className="hidden md:inline">{item.name}</span>
+                  <span className="hidden md:inline">{t(item.nameKey)}</span>
                 </Link>
               )
             })}
@@ -117,7 +119,7 @@ export function Sidebar() {
                 >
                   <div className="flex items-center gap-3">
                     <Settings className="h-5 w-5 shrink-0" />
-                    <span className="hidden md:inline">系统设置</span>
+                    <span className="hidden md:inline">{t("nav.settings")}</span>
                   </div>
                   <ChevronDown className={cn(
                     "hidden md:block",
@@ -140,7 +142,7 @@ export function Sidebar() {
                           : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground"
                       )}
                     >
-                      {item.name}
+                      {t(item.nameKey)}
                     </Link>
                   )
                 })}
@@ -148,8 +150,25 @@ export function Sidebar() {
             </Collapsible>
           </nav>
 
-          {/* User section */}
-          <div className="p-3 mt-auto">
+          {/* Language toggle + User section */}
+          <div className="p-3 mt-auto space-y-1">
+            {/* Language switcher */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setLang(lang === "zh" ? "en" : "zh")}
+                  className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
+                >
+                  <Languages className="h-4 w-4 shrink-0" />
+                  <span className="hidden md:inline">{lang === "zh" ? "English" : "中文"}</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                {lang === "zh" ? "Switch to English" : "切换为中文"}
+              </TooltipContent>
+            </Tooltip>
+
+            {/* User */}
             <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-sidebar-accent transition-colors">
               <Avatar className="h-9 w-9 shrink-0">
                 <AvatarImage src="/placeholder-user.jpg" alt="用户头像" />
@@ -162,7 +181,7 @@ export function Sidebar() {
                   {user?.name ?? "Artifacta"}
                 </p>
                 <p className="text-xs text-sidebar-foreground/60 truncate">
-                  {user?.role === "admin" ? "管理员" : "使用者"}
+                  {user?.role === "admin" ? t("nav.admin") : t("nav.member")}
                 </p>
               </div>
               <Button

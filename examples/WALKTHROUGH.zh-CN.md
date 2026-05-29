@@ -130,41 +130,6 @@ artifacta sync-scripts trigger --project-id <id> --script-id <script_id>
 
 ---
 
-## 5. HTML + CSV + COS — `5-html-csv-cos/`
-
-```
-5-html-csv-cos/
-  index.html
-  sales_snapshot.csv
-```
-
-```bash
-cd examples/5-html-csv-cos
-npx serve .
-zip -r ../5.zip . && artifacta projects upload --file ../5.zip --name "示例5 COS"
-artifacta datasets list --project-id <project_id>
-```
-
-无 COS 时用临时 `mock-sync.json`：
-
-```json
-{
-  "mock_rows": [
-    { "region": "North", "revenue": 50000, "orders": 340 },
-    { "region": "South", "revenue": 36000, "orders": 270 },
-    { "region": "East", "revenue": 41000, "orders": 300 }
-  ]
-}
-```
-
-```bash
-artifacta datasets sync set --project-id <id> --dataset-id <ds> \
-  --source-type cos --config-file ./mock-sync.json
-artifacta sync trigger --project-id <id> --dataset-id <ds>
-```
-
----
-
 ## 对照
 
 | 目录 | 结构 | 上传方式 | 自带 manifest |
@@ -174,4 +139,3 @@ artifacta sync trigger --project-id <id> --dataset-id <ds>
 | `2-html-csv` | 扁平 | zip | 否 |
 | `3-html-csv-json` | **data/ + analytics/** | zip | 否 |
 | `4-html-csv-script` | 扁平 + py | zip + 自建 manifest | **是** |
-| `5-html-csv-cos` | 扁平 | zip + CLI 同步配置 | 否 |

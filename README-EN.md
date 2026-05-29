@@ -24,7 +24,7 @@ Upload your HTML or ZIP dashboard bundle, set who can see it and how data should
 
 Generate with a local **Skill** in Cursor or Claude Code, then pack and upload with one CLI command; the platform handles hosting, permissions, dataset binding, and sync—turning “runs on my laptop” into “the team can open it anytime, and data can stay fresh.”
 
-[中文说明](README.zh-CN.md)
+[中文说明](README.md)
 
 ## Preview
 
@@ -41,6 +41,7 @@ Generate with a local **Skill** in Cursor or Claude Code, then pack and upload w
 - Use signed Cookie sessions in the web console; use Bearer API keys for coding agents, CI, and the CLI.
 - Start with local JSON storage for zero friction, or switch to SQLite for a more production-like self-hosted setup.
 - Built-in `artifacta` CLI, sync worker, and API smoke tests.
+- Web console ships with a Chinese / English toggle (top-bar language switch; defaults to Chinese, preference stored in browser `localStorage`).
 
 ## Quick Start
 
@@ -86,7 +87,7 @@ pnpm cli -- projects list
 pnpm cli -- projects upload --file ./dashboard.zip --name "Weekly Growth" --visibility team
 pnpm cli -- projects update-html --project-id proj_123 --file ./dashboard-v2.zip
 pnpm cli -- datasets upload --project-id proj_123 --file ./growth.csv --name "Weekly Growth Data"
-pnpm cli -- datasets sync set --project-id proj_123 --dataset-id ds_123 --source-type presto --config-file ./sync.json
+pnpm cli -- sync-scripts trigger --project-id proj_123 --script-id sscript_123
 pnpm cli -- datasets list
 pnpm cli -- doctor
 pnpm cli -- --json projects list
@@ -125,11 +126,11 @@ See [docs/API.md](docs/API.md) for routes, request fields, and response shapes. 
 
 ## Examples
 
-`examples/WALKTHROUGH.zh-CN.md` walks through sample bundles: single HTML, flat zips, nested `3-html-csv-json/`, script sync, and COS sync. Start with `examples/0-single-html/` or `examples/1-html-json/`.
+`examples/WALKTHROUGH.zh-CN.md` walks through sample bundles: single HTML, flat zips, nested `3-html-csv-json/`, and script sync. Start with `examples/0-single-html/` or `examples/1-html-json/`.
 
 ## Sync Worker
 
-The worker drains bundle script jobs (`POST /sync/script-jobs/claim`), then per-dataset sync jobs, and enqueues due dataset syncs from `/datasets`.
+Datasets are static data by default; dynamic updates come only from project-level `sync_scripts` (scripts run inside the extracted bundle directory). The worker drains queued script sync jobs (`POST /sync/script-jobs/claim`) and runs them with the same executor used by manual UI/API triggers.
 
 ```bash
 export ARTIFACTA_API_KEY=art_...
@@ -137,7 +138,7 @@ pnpm worker:once
 node scripts/sync-worker.mjs --interval 60
 ```
 
-The current sync executor supports local files, uploaded artifact paths, URL fetches, and `mock_rows`. Real COS/S3 and Presto/Trino clients are intended to land as connector adapters behind the executor.
+Per-dataset external dynamic sync (URL / COS / Presto) has been removed in favor of manually triggered bundle sync scripts.
 
 ## Common Scripts
 
@@ -165,7 +166,7 @@ pnpm worker:once  # run one sync worker pass
 | `DATA_DRIVER` | `json` | `json`, `sqlite`, or `postgres`. |
 | `DATA_DIR` | `.artifacta` | Local metadata directory and default SQLite parent directory. |
 | `SQLITE_PATH` | `.artifacta/artifacta.sqlite` | SQLite database path when `DATA_DRIVER=sqlite`. |
-| `POSTGRES_URL` / `DATABASE_URL` | unset | Postgres connection string when `DATA_DRIVER=postgres`. |
+| `POSTGRES_URL` / `DATABASE_URL` | unset | Connection string when `DATA_DRIVER=postgres` (currently a single-row JSONB blob, PoC stage). |
 | `UPLOAD_DIR` | `.artifacta/uploads` | Uploaded dashboard and dataset files. |
 | `STORAGE_DRIVER` | `local` | `local` or `s3`. |
 | `S3_BUCKET`, `S3_REGION`, `S3_ENDPOINT` | unset | S3-compatible object storage settings. |
@@ -194,8 +195,9 @@ See [docs/plans/2026-05-21-open-source-excellence-roadmap.md](docs/plans/2026-05
 ## Current Boundaries
 
 - OIDC login works when configured; SAML remains an extension point.
-- SQLite suits self-hosted trials; Postgres metadata and S3-compatible object storage are available for production hardening.
-- The worker runs local file, URL, `mock_rows`, S3/COS object, and Presto/Trino HTTP sync branches.
+- SQLite suits self-hosted trials and is closer to real persistence than the JSON driver.
+- **`DATA_DRIVER=postgres` currently serializes the whole database into a single JSONB blob** — equivalent to the JSON driver, with no row-level indexing; not recommended for production. Relational Postgres support is on the roadmap but not implemented yet.
+- Dataset updates are unified as manually triggered bundle sync scripts; external URL / S3 / Presto sync has been removed.
 
 ## License
 

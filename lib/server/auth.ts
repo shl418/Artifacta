@@ -2,6 +2,7 @@ import crypto from "node:crypto"
 import type { User } from "@/lib/types"
 import { normalizeApiKeyScopes, type ApiKeyScope, apiKeyAllowsScope } from "@/lib/server/api-key-scopes"
 import { assertProductionSecrets, authSecret, sessionCookieName, sessionMaxAgeSeconds } from "@/lib/server/config"
+import { getCookie } from "@/lib/server/cookies"
 import { readDatabase, updateDatabase, now } from "@/lib/server/db"
 import { rateLimitResponse } from "@/lib/server/rate-limit"
 import { apiError } from "@/lib/server/responses"
@@ -18,13 +19,7 @@ export interface AuthContext {
   apiKeyScopes?: ApiKeyScope[]
 }
 
-let pendingAuthRateLimit: Response | null = null
-
-export function takeAuthRateLimitResponse() {
-  const response = pendingAuthRateLimit
-  pendingAuthRateLimit = null
-  return response
-}
+const requestRateLimits = new WeakMap<Request, Response>()
 
 export function createSessionToken(userId: string) {
   assertProductionSecrets()
@@ -68,7 +63,7 @@ export async function authenticateRequest(request: Request): Promise<AuthContext
 
     const limited = rateLimitResponse(request, `api-key:${apiKey.id}`, 300)
     if (limited) {
-      pendingAuthRateLimit = limited
+      requestRateLimits.set(request, limited)
       return null
     }
 
@@ -97,15 +92,7 @@ export async function authenticateRequest(request: Request): Promise<AuthContext
   return user ? { user, authType: "session" } : null
 }
 
-export function getCookie(cookieHeader: string | null, name: string) {
-  if (!cookieHeader) return undefined
-
-  return cookieHeader
-    .split(";")
-    .map((part) => part.trim())
-    .find((part) => part.startsWith(`${name}=`))
-    ?.slice(name.length + 1)
-}
+export { getCookie }
 
 export function sessionCookieOptions() {
   return {
@@ -141,7 +128,7 @@ export function assertApiKeyScope(auth: AuthContext, scope: ApiKeyScope) {
 
 export async function requireRequestAuth(request: Request, scope?: ApiKeyScope): Promise<AuthContext | Response> {
   const auth = await authenticateRequest(request)
-  const rateLimited = takeAuthRateLimitResponse()
+  const rateLimited = requestRateLimits.get(request)
   if (rateLimited) return rateLimited
   if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
   if (scope && !apiKeyAllowsScope(auth, scope)) {

@@ -1,6 +1,9 @@
+"use client"
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { FileBarChart, Database, Users, Upload, Shield } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useLanguage } from "@/lib/i18n/context"
 
 interface Activity {
   id: string
@@ -35,23 +38,25 @@ interface ActivityFeedProps {
 }
 
 export function ActivityFeed({ activities }: ActivityFeedProps) {
+  const { t } = useLanguage()
+
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-gradient-to-b from-card to-secondary/10 shadow-sm">
       <div className="border-b border-border/80 px-5 py-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="font-medium text-foreground">最近活动</h3>
-            <p className="mt-1 text-xs text-muted-foreground">最近发生的上传、同步、权限和协作动作。</p>
+            <h3 className="font-medium text-foreground">{t("activity.title")}</h3>
+            <p className="mt-1 text-xs text-muted-foreground">{t("activity.subtitle")}</p>
           </div>
           <div className="rounded-full border border-border/70 bg-background/80 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-            {activities.length} 条
+            {activities.length} {t("activity.count")}
           </div>
         </div>
       </div>
       <div className="space-y-3 p-4">
         {activities.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border bg-background/70 px-4 py-6 text-center text-sm text-muted-foreground">
-            暂无活动记录
+            {t("activity.empty")}
           </div>
         ) : activities.map((activity) => {
           const Icon = activityIcons[activity.type]

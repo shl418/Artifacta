@@ -141,31 +141,9 @@ artifacta datasets replace \
   --file ./data-v2.csv
 ```
 
-## 第八步：提交同步配置 JSON
+## 第八步：触发 bundle 同步脚本
 
-如果你的 skill 还需要把同步配置一起提交：
-
-```bash
-artifacta datasets sync set \
-  --project-id proj_123 \
-  --dataset-id ds_123 \
-  --source-type presto \
-  --config-file ./sync.json
-```
-
-当前 CLI 会把本地 JSON 对象直接透传到 `source_config`。
-
-## 第九步：手动触发同步
-
-**按数据集的外部来源（URL/COS/Presto）：**
-
-```bash
-artifacta sync trigger \
-  --project-id proj_123 \
-  --dataset-id ds_123
-```
-
-**ZIP 内 `sync_scripts` 声明的 bundle 脚本：**
+数据集默认是静态数据；动态更新统一走 `artifacta.json` 里声明的项目级 `sync_scripts`。按数据集的外部来源（URL/COS/Presto）已移除。
 
 ```bash
 artifacta sync-scripts list --project-id proj_123
@@ -182,7 +160,7 @@ artifacta sync-scripts trigger --project-id proj_123 --script-id sscript_xxxxxxx
 2. 放到一个固定临时目录
 3. 调 `artifacta projects upload` 或 `artifacta projects update-html`
 4. 按需上传数据集
-5. 按需提交 `sync.json`
+5. 需要动态更新时，触发 bundle 同步脚本（`sync-scripts trigger`）
 6. 把 `preview_url` 返回给用户
 
 可以直接从 `templates/claude-code-artifacta-publisher/SKILL.md` 开始复制。

@@ -20,25 +20,25 @@ export type DomainEvent =
 export function dispatch(database: Database, event: DomainEvent): void {
   switch (event.type) {
     case "project.created":
-      addActivity(database, { organizationId: event.organizationId, type: "upload", userId: event.actorId, action: "上传了新看板", target: event.project.name })
+      addActivity(database, { organizationId: event.organizationId, type: "upload", userId: event.actorId, action: "上传了新看板", target: event.project.name, targetId: event.project.id })
       recordAudit(database, { organizationId: event.organizationId, actorUserId: event.actorId, action: "project.create", targetType: "project", targetId: event.project.id, summary: `Created project ${event.project.name}`, metadata: event.meta ?? {} })
       emitWebhooks(database, event.organizationId, "project.created", { project_id: event.project.id, name: event.project.name })
       return
 
     case "project.updated":
-      addActivity(database, { organizationId: event.organizationId, type: "dashboard", userId: event.actorId, action: "更新了看板", target: event.project.name })
+      addActivity(database, { organizationId: event.organizationId, type: "dashboard", userId: event.actorId, action: "更新了看板", target: event.project.name, targetId: event.project.id })
       recordAudit(database, { organizationId: event.organizationId, actorUserId: event.actorId, action: "project.update", targetType: "project", targetId: event.project.id, summary: `Updated project ${event.project.name}`, metadata: event.meta ?? {} })
       emitWebhooks(database, event.organizationId, "project.updated", { project_id: event.project.id, name: event.project.name })
       return
 
     case "project.deleted":
-      addActivity(database, { organizationId: event.organizationId, type: "dashboard", userId: event.actorId, action: "删除了看板", target: event.project.name })
+      addActivity(database, { organizationId: event.organizationId, type: "dashboard", userId: event.actorId, action: "删除了看板", target: event.project.name, targetId: event.project.id })
       recordAudit(database, { organizationId: event.organizationId, actorUserId: event.actorId, action: "project.delete", targetType: "project", targetId: event.project.id, summary: `Deleted project ${event.project.name}`, metadata: {} })
       emitWebhooks(database, event.organizationId, "project.deleted", { project_id: event.project.id, name: event.project.name })
       return
 
     case "project.html.updated":
-      addActivity(database, { organizationId: event.organizationId, type: "dashboard", userId: event.actorId, action: "更新了看板文件", target: event.project.name })
+      addActivity(database, { organizationId: event.organizationId, type: "dashboard", userId: event.actorId, action: "更新了看板文件", target: event.project.name, targetId: event.project.id })
       recordAudit(database, { organizationId: event.organizationId, actorUserId: event.actorId, action: "project.html.update", targetType: "project", targetId: event.project.id, summary: `Updated dashboard artifact for ${event.project.name}`, metadata: { artifact_kind: event.meta.artifact_kind, original_name: event.meta.original_name } })
       emitWebhooks(database, event.organizationId, "project.updated", { project_id: event.project.id, name: event.project.name })
       return
@@ -48,12 +48,12 @@ export function dispatch(database: Database, event: DomainEvent): void {
       return
 
     case "dataset.created":
-      addActivity(database, { organizationId: event.organizationId, type: "dataset", userId: event.actorId, action: "添加了数据集", target: event.dataset.name })
+      addActivity(database, { organizationId: event.organizationId, type: "dataset", userId: event.actorId, action: "添加了数据集", target: event.dataset.name, targetId: event.dataset.projectId })
       recordAudit(database, { organizationId: event.organizationId, actorUserId: event.actorId, action: "dataset.create", targetType: "dataset", targetId: event.dataset.id, summary: `Added dataset ${event.dataset.name}`, metadata: { project_id: event.dataset.projectId, file_type: event.dataset.fileType } })
       return
 
     case "dataset.replaced":
-      addActivity(database, { organizationId: event.organizationId, type: "dataset", userId: event.actorId, action: "更新了数据集", target: event.dataset.name })
+      addActivity(database, { organizationId: event.organizationId, type: "dataset", userId: event.actorId, action: "更新了数据集", target: event.dataset.name, targetId: event.dataset.projectId })
       recordAudit(database, { organizationId: event.organizationId, actorUserId: event.actorId, action: "dataset.replace", targetType: "dataset", targetId: event.dataset.id, summary: `Replaced dataset ${event.dataset.name}`, metadata: { project_id: event.dataset.projectId, version: event.dataset.version } })
       return
 
@@ -63,19 +63,19 @@ export function dispatch(database: Database, event: DomainEvent): void {
 
     case "dataset.synced":
       if (event.actorId) {
-        addActivity(database, { organizationId: event.organizationId, type: "dataset", userId: event.actorId, action: event.result.status === "success" ? "完成了数据同步" : "数据同步失败", target: event.dataset.name })
+        addActivity(database, { organizationId: event.organizationId, type: "dataset", userId: event.actorId, action: event.result.status === "success" ? "完成了数据同步" : "数据同步失败", target: event.dataset.name, targetId: event.dataset.projectId })
       }
       emitWebhooks(database, event.organizationId, event.result.status === "success" ? "sync.success" : "sync.failed", { project_id: event.dataset.projectId, dataset_id: event.dataset.id, sync_id: event.result.syncId, rows_synced: event.result.rowsSynced, error: event.result.error })
       return
 
     case "permission.upserted":
-      addActivity(database, { organizationId: event.organizationId, type: "permission", userId: event.actorId, action: "更新了项目成员", target: event.user.name })
+      addActivity(database, { organizationId: event.organizationId, type: "permission", userId: event.actorId, action: "更新了项目成员", target: event.user.name, targetId: event.projectId })
       recordAudit(database, { organizationId: event.organizationId, actorUserId: event.actorId, action: "permission.upsert", targetType: "project_member", targetId: `${event.projectId}:${event.user.id}`, summary: `Updated ${event.user.email} access to ${event.permission}`, metadata: { project_id: event.projectId, user_id: event.user.id, permission: event.permission } })
       emitWebhooks(database, event.organizationId, "permission.changed", { project_id: event.projectId, user_id: event.user.id, permission: event.permission })
       return
 
     case "permission.updated":
-      addActivity(database, { organizationId: event.organizationId, type: "permission", userId: event.actorId, action: "修改了项目权限", target: event.userId })
+      addActivity(database, { organizationId: event.organizationId, type: "permission", userId: event.actorId, action: "修改了项目权限", target: event.userId, targetId: event.projectId })
       recordAudit(database, { organizationId: event.organizationId, actorUserId: event.actorId, action: "permission.update", targetType: "project_member", targetId: `${event.projectId}:${event.userId}`, summary: `Updated project member ${event.userId} to ${event.permission}`, metadata: { project_id: event.projectId, user_id: event.userId, permission: event.permission } })
       emitWebhooks(database, event.organizationId, "permission.changed", { project_id: event.projectId, user_id: event.userId, permission: event.permission })
       return

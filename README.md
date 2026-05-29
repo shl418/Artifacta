@@ -24,7 +24,7 @@ Artifacta 相信另一件事：**让 AI 直接写 HTML 看板**——图表、�
 
 本地用 Cursor / Claude Code 等 **Skill** 生成完，一条 CLI 就能打包上传；平台负责托管、权限、数据集绑定与同步更新，把「我电脑上能跑」变成「团队随时能看、数据还能跟着变」。
 
-[English README](README.md)
+[English README](README-EN.md)
 
 ## 项目预览
 
@@ -41,6 +41,7 @@ Artifacta 相信另一件事：**让 AI 直接写 HTML 看板**——图表、�
 - Web 控制台使用签名 Cookie Session，coding agent、CI、CLI 使用 Bearer API Key。
 - 默认使用本地 JSON 零门槛启动，也可以切到 SQLite 获得更接近生产的自托管体验。
 - 内置 `artifacta` CLI、同步 Worker 和 API smoke test。
+- Web 控制台支持中文 / 英文切换（顶部语言开关，默认中文，偏好存于浏览器 `localStorage`）。
 
 ## 快速开始
 
@@ -86,7 +87,7 @@ pnpm cli -- projects list
 pnpm cli -- projects upload --file ./dashboard.zip --name "增长周报" --visibility team
 pnpm cli -- projects update-html --project-id proj_123 --file ./dashboard-v2.zip
 pnpm cli -- datasets upload --project-id proj_123 --file ./growth.csv --name "增长周报数据"
-pnpm cli -- datasets sync set --project-id proj_123 --dataset-id ds_123 --source-type presto --config-file ./sync.json
+pnpm cli -- sync-scripts trigger --project-id proj_123 --script-id sscript_123
 pnpm cli -- datasets list
 pnpm cli -- doctor
 pnpm cli -- --json projects list
@@ -125,7 +126,7 @@ curl -X POST http://localhost:3000/api/v1/projects \
 
 ## 示例
 
-`examples/WALKTHROUGH.zh-CN.md` 提供走通示例：单 HTML、扁平 zip、带 `data/` 子目录的多数据集包、脚本同步、COS 同步；示例目录内**不含**预置的 `artifacta.json`（脚本示例需自建）。
+`examples/WALKTHROUGH.zh-CN.md` 提供走通示例：单 HTML、扁平 zip、带 `data/` 子目录的多数据集包、脚本同步；示例目录内**不含**预置的 `artifacta.json`（脚本示例需自建）。
 
 ```bash
 cd examples/0-single-html && artifacta projects upload --file index.html --name "单文件"
@@ -134,7 +135,7 @@ cd examples/0-single-html && artifacta projects upload --file index.html --name 
 
 ## 数据同步 Worker
 
-Worker 会扫描开启了同步的数据集，判断是否到期，然后调用和 API 手动触发相同的同步执行器。
+数据集本身是静态数据；动态更新只通过项目级 `sync_scripts`（脚本运行在解包后的 bundle 目录里）。Worker 会领取排队中的脚本同步任务并执行，与用户在界面/API 手动触发的执行器一致。
 
 ```bash
 export ARTIFACTA_API_KEY=art_...
@@ -142,7 +143,7 @@ pnpm worker:once
 node scripts/sync-worker.mjs --interval 60
 ```
 
-当前同步执行器支持本地文件、上传目录文件、URL 拉取和 `mock_rows`。真实 COS/S3、Presto/Trino 客户端建议作为 connector adapter 加到同步执行器后面。
+按数据集来源的 URL / COS / Presto 等外部动态同步已移除，统一改为手动触发的 bundle sync scripts。
 
 ## 常用脚本
 
@@ -170,7 +171,7 @@ pnpm worker:once  # 执行一次同步 Worker
 | `DATA_DRIVER` | `json` | 可选 `json`、`sqlite` 或 `postgres`。 |
 | `DATA_DIR` | `.artifacta` | 本地元数据目录，也是默认 SQLite 父目录。 |
 | `SQLITE_PATH` | `.artifacta/artifacta.sqlite` | `DATA_DRIVER=sqlite` 时的数据库路径。 |
-| `POSTGRES_URL` / `DATABASE_URL` | 未设置 | `DATA_DRIVER=postgres` 时的 Postgres 连接串。 |
+| `POSTGRES_URL` / `DATABASE_URL` | 未设置 | `DATA_DRIVER=postgres` 时的连接串（当前为单行 JSONB blob，PoC 阶段）。 |
 | `UPLOAD_DIR` | `.artifacta/uploads` | 上传的看板和数据集文件目录。 |
 | `STORAGE_DRIVER` | `local` | 可选 `local` 或 `s3`。 |
 | `S3_BUCKET`, `S3_REGION`, `S3_ENDPOINT` | 未设置 | S3 兼容对象存储配置。 |
@@ -199,8 +200,9 @@ pnpm worker:once  # 执行一次同步 Worker
 ## 当前边界
 
 - 配置后可使用 OIDC 登录；SAML 仍保留为扩展点。
-- SQLite 适合自托管试用；Postgres 元数据和 S3 兼容对象存储已经可作为生产化路径。
-- Worker 支持本地文件、URL、`mock_rows`、S3/COS 对象和 Presto/Trino HTTP 同步分支。
+- SQLite 适合自托管试用，相比 JSON driver 更接近真实持久化。
+- **`DATA_DRIVER=postgres` 当前将整个数据库序列化为单行 JSONB blob**，与 JSON driver 等价，尚无行级索引，不建议用于生产环境。关系型 Postgres 支持列入路线图但尚未实现。
+- 数据集更新目前统一为手动触发的 bundle sync scripts，外部 URL / S3 / Presto 同步已移除。
 
 ## License
 

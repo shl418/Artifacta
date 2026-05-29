@@ -24,6 +24,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AlertCircle, Crown, Mail, Search, Shield, Trash2, User, UserPlus } from "lucide-react"
+import { useLanguage } from "@/lib/i18n/context"
 
 interface TeamMember {
   id: string
@@ -37,6 +38,7 @@ interface TeamMember {
 }
 
 export default function TeamPage() {
+  const { t } = useLanguage()
   const [members, setMembers] = useState<TeamMember[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false)
@@ -51,19 +53,19 @@ export default function TeamPage() {
     const response = await fetch(`/api/v1/team/members?${params.toString()}`)
     const payload = await response.json().catch(() => null)
     if (!response.ok) {
-      setError(payload?.error?.message ?? "无法加载团队成员。")
+      setError(payload?.error?.message ?? t("settings.team.load.error"))
       return
     }
     setError("")
     setMembers(payload.data)
-  }, [searchQuery])
+  }, [searchQuery, t])
 
   useEffect(() => {
     loadMembers().catch(() => {
       setMembers([])
-      setError("网络异常，无法加载团队成员。")
+      setError(t("common.error.network"))
     })
-  }, [loadMembers])
+  }, [loadMembers, t])
 
   const counts = useMemo(() => ({
     admin: members.filter((member) => member.role === "admin").length,
@@ -82,7 +84,7 @@ export default function TeamPage() {
       await loadMembers()
     } else {
       const payload = await response.json().catch(() => null)
-      setError(payload?.error?.message ?? "邀请成员失败。")
+      setError(payload?.error?.message ?? t("settings.team.load.error"))
     }
   }
 
@@ -94,7 +96,7 @@ export default function TeamPage() {
     })
     if (!response.ok) {
       const payload = await response.json().catch(() => null)
-      setError(payload?.error?.message ?? "更新角色失败。")
+      setError(payload?.error?.message ?? t("settings.team.load.error"))
       return
     }
     await loadMembers()
@@ -110,7 +112,7 @@ export default function TeamPage() {
     setPendingDisable(null)
     if (!response.ok) {
       const payload = await response.json().catch(() => null)
-      setError(payload?.error?.message ?? "禁用成员失败。")
+      setError(payload?.error?.message ?? t("settings.team.load.error"))
       return
     }
     await loadMembers()
@@ -121,54 +123,54 @@ export default function TeamPage() {
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0 p-2 pl-0">
         <main className="flex-1 flex flex-col bg-card rounded-xl shadow-sm overflow-hidden">
-          <Header title="团队成员" />
+          <Header title={t("settings.team.title")} />
           <div className="flex-1 overflow-y-auto p-6">
             <div className="max-w-5xl mx-auto space-y-6">
               <div className="grid gap-4 md:grid-cols-3">
-                <Metric label="总成员" value={members.length} icon={User} />
-                <Metric label="管理员" value={counts.admin} icon={Crown} />
-                <Metric label="使用者" value={counts.member} icon={User} />
+                <Metric label={t("settings.team.all")} value={members.length} icon={User} />
+                <Metric label={t("settings.team.metric.admin")} value={counts.admin} icon={Crown} />
+                <Metric label={t("settings.team.metric.member")} value={counts.member} icon={User} />
               </div>
 
               <Card className="bg-card border-border">
                 <CardHeader>
                   <div className="flex items-center justify-between gap-4">
                     <div>
-                      <CardTitle className="text-lg">成员列表</CardTitle>
-                      <CardDescription>管理团队成员的角色和访问状态。</CardDescription>
+                      <CardTitle className="text-lg">{t("settings.team.list.title")}</CardTitle>
+                      <CardDescription>{t("settings.team.list.desc")}</CardDescription>
                     </div>
                     <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
                       <DialogTrigger asChild>
                         <Button>
                           <UserPlus className="h-4 w-4" />
-                          邀请成员
+                          {t("settings.team.invite")}
                         </Button>
                       </DialogTrigger>
                       <DialogContent className="bg-card border-border">
                         <DialogHeader>
-                          <DialogTitle>邀请新成员</DialogTitle>
-                          <DialogDescription>本地开源版会直接创建可登录成员。</DialogDescription>
+                          <DialogTitle>{t("settings.team.invite.title")}</DialogTitle>
+                          <DialogDescription>{t("settings.team.invite.desc")}</DialogDescription>
                         </DialogHeader>
                         <div className="space-y-4 pt-4">
                           <div className="space-y-2">
-                            <Label>邮箱地址</Label>
+                            <Label>{t("settings.team.invite.email")}</Label>
                             <Input value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="name@company.com" />
                           </div>
                           <div className="space-y-2">
-                            <Label>角色</Label>
+                            <Label>{t("settings.team.invite.role")}</Label>
                             <Select value={inviteRole} onValueChange={setInviteRole}>
                               <SelectTrigger><SelectValue /></SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="admin">管理员</SelectItem>
-                                <SelectItem value="member">使用者</SelectItem>
+                                <SelectItem value="admin">{t("common.role.admin")}</SelectItem>
+                                <SelectItem value="member">{t("common.role.member")}</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
                           <div className="flex justify-end gap-2">
-                            <Button variant="secondary" onClick={() => setInviteDialogOpen(false)}>取消</Button>
+                            <Button variant="secondary" onClick={() => setInviteDialogOpen(false)}>{t("common.cancel")}</Button>
                             <Button onClick={invite} disabled={!inviteEmail}>
                               <Mail className="h-4 w-4" />
-                              发送邀请
+                              {t("settings.team.invite.send")}
                             </Button>
                           </div>
                         </div>
@@ -179,13 +181,13 @@ export default function TeamPage() {
                 <CardContent>
                   <div className="relative mb-4">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input placeholder="搜索成员..." value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} className="pl-9 bg-secondary/50" />
+                    <Input placeholder={t("settings.team.search.placeholder")} value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} className="pl-9 bg-secondary/50" />
                   </div>
 
                   {error && (
                     <Alert variant="destructive" className="mb-4">
                       <AlertCircle className="h-4 w-4" />
-                      <AlertTitle>团队操作失败</AlertTitle>
+                      <AlertTitle>{t("settings.team.error.title")}</AlertTitle>
                       <AlertDescription>{error}</AlertDescription>
                     </Alert>
                   )}
@@ -195,8 +197,8 @@ export default function TeamPage() {
                       <Empty className="border py-10">
                         <EmptyHeader>
                           <EmptyMedia variant="icon"><UserPlus /></EmptyMedia>
-                          <EmptyTitle>团队里还只有你</EmptyTitle>
-                          <EmptyDescription>邀请成员后，可以在这里调整角色、查看项目数量并禁用访问。</EmptyDescription>
+                          <EmptyTitle>{t("settings.team.only_you")}</EmptyTitle>
+                          <EmptyDescription>{t("settings.team.only_you.desc")}</EmptyDescription>
                         </EmptyHeader>
                       </Empty>
                     )}
@@ -216,16 +218,16 @@ export default function TeamPage() {
                         </div>
                         <div className="flex items-center gap-3">
                           <div className="text-right hidden md:block">
-                            <p className="text-sm text-foreground">{member.projects_count} 个项目</p>
-                            <p className="text-xs text-muted-foreground">加入于 {new Date(member.joined_at).toLocaleDateString("zh-CN")}</p>
+                            <p className="text-sm text-foreground">{member.projects_count} {t("settings.team.projects")}</p>
+                            <p className="text-xs text-muted-foreground">{t("settings.team.joined")} {new Date(member.joined_at).toLocaleDateString()}</p>
                           </div>
                           <Select value={member.role} onValueChange={(value) => updateRole(member.id, value as "admin" | "member")}>
                             <SelectTrigger className="w-28 h-8">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="admin">管理员</SelectItem>
-                              <SelectItem value="member">使用者</SelectItem>
+                              <SelectItem value="admin">{t("common.role.admin")}</SelectItem>
+                              <SelectItem value="member">{t("common.role.member")}</SelectItem>
                             </SelectContent>
                           </Select>
                           <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" disabled={member.status === "disabled"} onClick={() => setPendingDisable(member)}>
@@ -244,15 +246,15 @@ export default function TeamPage() {
       <AlertDialog open={!!pendingDisable} onOpenChange={(open) => !open && setPendingDisable(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>禁用成员</AlertDialogTitle>
+            <AlertDialogTitle>{t("settings.team.disable.title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              禁用 “{pendingDisable?.name}” 后，该成员不能继续登录或使用 API Key。已有项目和审计记录会保留。
+              {t("settings.team.disable")} &quot;{pendingDisable?.name}&quot;
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={disableMember}>
-              禁用
+              {t("common.disable")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

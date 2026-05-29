@@ -283,6 +283,7 @@ export interface Activity {
   userId: string
   action: string
   target: string
+  targetId?: string
   createdAt: string
 }
 

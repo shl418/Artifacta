@@ -32,6 +32,7 @@ async function loadEmbed() {
   const aliasRoot = path.join(tempDir, "node_modules", "@", "lib", "server")
   await mkdir(aliasRoot, { recursive: true })
   await compileTs(path.join(repoRoot, "lib/server/config.ts"), path.join(aliasRoot, "config.js"))
+  await compileTs(path.join(repoRoot, "lib/server/cookies.ts"), path.join(aliasRoot, "cookies.js"))
   await compileTs(path.join(repoRoot, "lib/server/embed.ts"), path.join(aliasRoot, "embed.js"))
 
   const require = createRequire(path.join(tempDir, "loader.cjs"))
