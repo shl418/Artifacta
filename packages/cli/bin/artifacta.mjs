@@ -6,6 +6,9 @@ import { promisify } from "node:util"
 
 const execFileAsync = promisify(execFile)
 const args = process.argv.slice(2)
+// `pnpm cli -- <command>` forwards the `--` separator literally; drop a leading
+// standalone `--` so documented `pnpm cli -- doctor` and direct `artifacta doctor` match.
+if (args[0] === "--") args.shift()
 const jsonOutput = consumeBooleanFlag(args, "json")
 const command = args[0] ?? "help"
 
@@ -485,7 +488,8 @@ function printOutput(value, humanPrinter) {
 function printSummary(title, value) {
   console.log(title)
   for (const [key, entryValue] of Object.entries(value)) {
-    console.log(`${key}: ${entryValue ?? ""}`)
+    const display = entryValue !== null && typeof entryValue === "object" ? JSON.stringify(entryValue) : (entryValue ?? "")
+    console.log(`${key}: ${display}`)
   }
 }
 
