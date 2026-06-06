@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Spinner } from "@/components/ui/spinner"
 import { AlertCircle, RefreshCw, Webhook } from "lucide-react"
 
 interface WebhookRow {
@@ -33,46 +34,61 @@ export default function OperationsPage() {
   const [webhooks, setWebhooks] = useState<WebhookRow[]>([])
   const [auditLogs, setAuditLogs] = useState<AuditRow[]>([])
   const [error, setError] = useState("")
+  const [isLoading, setIsLoading] = useState(true)
   const [webhookUrl, setWebhookUrl] = useState("")
   const [latestSecret, setLatestSecret] = useState("")
+  const [creatingWebhook, setCreatingWebhook] = useState(false)
 
   const load = useCallback(async () => {
-    const [webhookResponse, auditResponse] = await Promise.all([
-      fetch("/api/v1/webhooks"),
-      fetch("/api/v1/audit-logs?per_page=20"),
-    ])
-    const webhookPayload = await webhookResponse.json().catch(() => null)
-    const auditPayload = await auditResponse.json().catch(() => null)
-    if (!webhookResponse.ok || !auditResponse.ok) {
-      setError(webhookPayload?.error?.message ?? auditPayload?.error?.message ?? "无法加载运维数据。")
-      return
+    try {
+      const [webhookResponse, auditResponse] = await Promise.all([
+        fetch("/api/v1/webhooks"),
+        fetch("/api/v1/audit-logs?per_page=20"),
+      ])
+      const webhookPayload = await webhookResponse.json().catch(() => null)
+      const auditPayload = await auditResponse.json().catch(() => null)
+      if (!webhookResponse.ok || !auditResponse.ok) {
+        setError(webhookPayload?.error?.message ?? auditPayload?.error?.message ?? "无法加载运维数据。")
+        return
+      }
+      setError("")
+      setWebhooks(webhookPayload.data ?? [])
+      setAuditLogs(auditPayload.data ?? [])
+    } finally {
+      setIsLoading(false)
     }
-    setError("")
-    setWebhooks(webhookPayload.data ?? [])
-    setAuditLogs(auditPayload.data ?? [])
   }, [])
 
   useEffect(() => {
-    load().catch(() => setError("网络异常，无法加载运维数据。"))
+    load().catch(() => {
+      setError("网络异常，无法加载运维数据。")
+      setIsLoading(false)
+    })
   }, [load])
 
   const createWebhook = async () => {
-    const response = await fetch("/api/v1/webhooks", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        url: webhookUrl,
-        events: ["project.created", "project.updated", "sync.success", "sync.failed", "permission.changed"],
-      }),
-    })
-    const payload = await response.json().catch(() => null)
-    if (!response.ok) {
-      setError(payload?.error?.message ?? "创建 Webhook 失败。")
-      return
+    if (creatingWebhook) return
+    setCreatingWebhook(true)
+    try {
+      const response = await fetch("/api/v1/webhooks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: webhookUrl,
+          events: ["project.created", "project.updated", "sync.success", "sync.failed", "permission.changed"],
+        }),
+      })
+      const payload = await response.json().catch(() => null)
+      if (!response.ok) {
+        setError(payload?.error?.message ?? "创建 Webhook 失败。")
+        return
+      }
+      setWebhookUrl("")
+      setLatestSecret(payload.secret ?? "")
+      await load()
+    } finally {
+      setCreatingWebhook(false)
     }
-    setWebhookUrl("")
-    setLatestSecret(payload.secret ?? "")
-    await load()
   }
 
   return (
@@ -96,6 +112,13 @@ export default function OperationsPage() {
               </Alert>
             )}
 
+            {isLoading && !error ? (
+              <div className="flex flex-col items-center justify-center gap-2 py-24 text-sm text-muted-foreground">
+                <Spinner className="size-5" />
+                加载中…
+              </div>
+            ) : (
+            <>
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2"><Webhook className="h-5 w-5" />Webhooks</CardTitle>
@@ -108,7 +131,7 @@ export default function OperationsPage() {
                     <Input value={webhookUrl} onChange={(event) => setWebhookUrl(event.target.value)} placeholder="https://hooks.example.com/artifacta" />
                   </div>
                   <div className="flex items-end">
-                    <Button onClick={createWebhook}>添加 Webhook</Button>
+                    <Button onClick={createWebhook} disabled={creatingWebhook}>{creatingWebhook ? "添加中…" : "添加 Webhook"}</Button>
                   </div>
                 </div>
                 {latestSecret && (
@@ -151,6 +174,8 @@ export default function OperationsPage() {
                 ))}
               </CardContent>
             </Card>
+            </>
+            )}
           </div>
         </main>
       </div>

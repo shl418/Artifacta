@@ -23,6 +23,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Spinner } from "@/components/ui/spinner"
 import { AlertCircle, Crown, Mail, Search, Shield, Trash2, User, UserPlus } from "lucide-react"
 
 interface TeamMember {
@@ -38,30 +39,45 @@ interface TeamMember {
 
 export default function TeamPage() {
   const [members, setMembers] = useState<TeamMember[]>([])
+  const [searchInput, setSearchInput] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false)
   const [inviteEmail, setInviteEmail] = useState("")
   const [inviteRole, setInviteRole] = useState("member")
   const [error, setError] = useState("")
+  const [isLoading, setIsLoading] = useState(true)
+  const [inviting, setInviting] = useState(false)
+  const [updatingRoleIds, setUpdatingRoleIds] = useState<Set<string>>(new Set())
   const [pendingDisable, setPendingDisable] = useState<TeamMember | null>(null)
+  const [disabling, setDisabling] = useState(false)
 
   const loadMembers = useCallback(async () => {
-    const params = new URLSearchParams()
-    if (searchQuery) params.set("search", searchQuery)
-    const response = await fetch(`/api/v1/team/members?${params.toString()}`)
-    const payload = await response.json().catch(() => null)
-    if (!response.ok) {
-      setError(payload?.error?.message ?? "无法加载团队成员。")
-      return
+    try {
+      const params = new URLSearchParams()
+      if (searchQuery) params.set("search", searchQuery)
+      const response = await fetch(`/api/v1/team/members?${params.toString()}`)
+      const payload = await response.json().catch(() => null)
+      if (!response.ok) {
+        setError(payload?.error?.message ?? "无法加载团队成员。")
+        return
+      }
+      setError("")
+      setMembers(payload.data)
+    } finally {
+      setIsLoading(false)
     }
-    setError("")
-    setMembers(payload.data)
   }, [searchQuery])
+
+  useEffect(() => {
+    const timer = setTimeout(() => setSearchQuery(searchInput), 300)
+    return () => clearTimeout(timer)
+  }, [searchInput])
 
   useEffect(() => {
     loadMembers().catch(() => {
       setMembers([])
       setError("网络异常，无法加载团队成员。")
+      setIsLoading(false)
     })
   }, [loadMembers])
 
@@ -71,49 +87,66 @@ export default function TeamPage() {
   }), [members])
 
   const invite = async () => {
-    const response = await fetch("/api/v1/team/invitations", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
-    })
-    if (response.ok) {
-      setInviteEmail("")
-      setInviteDialogOpen(false)
-      await loadMembers()
-    } else {
-      const payload = await response.json().catch(() => null)
-      setError(payload?.error?.message ?? "邀请成员失败。")
+    if (inviting) return
+    setInviting(true)
+    try {
+      const response = await fetch("/api/v1/team/invitations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
+      })
+      if (response.ok) {
+        setInviteEmail("")
+        setInviteDialogOpen(false)
+        await loadMembers()
+      } else {
+        const payload = await response.json().catch(() => null)
+        setError(payload?.error?.message ?? "邀请成员失败。")
+      }
+    } finally {
+      setInviting(false)
     }
   }
 
   const updateRole = async (userId: string, role: "admin" | "member") => {
-    const response = await fetch(`/api/v1/team/members/${userId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role }),
-    })
-    if (!response.ok) {
-      const payload = await response.json().catch(() => null)
-      setError(payload?.error?.message ?? "更新角色失败。")
-      return
+    if (updatingRoleIds.has(userId)) return
+    setUpdatingRoleIds((prev) => new Set([...prev, userId]))
+    try {
+      const response = await fetch(`/api/v1/team/members/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+      })
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null)
+        setError(payload?.error?.message ?? "更新角色失败。")
+        return
+      }
+      await loadMembers()
+    } finally {
+      setUpdatingRoleIds((prev) => { const s = new Set(prev); s.delete(userId); return s })
     }
-    await loadMembers()
   }
 
   const disableMember = async () => {
-    if (!pendingDisable) return
-    const response = await fetch(`/api/v1/team/members/${pendingDisable.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "disabled" }),
-    })
-    setPendingDisable(null)
-    if (!response.ok) {
-      const payload = await response.json().catch(() => null)
-      setError(payload?.error?.message ?? "禁用成员失败。")
-      return
+    if (!pendingDisable || disabling) return
+    setDisabling(true)
+    try {
+      const response = await fetch(`/api/v1/team/members/${pendingDisable.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "disabled" }),
+      })
+      setPendingDisable(null)
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null)
+        setError(payload?.error?.message ?? "禁用成员失败。")
+        return
+      }
+      await loadMembers()
+    } finally {
+      setDisabling(false)
     }
-    await loadMembers()
   }
 
   return (
@@ -166,9 +199,9 @@ export default function TeamPage() {
                           </div>
                           <div className="flex justify-end gap-2">
                             <Button variant="secondary" onClick={() => setInviteDialogOpen(false)}>取消</Button>
-                            <Button onClick={invite} disabled={!inviteEmail}>
+                            <Button onClick={invite} disabled={!inviteEmail || inviting}>
                               <Mail className="h-4 w-4" />
-                              发送邀请
+                              {inviting ? "发送中…" : "发送邀请"}
                             </Button>
                           </div>
                         </div>
@@ -179,7 +212,7 @@ export default function TeamPage() {
                 <CardContent>
                   <div className="relative mb-4">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input placeholder="搜索成员..." value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} className="pl-9 bg-secondary/50" />
+                    <Input placeholder="搜索成员..." value={searchInput} onChange={(event) => setSearchInput(event.target.value)} className="pl-9 bg-secondary/50" />
                   </div>
 
                   {error && (
@@ -191,7 +224,13 @@ export default function TeamPage() {
                   )}
 
                   <div className="space-y-3">
-                    {!error && members.length <= 1 && (
+                    {isLoading && (
+                      <div className="flex flex-col items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+                        <Spinner className="size-5" />
+                        加载中…
+                      </div>
+                    )}
+                    {!isLoading && !error && members.length <= 1 && (
                       <Empty className="border py-10">
                         <EmptyHeader>
                           <EmptyMedia variant="icon"><UserPlus /></EmptyMedia>
@@ -219,7 +258,7 @@ export default function TeamPage() {
                             <p className="text-sm text-foreground">{member.projects_count} 个项目</p>
                             <p className="text-xs text-muted-foreground">加入于 {new Date(member.joined_at).toLocaleDateString("zh-CN")}</p>
                           </div>
-                          <Select value={member.role} onValueChange={(value) => updateRole(member.id, value as "admin" | "member")}>
+                          <Select value={member.role} disabled={updatingRoleIds.has(member.id)} onValueChange={(value) => updateRole(member.id, value as "admin" | "member")}>
                             <SelectTrigger className="w-28 h-8">
                               <SelectValue />
                             </SelectTrigger>
@@ -251,8 +290,8 @@ export default function TeamPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={disableMember}>
-              禁用
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={disabling} onClick={(event) => { event.preventDefault(); disableMember() }}>
+              {disabling ? "禁用中…" : "禁用"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

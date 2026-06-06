@@ -6,6 +6,12 @@ import { ExternalLink, RefreshCw, Settings2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 
+const visibilityLabel: Record<"private" | "team" | "public", string> = {
+  private: "私有",
+  team: "团队",
+  public: "公开",
+}
+
 interface ProjectDetail {
   id: string
   name: string
@@ -20,6 +26,7 @@ export default function ProjectPreviewPage() {
   const [project, setProject] = useState<ProjectDetail | null>(null)
   const [iframeSrc, setIframeSrc] = useState("")
   const [error, setError] = useState("")
+  const [errorStatus, setErrorStatus] = useState<number | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -27,7 +34,9 @@ export default function ProjectPreviewPage() {
       .then(async (response) => {
         if (!response.ok) {
           const payload = await response.json().catch(() => null)
-          throw new Error(payload?.error?.message ?? "无法访问该看板。")
+          const failure = new Error(payload?.error?.message ?? "无法访问该看板。") as Error & { status?: number }
+          failure.status = response.status
+          throw failure
         }
         return response.json()
       })
@@ -36,19 +45,30 @@ export default function ProjectPreviewPage() {
         setProject(payload)
         setIframeSrc(payload.html_url)
       })
-      .catch((reason) => mounted && setError(reason instanceof Error ? reason.message : "无法访问该看板。"))
+      .catch((reason) => {
+        if (!mounted) return
+        setErrorStatus(typeof reason?.status === "number" ? reason.status : null)
+        setError(reason instanceof Error ? reason.message : "无法访问该看板。")
+      })
     return () => {
       mounted = false
     }
   }, [params.projectId])
 
   if (error) {
+    // Only an auth failure should send the user to login; a missing/forbidden
+    // board (e.g. deleted or private) should not dead-end an already-logged-in user.
+    const isAuthError = errorStatus === 401
     return (
       <main className="min-h-screen bg-background grid place-items-center p-6">
         <div className="max-w-md rounded-lg border bg-card p-6 text-center shadow-sm">
           <h1 className="text-lg font-semibold text-foreground">看板不可访问</h1>
           <p className="text-sm text-muted-foreground mt-2">{error}</p>
-          <Button className="mt-5" onClick={() => router.push("/login")}>登录后重试</Button>
+          {isAuthError ? (
+            <Button className="mt-5" onClick={() => router.push("/login")}>登录后重试</Button>
+          ) : (
+            <Button className="mt-5" variant="outline" onClick={() => router.push("/dashboards")}>返回看板列表</Button>
+          )}
         </div>
       </main>
     )
@@ -67,7 +87,7 @@ export default function ProjectPreviewPage() {
           </Button>
           <div className="h-5 w-px bg-border" />
           <h1 className="font-medium text-sm truncate">{project.name}</h1>
-          <Badge variant="outline" className="text-xs">{project.visibility}</Badge>
+          <Badge variant="outline" className="text-xs">{visibilityLabel[project.visibility]}</Badge>
         </div>
         <div className="flex w-full sm:w-auto items-center justify-end gap-1.5 sm:gap-2">
           <Button

@@ -32,9 +32,6 @@ export function Header({ title }: HeaderProps) {
             <DropdownMenuItem asChild>
               <Link href="/upload">上传看板项目</Link>
             </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href="/datasets">新建数据集</Link>
-            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 

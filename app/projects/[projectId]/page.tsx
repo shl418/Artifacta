@@ -15,6 +15,12 @@ import { AlertCircle, Clock, Database, Eye, FileBarChart, RefreshCw, Shield, Use
 
 type Visibility = "private" | "team" | "public"
 
+const visibilityLabel: Record<Visibility, string> = {
+  private: "私有",
+  team: "团队",
+  public: "公开",
+}
+
 interface ProjectDetail {
   id: string
   name: string
@@ -57,6 +63,7 @@ export default function ProjectDetailPage() {
   const [error, setError] = useState("")
   const [embedUrl, setEmbedUrl] = useState("")
   const [actionMessage, setActionMessage] = useState("")
+  const [pendingAction, setPendingAction] = useState<string | null>(null)
 
   const loadProject = useCallback(async () => {
     const [projectResponse, versionsResponse] = await Promise.all([
@@ -79,40 +86,58 @@ export default function ProjectDetailPage() {
   }, [loadProject])
 
   const createEmbedLink = async () => {
-    const response = await fetch(`/api/v1/projects/${params.projectId}/embed-token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ expires_in_seconds: 3600 }),
-    })
-    const payload = await response.json().catch(() => null)
-    if (!response.ok) {
-      setActionMessage(payload?.error?.message ?? "无法创建嵌入链接。")
-      return
+    if (pendingAction) return
+    setPendingAction("embed")
+    try {
+      const response = await fetch(`/api/v1/projects/${params.projectId}/embed-token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expires_in_seconds: 3600 }),
+      })
+      const payload = await response.json().catch(() => null)
+      if (!response.ok) {
+        setActionMessage(payload?.error?.message ?? "无法创建嵌入链接。")
+        return
+      }
+      setEmbedUrl(payload.embed_url)
+      setActionMessage("嵌入链接已生成，1 小时内有效。")
+    } finally {
+      setPendingAction(null)
     }
-    setEmbedUrl(payload.embed_url)
-    setActionMessage("嵌入链接已生成，1 小时内有效。")
   }
 
   const rollbackVersion = async (versionId: string) => {
-    const response = await fetch(`/api/v1/projects/${params.projectId}/versions/${versionId}/rollback`, { method: "POST" })
-    const payload = await response.json().catch(() => null)
-    if (!response.ok) {
-      setActionMessage(payload?.error?.message ?? "回滚失败。")
-      return
+    if (pendingAction) return
+    setPendingAction(`rollback:${versionId}`)
+    try {
+      const response = await fetch(`/api/v1/projects/${params.projectId}/versions/${versionId}/rollback`, { method: "POST" })
+      const payload = await response.json().catch(() => null)
+      if (!response.ok) {
+        setActionMessage(payload?.error?.message ?? "回滚失败。")
+        return
+      }
+      setActionMessage("看板已回滚到所选版本。")
+      await loadProject()
+    } finally {
+      setPendingAction(null)
     }
-    setActionMessage("看板已回滚到所选版本。")
-    await loadProject()
   }
 
   const triggerScriptSync = async (scriptId: string) => {
-    const response = await fetch(`/api/v1/projects/${params.projectId}/sync-scripts/${scriptId}/trigger`, { method: "POST" })
-    const payload = await response.json().catch(() => null)
-    if (!response.ok) {
-      setActionMessage(payload?.error?.message ?? "无法触发脚本同步。")
-      return
+    if (pendingAction) return
+    setPendingAction(`sync:${scriptId}`)
+    try {
+      const response = await fetch(`/api/v1/projects/${params.projectId}/sync-scripts/${scriptId}/trigger`, { method: "POST" })
+      const payload = await response.json().catch(() => null)
+      if (!response.ok) {
+        setActionMessage(payload?.error?.message ?? "无法触发脚本同步。")
+        return
+      }
+      setActionMessage(`脚本同步已排队：${payload.job_id}`)
+      await loadProject()
+    } finally {
+      setPendingAction(null)
     }
-    setActionMessage(`脚本同步已排队：${payload.job_id}`)
-    await loadProject()
   }
 
   const updateVisibility = async (visibility: Visibility) => {
@@ -158,13 +183,13 @@ export default function ProjectDetailPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <FileBarChart className="h-5 w-5 shrink-0 text-primary" />
                         <h2 className="text-xl font-semibold">{project.name}</h2>
-                        <Badge variant="outline">{project.visibility}</Badge>
+                        <Badge variant="outline">{visibilityLabel[project.visibility]}</Badge>
                       </div>
                       <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{project.description || "暂无描述"}</p>
                     </div>
                     <div className="flex shrink-0 flex-wrap gap-2">
                       <Button asChild variant="outline" size="sm"><Link href={`/view/${project.id}`}>预览</Link></Button>
-                      <Button variant="outline" size="sm" onClick={createEmbedLink}>嵌入链接</Button>
+                      <Button variant="outline" size="sm" onClick={createEmbedLink} disabled={pendingAction === "embed"}>{pendingAction === "embed" ? "生成中…" : "嵌入链接"}</Button>
                       <Select value={project.visibility} onValueChange={(value) => updateVisibility(value as Visibility)}>
                         <SelectTrigger className="h-9 w-32"><SelectValue /></SelectTrigger>
                         <SelectContent>
@@ -179,12 +204,15 @@ export default function ProjectDetailPage() {
                     <div className="space-y-2 rounded-lg border border-border bg-muted/30 px-3 py-2.5">
                       {actionMessage && <p className="text-sm text-muted-foreground">{actionMessage}</p>}
                       {embedUrl && (
-                        <p className="text-xs text-muted-foreground">
-                          <span className="font-medium">嵌入链接：</span>
-                          <a className="break-all text-primary underline" href={embedUrl} target="_blank" rel="noreferrer">
-                            {embedUrl}
-                          </a>
-                        </p>
+                        <div className="space-y-1">
+                          <p className="text-xs text-muted-foreground">
+                            <span className="font-medium">嵌入链接：</span>
+                            <a className="break-all text-primary underline" href={embedUrl} target="_blank" rel="noreferrer">
+                              {embedUrl}
+                            </a>
+                          </p>
+                          <p className="text-xs text-amber-600">此链接包含临时访问令牌，有效期较短，请勿公开分享。</p>
+                        </div>
                       )}
                     </div>
                   )}
@@ -266,8 +294,8 @@ export default function ProjectDetailPage() {
                           <div className="flex items-center gap-2">
                             <Badge variant={script.enabled ? "default" : "secondary"}>{script.enabled ? "启用" : "禁用"}</Badge>
                             <Badge variant="outline">{script.last_run_status ?? "未运行"}</Badge>
-                            <Button variant="outline" size="sm" disabled={!script.enabled} onClick={() => triggerScriptSync(script.id)}>
-                              触发同步
+                            <Button variant="outline" size="sm" disabled={!script.enabled || pendingAction !== null} onClick={() => triggerScriptSync(script.id)}>
+                              {pendingAction === `sync:${script.id}` ? "排队中…" : "触发同步"}
                             </Button>
                           </div>
                         </CardContent>
@@ -311,7 +339,7 @@ export default function ProjectDetailPage() {
                           </div>
                           <div className="flex items-center gap-2">
                             <p className="text-xs text-muted-foreground">{new Date(version.created_at).toLocaleString("zh-CN")}</p>
-                            <Button variant="outline" size="sm" onClick={() => rollbackVersion(version.id)}>回滚</Button>
+                            <Button variant="outline" size="sm" disabled={pendingAction !== null} onClick={() => rollbackVersion(version.id)}>{pendingAction === `rollback:${version.id}` ? "回滚中…" : "回滚"}</Button>
                           </div>
                         </CardContent>
                       </Card>

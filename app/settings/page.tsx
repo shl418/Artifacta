@@ -111,12 +111,12 @@ export default function SettingsPage() {
                       </AvatarFallback>
                     </Avatar>
                     <div className="space-y-2">
-                      <Button variant="secondary" size="sm">
+                      <Button variant="secondary" size="sm" disabled title="暂未开放">
                         <Upload className="h-4 w-4 mr-2" />
                         更换头像
                       </Button>
                       <p className="text-xs text-muted-foreground">
-                        支持 JPG、PNG 格式，最大 2MB
+                        支持 JPG、PNG 格式，最大 2MB（暂未开放）
                       </p>
                     </div>
                   </div>
@@ -178,9 +178,9 @@ export default function SettingsPage() {
                   </div>
 
                   <div className="flex justify-end">
-                    <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                    <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled title="暂未开放">
                       <Save className="h-4 w-4 mr-2" />
-                      保存更改
+                      保存更改（暂未开放）
                     </Button>
                   </div>
                 </CardContent>
@@ -205,7 +205,7 @@ export default function SettingsPage() {
                         永久删除您的账户和所有数据
                       </p>
                     </div>
-                    <Button variant="destructive">
+                    <Button variant="destructive" disabled title="暂未开放">
                       <Trash2 className="h-4 w-4 mr-2" />
                       删除账户
                     </Button>
@@ -248,9 +248,9 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div className="flex justify-end">
-                    <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                    <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled title="暂未开放">
                       <Save className="h-4 w-4 mr-2" />
-                      保存更改
+                      保存更改（暂未开放）
                     </Button>
                   </div>
                 </CardContent>
@@ -343,7 +343,7 @@ export default function SettingsPage() {
                     <p className="text-sm text-muted-foreground">
                       需要更多存储空间？
                     </p>
-                    <Button variant="secondary">升级套餐</Button>
+                    <Button variant="secondary" disabled title="暂未开放">升级套餐（暂未开放）</Button>
                   </div>
                 </CardContent>
               </Card>
