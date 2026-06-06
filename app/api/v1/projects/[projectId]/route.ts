@@ -77,6 +77,13 @@ export async function DELETE(request: Request, context: RouteContext) {
     mutable.datasets = mutable.datasets.filter((dataset) => dataset.projectId !== projectId)
     mutable.projectMembers = mutable.projectMembers.filter((member) => member.projectId !== projectId)
     mutable.syncHistory = mutable.syncHistory.filter((history) => history.projectId !== projectId)
+    // Cascade to every project-scoped child collection so deletion leaves no orphans.
+    mutable.syncJobs = mutable.syncJobs.filter((job) => job.projectId !== projectId)
+    mutable.projectSyncScripts = mutable.projectSyncScripts.filter((script) => script.projectId !== projectId)
+    mutable.scriptSyncJobs = (mutable.scriptSyncJobs ?? []).filter((job) => job.projectId !== projectId)
+    mutable.scriptSyncHistory = (mutable.scriptSyncHistory ?? []).filter((history) => history.projectId !== projectId)
+    mutable.dashboardVersions = mutable.dashboardVersions.filter((version) => version.projectId !== projectId)
+    mutable.datasetVersions = mutable.datasetVersions.filter((version) => version.projectId !== projectId)
     dispatch(mutable, { type: "project.deleted", organizationId: auth.user.organizationId, actorId: auth.user.id, project: { id: project.id, name: project.name } })
   })
 

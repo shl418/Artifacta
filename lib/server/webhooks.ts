@@ -29,6 +29,9 @@ export function emitWebhooks(database: Database, organizationId: string, event: 
   }
 }
 
+const DELIVERY_MAX_ATTEMPTS = Number(process.env.ARTIFACTA_WEBHOOK_MAX_ATTEMPTS ?? 3)
+const DELIVERY_BACKOFF_MS = Number(process.env.ARTIFACTA_WEBHOOK_BACKOFF_MS ?? 500)
+
 async function deliverWebhook(endpoint: WebhookEndpoint, event: WebhookEvent, payload: Record<string, unknown>) {
   const body = JSON.stringify({
     event,
@@ -37,20 +40,31 @@ async function deliverWebhook(endpoint: WebhookEndpoint, event: WebhookEvent, pa
   })
   const signature = crypto.createHmac("sha256", endpoint.secret).update(body).digest("hex")
 
-  try {
-    const response = await fetch(endpoint.url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Artifacta-Event": event,
-        "X-Artifacta-Signature": `sha256=${signature}`,
-      },
-      body,
-    })
-    await markDelivery(endpoint.id, response.ok ? "success" : "failed")
-  } catch {
-    await markDelivery(endpoint.id, "failed")
+  // Best-effort retry with backoff so a transient blip doesn't silently drop the
+  // event. (A durable cross-restart delivery queue remains a documented follow-up.)
+  for (let attempt = 1; attempt <= DELIVERY_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await fetch(endpoint.url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Artifacta-Event": event,
+          "X-Artifacta-Signature": `sha256=${signature}`,
+        },
+        body,
+      })
+      if (response.ok) {
+        await markDelivery(endpoint.id, "success")
+        return
+      }
+    } catch {
+      // network error — fall through to retry/backoff
+    }
+    if (attempt < DELIVERY_MAX_ATTEMPTS) {
+      await new Promise((resolve) => setTimeout(resolve, DELIVERY_BACKOFF_MS * attempt))
+    }
   }
+  await markDelivery(endpoint.id, "failed")
 }
 
 async function markDelivery(endpointId: string, status: "success" | "failed") {

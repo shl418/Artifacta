@@ -25,9 +25,18 @@ export function apiError(status: number, code: string, message: string, details?
   )
 }
 
+function toPositiveInt(raw: string | null, fallback: number) {
+  if (raw == null || raw.trim() === "") return fallback
+  const value = Number(raw)
+  // Reject NaN / non-finite / non-integer input instead of letting it poison the
+  // slice math (which silently returned an empty page).
+  if (!Number.isFinite(value) || value < 1) return fallback
+  return Math.floor(value)
+}
+
 export function parsePagination(url: URL) {
-  const page = Math.max(Number(url.searchParams.get("page") ?? 1), 1)
-  const perPage = Math.min(Math.max(Number(url.searchParams.get("per_page") ?? 20), 1), 100)
+  const page = toPositiveInt(url.searchParams.get("page"), 1)
+  const perPage = Math.min(toPositiveInt(url.searchParams.get("per_page"), 20), 100)
   return { page, perPage }
 }
 
