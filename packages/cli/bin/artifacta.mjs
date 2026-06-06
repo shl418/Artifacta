@@ -235,13 +235,17 @@ async function datasetSyncCommand(syncArgs) {
   const options = parseOptions(syncArgs.slice(1))
   const projectId = requiredOption(options, "project-id")
   const datasetId = requiredOption(options, "dataset-id")
+  // Honor the documented flags instead of silently discarding them. The server
+  // currently only accepts source_type "manual" and will reject others with a
+  // clear error rather than this CLI swallowing them.
   const sourceType = String(options["source-type"] ?? options.source ?? "manual")
+  const config = await readJsonConfig(options)
   const body = {
-    enabled: false,
-    source_type: "manual",
-    source_config: {},
-    update_mode: "full",
-    schedule: null,
+    enabled: Boolean(options.enabled || options.enable),
+    source_type: sourceType,
+    source_config: config,
+    update_mode: String(options["update-mode"] ?? "full"),
+    schedule: optionalString(options, "schedule"),
   }
 
   const payload = await request(`/projects/${projectId}/datasets/${datasetId}/sync`, {
@@ -323,8 +327,7 @@ async function bundleCommand(bundleArgs) {
   }
 
   const command = runtime === "python" ? process.env.ARTIFACTA_PYTHON ?? "python3" : process.execPath
-  const args = runtime === "python" ? [filePath] : [filePath]
-  await execFileAsync(command, args, { cwd: bundleRoot, env })
+  await execFileAsync(command, [filePath], { cwd: bundleRoot, env })
   printOutput({ ok: true, script_path: scriptPath, bundle_root: bundleRoot }, () =>
     console.log(`Script completed: ${scriptPath}`)
   )
@@ -503,12 +506,6 @@ function optionalString(options, name) {
   const value = options[name]
   if (value === undefined || value === true || Array.isArray(value)) return null
   return String(value)
-}
-
-function arrayOption(options, name) {
-  const value = options[name]
-  if (!value) return []
-  return Array.isArray(value) ? value.map(String) : [String(value)]
 }
 
 function parseJsonObject(value, label) {

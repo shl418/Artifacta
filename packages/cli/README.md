@@ -37,12 +37,10 @@ artifacta sync-scripts trigger --project-id proj_123 --script-id sscript_abc123
 artifacta sync-scripts status --project-id proj_123 --script-id sscript_abc123
 artifacta sync-scripts set --project-id proj_123 --script-id sscript_abc123 --config-file ./secrets.json
 artifacta bundle run-script --file ./scripts/sync.py --bundle-root ./dist --outputs data/sales.csv
-artifacta datasets list [--source manual|cos|presto]
+artifacta datasets list [--source manual|all]
 artifacta datasets upload --project-id proj_123 --file ./growth.csv --name "Weekly Growth Data"
 artifacta datasets replace --project-id proj_123 --dataset-id ds_123 --file ./growth-v2.csv
-artifacta datasets sync set --project-id proj_123 --dataset-id ds_123 --source-type presto --config-file ./sync.json
-artifacta datasets sync set --project-id proj_123 --dataset-id ds_123 --source-type presto --config-json '{"mock_rows":[{"day":"2026-05-21","value":42}]}'
-artifacta sync trigger --project-id proj_123 --dataset-id ds_123
+artifacta datasets sync set --project-id proj_123 --dataset-id ds_123 --config-file ./sync.json
 ```
 
 `ARTIFACTA_URL` may be either the app root (`https://artifacta.example.com`) or an API base ending in `/api/v1`; the CLI normalizes both.
