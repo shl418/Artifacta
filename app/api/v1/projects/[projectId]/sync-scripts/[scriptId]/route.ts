@@ -20,7 +20,8 @@ export async function GET(request: Request, context: RouteContext) {
   if (!project || !script) return apiError(404, "NOT_FOUND", "同步脚本不存在。")
   if (!canViewProject(database, auth?.user ?? null, project)) return apiError(403, "FORBIDDEN", "无权访问同步脚本。")
 
-  return ok(serializeProjectSyncScript(script))
+  const includeSecrets = auth ? canEditProject(database, auth.user, project) : false
+  return ok(serializeProjectSyncScript(script, includeSecrets))
 }
 
 export async function PUT(request: Request, context: RouteContext) {
@@ -69,5 +70,5 @@ export async function PUT(request: Request, context: RouteContext) {
   })
 
   if (!updated) return apiError(404, "NOT_FOUND", "同步脚本不存在。")
-  return ok(serializeProjectSyncScript(updated))
+  return ok(serializeProjectSyncScript(updated, true))
 }

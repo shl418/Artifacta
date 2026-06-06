@@ -1,9 +1,10 @@
 import crypto from "node:crypto"
-import { authSecret, appUrl } from "@/lib/server/config"
+import { assertProductionSecrets, authSecret, appUrl } from "@/lib/server/config"
 
 const embedCookieName = "artifacta_embed_token"
 
 export function createEmbedToken(projectId: string, expiresInSeconds = 60 * 60) {
+  assertProductionSecrets()
   const payload = {
     projectId,
     exp: Math.floor(Date.now() / 1000) + expiresInSeconds,
@@ -13,9 +14,10 @@ export function createEmbedToken(projectId: string, expiresInSeconds = 60 * 60) 
 }
 
 export function verifyEmbedToken(token: string | undefined, projectId: string) {
+  assertProductionSecrets()
   if (!token) return false
   const [encoded, signature] = token.split(".")
-  if (!encoded || !signature || sign(encoded) !== signature) return false
+  if (!encoded || !signature || !timingSafeEqualStr(sign(encoded), signature)) return false
   try {
     const payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as { projectId?: string; exp?: number }
     return payload.projectId === projectId && typeof payload.exp === "number" && payload.exp >= Math.floor(Date.now() / 1000)
@@ -40,7 +42,16 @@ export function embedUrl(projectId: string, token: string) {
 }
 
 function sign(value: string) {
-  return crypto.createHmac("sha256", authSecret).update(value).digest("base64url")
+  // Domain-separate embed tokens from session tokens so the two HMAC namespaces
+  // can never be cross-used even though they share AUTH_SECRET.
+  return crypto.createHmac("sha256", authSecret).update(`embed:${value}`).digest("base64url")
+}
+
+function timingSafeEqualStr(a: string, b: string) {
+  const bufferA = Buffer.from(a)
+  const bufferB = Buffer.from(b)
+  if (bufferA.length !== bufferB.length) return false
+  return crypto.timingSafeEqual(bufferA, bufferB)
 }
 
 function getCookie(cookieHeader: string | null, name: string) {

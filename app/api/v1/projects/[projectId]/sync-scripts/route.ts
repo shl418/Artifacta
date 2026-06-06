@@ -1,5 +1,5 @@
 import { authenticateRequest } from "@/lib/server/auth"
-import { canViewProject } from "@/lib/server/access"
+import { canEditProject, canViewProject } from "@/lib/server/access"
 import { readDatabase } from "@/lib/server/db"
 import { apiError, ok } from "@/lib/server/responses"
 import { listProjectSyncScripts } from "@/lib/server/sync/sync-scripts"
@@ -18,6 +18,7 @@ export async function GET(request: Request, context: RouteContext) {
   if (!project) return apiError(404, "NOT_FOUND", "项目不存在。")
   if (!canViewProject(database, auth?.user ?? null, project)) return apiError(403, "FORBIDDEN", "无权访问同步脚本。")
 
-  const scripts = listProjectSyncScripts(database, projectId).map(serializeProjectSyncScript)
+  const includeSecrets = auth ? canEditProject(database, auth.user, project) : false
+  const scripts = listProjectSyncScripts(database, projectId).map((script) => serializeProjectSyncScript(script, includeSecrets))
   return ok({ data: scripts })
 }

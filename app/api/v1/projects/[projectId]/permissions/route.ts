@@ -1,4 +1,4 @@
-import type { ProjectPermission, User } from "@/lib/types"
+import type { ProjectPermission } from "@/lib/types"
 import { authenticateRequest, requireRequestAuth } from "@/lib/server/auth"
 import { canEditProject, canViewProject } from "@/lib/server/access"
 import { now, readDatabase, updateDatabase } from "@/lib/server/db"
@@ -52,22 +52,16 @@ export async function POST(request: Request, context: RouteContext) {
   if (!project) return apiError(404, "NOT_FOUND", "项目不存在。")
   if (!canEditProject(database, auth.user, project)) return apiError(403, "FORBIDDEN", "无权管理项目成员。")
 
+  // Only grant access to existing members of the same organization. Net-new
+  // users must be invited through the admin team flow; permission grants must
+  // never silently create users or pull in accounts from other organizations.
+  const target = database.users.find(
+    (candidate) => candidate.email.toLowerCase() === email && candidate.organizationId === auth.user.organizationId
+  )
+  if (!target) return apiError(404, "NOT_FOUND", "该邮箱不属于当前团队成员，请先在团队设置中邀请。", { field: "user_email" })
+
   const member = await updateDatabase((mutable) => {
-    let user = mutable.users.find((candidate) => candidate.email.toLowerCase() === email)
-    if (!user) {
-      const createdAt = now()
-      user = {
-        id: `user_${crypto.randomUUID()}`,
-        organizationId: auth.user.organizationId,
-        email,
-        name: email.split("@")[0],
-        role: "member",
-        status: "active",
-        createdAt,
-        updatedAt: createdAt,
-      } satisfies User
-      mutable.users.push(user)
-    }
+    const user = mutable.users.find((candidate) => candidate.id === target.id)!
 
     let projectMember = mutable.projectMembers.find((candidate) => candidate.projectId === projectId && candidate.userId === user.id)
     if (!projectMember) {

@@ -82,7 +82,7 @@ export function serializeProjectDetail(database: Database, project: Project) {
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
       .slice(0, 20)
       .map((activity) => serializeActivity(database, activity)),
-    sync_scripts: listProjectSyncScripts(database, project.id).map(serializeProjectSyncScript),
+    sync_scripts: listProjectSyncScripts(database, project.id).map((script) => serializeProjectSyncScript(script)),
   }
 }
 
@@ -129,7 +129,15 @@ export function serializeSyncConfig(dataset: Dataset) {
   }
 }
 
-export function serializeProjectSyncScript(script: ProjectSyncScript) {
+// source_config can carry script credentials (it is injected into the sync
+// subprocess). Mask values for non-editors so anonymous viewers of a public
+// project cannot read secrets, while still revealing which keys are configured.
+function redactSourceConfig(config: Record<string, unknown> | undefined) {
+  if (!config) return config
+  return Object.fromEntries(Object.keys(config).map((key) => [key, "***"]))
+}
+
+export function serializeProjectSyncScript(script: ProjectSyncScript, includeSecrets = false) {
   return {
     id: script.id,
     manifest_id: script.manifestId,
@@ -139,7 +147,7 @@ export function serializeProjectSyncScript(script: ProjectSyncScript) {
     outputs: script.outputs,
     schedule: script.schedule,
     enabled: script.enabled,
-    source_config: script.sourceConfig,
+    source_config: includeSecrets ? script.sourceConfig : redactSourceConfig(script.sourceConfig),
     last_run_at: script.lastRunAt,
     last_run_status: script.lastRunStatus,
     next_run_at: script.nextRunAt,
