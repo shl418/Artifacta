@@ -1,6 +1,6 @@
-import { authenticateRequest } from "@/lib/server/auth"
+import { requireRequestAuth } from "@/lib/server/auth"
 import { updateDatabase } from "@/lib/server/db"
-import { apiError, ok } from "@/lib/server/responses"
+import { ok } from "@/lib/server/responses"
 import { runScriptSync } from "@/lib/server/sync/script-runner"
 import {
   claimNextScriptSyncJob,
@@ -13,8 +13,8 @@ import { findProjectSyncScript } from "@/lib/server/sync/sync-scripts"
 export const runtime = "nodejs"
 
 export async function POST(request: Request) {
-  const auth = await authenticateRequest(request)
-  if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
+  const auth = await requireRequestAuth(request, "sync:run")
+  if (auth instanceof Response) return auth
 
   const job = await updateDatabase((database) => claimNextScriptSyncJob(database, auth.user.organizationId))
   if (!job) return ok({ job: null })

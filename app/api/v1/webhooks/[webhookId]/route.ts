@@ -1,4 +1,4 @@
-import { authenticateRequest } from "@/lib/server/auth"
+import { requireRequestAuth } from "@/lib/server/auth"
 import { canManageTeam } from "@/lib/server/access"
 import { now, readDatabase, updateDatabase } from "@/lib/server/db"
 import { apiError, noContent, ok } from "@/lib/server/responses"
@@ -10,8 +10,8 @@ type RouteContext = { params: Promise<{ webhookId: string }> }
 
 export async function PATCH(request: Request, context: RouteContext) {
   const { webhookId } = await context.params
-  const auth = await authenticateRequest(request)
-  if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
+  const auth = await requireRequestAuth(request, "team:write")
+  if (auth instanceof Response) return auth
   if (!canManageTeam(auth.user)) return apiError(403, "FORBIDDEN", "只有管理员可以管理 Webhook。")
 
   const body = await request.json().catch(() => null)
@@ -32,8 +32,8 @@ export async function PATCH(request: Request, context: RouteContext) {
 
 export async function DELETE(request: Request, context: RouteContext) {
   const { webhookId } = await context.params
-  const auth = await authenticateRequest(request)
-  if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
+  const auth = await requireRequestAuth(request, "team:write")
+  if (auth instanceof Response) return auth
   if (!canManageTeam(auth.user)) return apiError(403, "FORBIDDEN", "只有管理员可以管理 Webhook。")
 
   const database = await readDatabase()

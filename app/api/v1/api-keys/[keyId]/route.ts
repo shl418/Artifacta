@@ -1,4 +1,4 @@
-import { authenticateRequest } from "@/lib/server/auth"
+import { requireSessionAuth } from "@/lib/server/auth"
 import { updateDatabase, readDatabase } from "@/lib/server/db"
 import { apiError, noContent } from "@/lib/server/responses"
 
@@ -8,8 +8,8 @@ type RouteContext = { params: Promise<{ keyId: string }> }
 
 export async function DELETE(request: Request, context: RouteContext) {
   const { keyId } = await context.params
-  const auth = await authenticateRequest(request)
-  if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
+  const auth = await requireSessionAuth(request)
+  if (auth instanceof Response) return auth
 
   const database = await readDatabase()
   const apiKey = database.apiKeys.find(

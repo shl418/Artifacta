@@ -1,4 +1,4 @@
-import { authenticateRequest } from "@/lib/server/auth"
+import { requireRequestAuth } from "@/lib/server/auth"
 import { canEditProject } from "@/lib/server/access"
 import { now, readDatabase, updateDatabase } from "@/lib/server/db"
 import { dispatch } from "@/lib/server/dispatch"
@@ -12,8 +12,8 @@ type RouteContext = { params: Promise<{ projectId: string; versionId: string }> 
 
 export async function POST(request: Request, context: RouteContext) {
   const { projectId, versionId } = await context.params
-  const auth = await authenticateRequest(request)
-  if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
+  const auth = await requireRequestAuth(request, "projects:write")
+  if (auth instanceof Response) return auth
 
   const database = await readDatabase()
   const project = database.projects.find((candidate) => candidate.id === projectId)

@@ -1,6 +1,6 @@
 import type { ApiKey } from "@/lib/types"
 import { parseRequestedScopes } from "@/lib/server/api-key-scopes"
-import { authenticateRequest, createApiKeySecret, takeAuthRateLimitResponse } from "@/lib/server/auth"
+import { createApiKeySecret, requireSessionAuth } from "@/lib/server/auth"
 import { defaultApiKeyExpiryDays } from "@/lib/server/config"
 import { addActivity, now, readDatabase, updateDatabase } from "@/lib/server/db"
 import { apiError, created, ok } from "@/lib/server/responses"
@@ -9,10 +9,8 @@ import { rateLimitResponse } from "@/lib/server/rate-limit"
 export const runtime = "nodejs"
 
 export async function GET(request: Request) {
-  const auth = await authenticateRequest(request)
-  const rateLimited = takeAuthRateLimitResponse()
-  if (rateLimited) return rateLimited
-  if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
+  const auth = await requireSessionAuth(request)
+  if (auth instanceof Response) return auth
 
   const database = await readDatabase()
   const keys = database.apiKeys.filter((key) => key.organizationId === auth.user.organizationId && key.userId === auth.user.id)
@@ -24,10 +22,8 @@ export async function POST(request: Request) {
   const limited = rateLimitResponse(request, "api-keys-create", 30)
   if (limited) return limited
 
-  const auth = await authenticateRequest(request)
-  const rateLimited = takeAuthRateLimitResponse()
-  if (rateLimited) return rateLimited
-  if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
+  const auth = await requireSessionAuth(request)
+  if (auth instanceof Response) return auth
 
   const body = await request.json().catch(() => null)
   const name = String(body?.name ?? "").trim()

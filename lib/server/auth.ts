@@ -150,4 +150,17 @@ export async function requireRequestAuth(request: Request, scope?: ApiKeyScope):
   return auth
 }
 
+// API-key management must use an interactive session: a scoped API key must never
+// be able to mint or revoke keys (which would let it escalate to a wildcard key).
+export async function requireSessionAuth(request: Request): Promise<AuthContext | Response> {
+  const auth = await authenticateRequest(request)
+  const rateLimited = takeAuthRateLimitResponse()
+  if (rateLimited) return rateLimited
+  if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
+  if (auth.authType !== "session") {
+    return apiError(403, "FORBIDDEN", "API Key 管理仅支持登录会话操作。")
+  }
+  return auth
+}
+
 export { sessionCookieName }

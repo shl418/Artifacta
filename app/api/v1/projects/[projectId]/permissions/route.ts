@@ -1,5 +1,5 @@
 import type { ProjectPermission, User } from "@/lib/types"
-import { authenticateRequest } from "@/lib/server/auth"
+import { authenticateRequest, requireRequestAuth } from "@/lib/server/auth"
 import { canEditProject, canViewProject } from "@/lib/server/access"
 import { now, readDatabase, updateDatabase } from "@/lib/server/db"
 import { dispatch } from "@/lib/server/dispatch"
@@ -37,8 +37,8 @@ export async function GET(request: Request, context: RouteContext) {
 
 export async function POST(request: Request, context: RouteContext) {
   const { projectId } = await context.params
-  const auth = await authenticateRequest(request)
-  if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
+  const auth = await requireRequestAuth(request, "projects:write")
+  if (auth instanceof Response) return auth
 
   const body = await request.json().catch(() => null)
   const email = String(body?.user_email ?? body?.email ?? "").trim().toLowerCase()
