@@ -9,8 +9,8 @@ import {
 } from "@/lib/server/artifacts/asset-routing"
 import { BundleIncompleteError } from "@/lib/server/artifacts/errors"
 import { pickDefaultIndex, resolveBundleEntryPath } from "@/lib/server/artifacts/entrypoint"
-import { contentTypeForPath, fileExtension } from "@/lib/server/artifacts/mime"
-import { normalizeBundleEntry, validateZipBundle } from "@/lib/server/artifacts/zip-security"
+import { contentTypeForPath, fileExtension, isHtmlBundleEntry } from "@/lib/server/artifacts/mime"
+import { normalizeBundleEntry, validateZipBundle, zipSecurityLimits } from "@/lib/server/artifacts/zip-security"
 import {
   listStorageEntries,
   readStorageObject,
@@ -199,6 +199,11 @@ export async function extractProjectZip(
     await removeStoragePrefix(assetRoot)
   }
 
+  // Enforce the size caps against the ACTUAL decompressed bytes, not the
+  // attacker-declared header.size that validateZipBundle pre-checks. A crafted
+  // ZIP can under-declare sizes; here getData() has already inflated the real
+  // content, so we reject before persisting anything oversized.
+  let realTotalBytes = 0
   for (const entry of zip.getEntries()) {
     if (entry.isDirectory) continue
 
@@ -206,9 +211,18 @@ export async function extractProjectZip(
     if (!safePath) continue
     if (skipPaths?.has(safePath)) continue
 
-    await writeStorageObject(path.posix.join(assetRoot, safePath), entry.getData(), contentTypeForPath(safePath))
+    const data = entry.getData()
+    if (data.length > zipSecurityLimits.maxEntryBytes) {
+      throw new Error(`ZIP bundle entry exceeds ${zipSecurityLimits.maxEntryBytes} bytes: ${safePath}`)
+    }
+    realTotalBytes += data.length
+    if (realTotalBytes > zipSecurityLimits.maxTotalBytes) {
+      throw new Error(`ZIP bundle exceeds ${zipSecurityLimits.maxTotalBytes} total uncompressed bytes`)
+    }
 
-    if (safePath.toLowerCase().endsWith(".html")) htmlFiles.push(safePath)
+    await writeStorageObject(path.posix.join(assetRoot, safePath), data, contentTypeForPath(safePath))
+
+    if (isHtmlBundleEntry(safePath)) htmlFiles.push(safePath)
   }
 
   return { assetRoot, htmlFiles, defaultIndex: pickDefaultIndex(htmlFiles) }
