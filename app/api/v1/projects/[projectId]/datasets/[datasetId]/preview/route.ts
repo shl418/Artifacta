@@ -31,7 +31,13 @@ export async function GET(request: Request, context: RouteContext) {
   const buffer = await readStorageObject(dataset.filePath).catch(() => null)
   if (!buffer) return apiError(404, "NOT_FOUND", "数据集文件不存在。")
 
-  const rows = previewRows(dataset.fileType, buffer.toString("utf8"))
+  let rows: Array<Record<string, unknown>>
+  try {
+    rows = previewRows(dataset.fileType, buffer.toString("utf8"))
+  } catch {
+    // A corrupt or hand-edited file must not surface as an unhandled 500.
+    return apiError(422, "UNPROCESSABLE_DATASET", "数据集文件无法解析，可能已损坏或格式不正确。", { field: "file" })
+  }
   return ok({
     parsed: true,
     schema: dataset.schema,

@@ -112,7 +112,7 @@ export default function SettingsPage() {
                       </AvatarFallback>
                     </Avatar>
                     <div className="space-y-2">
-                      <Button variant="secondary" size="sm">
+                      <Button variant="secondary" size="sm" disabled title="暂未开放">
                         <Upload className="h-4 w-4 mr-2" />
                         {t("settings.profile.avatar")}
                       </Button>
@@ -179,7 +179,7 @@ export default function SettingsPage() {
                   </div>
 
                   <div className="flex justify-end">
-                    <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                    <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled title="暂未开放">
                       <Save className="h-4 w-4 mr-2" />
                       {t("settings.profile.save")}
                     </Button>
@@ -206,7 +206,7 @@ export default function SettingsPage() {
                         {t("settings.danger.delete.desc")}
                       </p>
                     </div>
-                    <Button variant="destructive">
+                    <Button variant="destructive" disabled title="暂未开放">
                       <Trash2 className="h-4 w-4 mr-2" />
                       {t("settings.danger.delete")}
                     </Button>
@@ -249,7 +249,7 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div className="flex justify-end">
-                    <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                    <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled title="暂未开放">
                       <Save className="h-4 w-4 mr-2" />
                       {t("settings.org.save")}
                     </Button>
@@ -342,7 +342,7 @@ export default function SettingsPage() {
                     <p className="text-sm text-muted-foreground">
                       {t("settings.storage.need_more")}
                     </p>
-                    <Button variant="secondary">{t("settings.storage.upgrade")}</Button>
+                    <Button variant="secondary" disabled>{t("settings.storage.upgrade")}</Button>
                   </div>
                 </CardContent>
               </Card>

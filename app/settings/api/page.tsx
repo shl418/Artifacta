@@ -21,6 +21,7 @@ import {
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
+import { Spinner } from "@/components/ui/spinner"
 import { AlertCircle, Check, Code2, Copy, Key, Plus, Terminal, Trash2 } from "lucide-react"
 import { useLanguage } from "@/lib/i18n/context"
 
@@ -91,55 +92,74 @@ export default function ApiDocsPage() {
   const [selectedScopes, setSelectedScopes] = useState<string[]>([])
   const [latestSecret, setLatestSecret] = useState("")
   const [error, setError] = useState("")
+  const [isLoading, setIsLoading] = useState(true)
+  const [creatingKey, setCreatingKey] = useState(false)
+  const [deletingKey, setDeletingKey] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<ApiKeyRecord | null>(null)
 
   const loadKeys = useCallback(async () => {
-    const response = await fetch("/api/v1/api-keys")
-    const payload = await response.json().catch(() => null)
-    if (!response.ok) {
-      setError(payload?.error?.message ?? t("settings.api.load.error"))
-      return
+    try {
+      const response = await fetch("/api/v1/api-keys")
+      const payload = await response.json().catch(() => null)
+      if (!response.ok) {
+        setError(payload?.error?.message ?? t("settings.api.load.error"))
+        return
+      }
+      setError("")
+      setApiKeys(payload.data)
+    } finally {
+      setIsLoading(false)
     }
-    setError("")
-    setApiKeys(payload.data)
   }, [t])
 
   useEffect(() => {
     loadKeys().catch(() => {
       setApiKeys([])
       setError(t("common.error.network"))
+      setIsLoading(false)
     })
   }, [loadKeys, t])
 
   const createKey = async () => {
-    const response = await fetch("/api/v1/api-keys", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: newKeyName,
-        scopes: selectedScopes.length > 0 ? selectedScopes : undefined,
-      }),
-    })
-    if (response.ok) {
-      const payload = await response.json()
-      setLatestSecret(payload.key)
-      await loadKeys()
-    } else {
-      const payload = await response.json().catch(() => null)
-      setError(payload?.error?.message ?? t("settings.api.load.error"))
+    if (creatingKey) return
+    setCreatingKey(true)
+    try {
+      const response = await fetch("/api/v1/api-keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newKeyName,
+          scopes: selectedScopes.length > 0 ? selectedScopes : undefined,
+        }),
+      })
+      if (response.ok) {
+        const payload = await response.json()
+        setLatestSecret(payload.key)
+        await loadKeys()
+      } else {
+        const payload = await response.json().catch(() => null)
+        setError(payload?.error?.message ?? t("settings.api.load.error"))
+      }
+    } finally {
+      setCreatingKey(false)
     }
   }
 
   const deleteKey = async () => {
-    if (!pendingDelete) return
-    const response = await fetch(`/api/v1/api-keys/${pendingDelete.id}`, { method: "DELETE" })
-    setPendingDelete(null)
-    if (!response.ok) {
-      const payload = await response.json().catch(() => null)
-      setError(payload?.error?.message ?? t("settings.api.load.error"))
-      return
+    if (!pendingDelete || deletingKey) return
+    setDeletingKey(true)
+    try {
+      const response = await fetch(`/api/v1/api-keys/${pendingDelete.id}`, { method: "DELETE" })
+      setPendingDelete(null)
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null)
+        setError(payload?.error?.message ?? t("settings.api.load.error"))
+        return
+      }
+      await loadKeys()
+    } finally {
+      setDeletingKey(false)
     }
-    await loadKeys()
   }
 
   return (
@@ -162,7 +182,7 @@ export default function ApiDocsPage() {
                   <div className="flex flex-col gap-3">
                     <div className="flex gap-2">
                       <Input value={newKeyName} onChange={(event) => setNewKeyName(event.target.value)} placeholder={t("settings.api.key.placeholder")} />
-                      <Button onClick={createKey} disabled={!newKeyName.trim()}>
+                      <Button onClick={createKey} disabled={!newKeyName.trim() || creatingKey}>
                         <Plus className="h-4 w-4" />
                         {t("common.create")}
                       </Button>
@@ -211,7 +231,13 @@ export default function ApiDocsPage() {
                   )}
 
                   <div className="space-y-2">
-                    {apiKeys.length === 0 && (
+                    {isLoading && (
+                      <div className="flex flex-col items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+                        <Spinner className="size-5" />
+                        加载中…
+                      </div>
+                    )}
+                    {!isLoading && apiKeys.length === 0 && (
                       <Empty className="border py-10">
                         <EmptyHeader>
                           <EmptyMedia variant="icon"><Key /></EmptyMedia>
@@ -306,7 +332,7 @@ export default function ApiDocsPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={deleteKey}>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={deletingKey} onClick={(event) => { event.preventDefault(); deleteKey() }}>
               {t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>

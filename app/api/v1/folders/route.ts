@@ -1,5 +1,5 @@
 import type { Folder } from "@/lib/types"
-import { authenticateRequest } from "@/lib/server/auth"
+import { requireRequestAuth } from "@/lib/server/auth"
 import { addActivity, now, readDatabase, updateDatabase } from "@/lib/server/db"
 import { apiError, created, ok } from "@/lib/server/responses"
 import { serializeFolder } from "@/lib/server/serializers"
@@ -7,8 +7,8 @@ import { serializeFolder } from "@/lib/server/serializers"
 export const runtime = "nodejs"
 
 export async function GET(request: Request) {
-  const auth = await authenticateRequest(request)
-  if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
+  const auth = await requireRequestAuth(request, "projects:read")
+  if (auth instanceof Response) return auth
 
   const database = await readDatabase()
   const folders = database.folders.filter((folder) => folder.organizationId === auth.user.organizationId)
@@ -21,8 +21,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await authenticateRequest(request)
-  if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
+  const auth = await requireRequestAuth(request, "projects:write")
+  if (auth instanceof Response) return auth
 
   const body = await request.json().catch(() => null)
   const name = String(body?.name ?? "").trim()

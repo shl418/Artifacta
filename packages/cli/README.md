@@ -37,9 +37,10 @@ artifacta sync-scripts trigger --project-id proj_123 --script-id sscript_abc123
 artifacta sync-scripts status --project-id proj_123 --script-id sscript_abc123
 artifacta sync-scripts set --project-id proj_123 --script-id sscript_abc123 --config-file ./secrets.json
 artifacta bundle run-script --file ./scripts/sync.py --bundle-root ./dist --outputs data/sales.csv
-artifacta datasets list [--source manual]
+artifacta datasets list [--source manual|all]
 artifacta datasets upload --project-id proj_123 --file ./growth.csv --name "Weekly Growth Data"
 artifacta datasets replace --project-id proj_123 --dataset-id ds_123 --file ./growth-v2.csv
+artifacta datasets sync set --project-id proj_123 --dataset-id ds_123 --config-file ./sync.json
 ```
 
 > Datasets are static (`manual`) by default. Dynamic updates use project-level bundle sync scripts (`sync-scripts ...`); the old `datasets sync set --source-type` / `sync trigger` are deprecated (external sources removed; `sync trigger` returns `410`).

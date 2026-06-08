@@ -28,11 +28,7 @@ try {
   const syncConfig = await jsonRequest(`/projects/${project.id}/datasets/${dataset.id}/sync`)
   assert(syncConfig.source_type === "manual", "Dataset sync config source type should be manual.")
 
-  const syncTrigger = await jsonRequestWithStatus(
-    `/projects/${project.id}/datasets/${dataset.id}/sync/trigger`,
-    { method: "POST" },
-    { expectOk: false },
-  )
+  const syncTrigger = await jsonRequestWithStatus(`/projects/${project.id}/datasets/${dataset.id}/sync/trigger`, { method: "POST" }, { expectStatuses: [410] })
   assert(syncTrigger.status === 410, "Dataset sync trigger should return 410 (replaced by sync scripts).")
 
   const claim = await jsonRequest("/sync/jobs/claim", { method: "POST" })
@@ -106,13 +102,12 @@ async function jsonRequest(route, init = {}) {
   return (await jsonRequestWithStatus(route, init)).payload
 }
 
-async function jsonRequestWithStatus(route, init = {}, options = {}) {
+async function jsonRequestWithStatus(route, init = {}, { expectStatuses } = {}) {
   const response = await fetch(`${apiBase}${route}`, withAuth(init))
   const text = await response.text()
   const payload = text ? JSON.parse(text) : null
-  if (options.expectOk !== false) {
-    assert(response.ok, payload?.error?.message ?? `Request ${route} failed with ${response.status}`)
-  }
+  const acceptable = expectStatuses ? expectStatuses.includes(response.status) : response.ok
+  assert(acceptable, payload?.error?.message ?? `Request ${route} failed with ${response.status}`)
   return { status: response.status, payload }
 }
 

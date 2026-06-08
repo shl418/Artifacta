@@ -1,5 +1,5 @@
 import type { WebhookEndpoint, WebhookEvent } from "@/lib/types"
-import { authenticateRequest } from "@/lib/server/auth"
+import { requireRequestAuth } from "@/lib/server/auth"
 import { canManageTeam } from "@/lib/server/access"
 import { now, readDatabase, updateDatabase } from "@/lib/server/db"
 import { apiError, created, ok } from "@/lib/server/responses"
@@ -10,8 +10,8 @@ export const runtime = "nodejs"
 const events = new Set<WebhookEvent>(["project.created", "project.updated", "project.deleted", "permission.changed", "sync.success", "sync.failed"])
 
 export async function GET(request: Request) {
-  const auth = await authenticateRequest(request)
-  if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
+  const auth = await requireRequestAuth(request, "admin:read")
+  if (auth instanceof Response) return auth
   if (!canManageTeam(auth.user)) return apiError(403, "FORBIDDEN", "只有管理员可以管理 Webhook。")
 
   const database = await readDatabase()
@@ -23,8 +23,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await authenticateRequest(request)
-  if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
+  const auth = await requireRequestAuth(request, "team:write")
+  if (auth instanceof Response) return auth
   if (!canManageTeam(auth.user)) return apiError(403, "FORBIDDEN", "只有管理员可以管理 Webhook。")
 
   const body = await request.json().catch(() => null)

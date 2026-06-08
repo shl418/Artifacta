@@ -23,6 +23,7 @@ import {
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Spinner } from "@/components/ui/spinner"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
@@ -132,6 +133,7 @@ const visibilityKey: Record<string, TranslationKey> = {
 export default function DashboardsPage() {
   const { t } = useLanguage()
   const [payload, setPayload] = useState<ProjectsPayload | null>(null)
+  const [searchInput, setSearchInput] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [visibilityFilter, setProjectVisibilityFilter] = useState<"all" | ProjectVisibility>("all")
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null)
@@ -139,7 +141,14 @@ export default function DashboardsPage() {
   const [createFolderOpen, setCreateFolderOpen] = useState(false)
   const [newFolderName, setNewFolderName] = useState("")
   const [error, setError] = useState("")
+  const [isLoading, setIsLoading] = useState(true)
   const [pendingDelete, setPendingDelete] = useState<ProjectSummary | null>(null)
+
+  const [creatingFolder, setCreatingFolder] = useState(false)
+  const [movingProjectIds, setMovingProjectIds] = useState<Set<string>>(new Set())
+  const [updatingVisibilityIds, setUpdatingVisibilityIds] = useState<Set<string>>(new Set())
+  const [deletingProject, setDeletingProject] = useState(false)
+  const [deletingDataset, setDeletingDataset] = useState(false)
 
   const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(new Set())
   const [projectDatasets, setProjectDatasets] = useState<Record<string, DatasetRecord[]>>({})
@@ -154,23 +163,36 @@ export default function DashboardsPage() {
   )
 
   const loadProjects = useCallback(async () => {
-    const params = new URLSearchParams({ page: String(currentPage), per_page: "10", folder_id: currentFolderId ?? "root" })
-    if (searchQuery) params.set("search", searchQuery)
-    if (visibilityFilter !== "all") params.set("visibility", visibilityFilter)
-    const response = await fetch(`/api/v1/projects?${params.toString()}`)
-    const nextPayload = await response.json().catch(() => null)
-    if (!response.ok) {
-      setError(nextPayload?.error?.message ?? t("dashboards.error"))
-      return
+    try {
+      const params = new URLSearchParams({ page: String(currentPage), per_page: "10", folder_id: currentFolderId ?? "root" })
+      if (searchQuery) params.set("search", searchQuery)
+      if (visibilityFilter !== "all") params.set("visibility", visibilityFilter)
+      const response = await fetch(`/api/v1/projects?${params.toString()}`)
+      const nextPayload = await response.json().catch(() => null)
+      if (!response.ok) {
+        setError(nextPayload?.error?.message ?? t("dashboards.error"))
+        return
+      }
+      setError("")
+      setPayload(nextPayload)
+    } finally {
+      setIsLoading(false)
     }
-    setError("")
-    setPayload(nextPayload)
   }, [currentFolderId, currentPage, searchQuery, visibilityFilter, t])
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchQuery(searchInput)
+      setCurrentPage(1)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchInput])
 
   useEffect(() => {
     loadProjects().catch(() => {
       setPayload(null)
       setError(t("common.error.network"))
+      setIsLoading(false)
     })
   }, [loadProjects, t])
 
@@ -206,76 +228,103 @@ export default function DashboardsPage() {
   }, [expandedProjectIds, projectDatasets, t])
 
   const createFolder = async () => {
-    if (!newFolderName.trim()) return
-    const response = await fetch("/api/v1/folders", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newFolderName }),
-    })
-    if (response.ok) {
-      setNewFolderName("")
-      setCreateFolderOpen(false)
-      await loadProjects()
-    } else {
-      const data = await response.json().catch(() => null)
-      setError(data?.error?.message ?? t("dashboards.error"))
+    if (!newFolderName.trim() || creatingFolder) return
+    setCreatingFolder(true)
+    try {
+      const response = await fetch("/api/v1/folders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newFolderName }),
+      })
+      if (response.ok) {
+        setNewFolderName("")
+        setCreateFolderOpen(false)
+        await loadProjects()
+      } else {
+        const data = await response.json().catch(() => null)
+        setError(data?.error?.message ?? t("dashboards.error"))
+      }
+    } finally {
+      setCreatingFolder(false)
     }
   }
 
   const moveProject = async (projectId: string, folderId: string | null) => {
-    const response = await fetch(`/api/v1/projects/${projectId}/folder`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ folder_id: folderId }),
-    })
-    if (!response.ok) {
-      const data = await response.json().catch(() => null)
-      setError(data?.error?.message ?? t("dashboards.error"))
-      return
+    if (movingProjectIds.has(projectId)) return
+    setMovingProjectIds((prev) => new Set([...prev, projectId]))
+    try {
+      const response = await fetch(`/api/v1/projects/${projectId}/folder`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folder_id: folderId }),
+      })
+      if (!response.ok) {
+        const data = await response.json().catch(() => null)
+        setError(data?.error?.message ?? t("dashboards.error"))
+        return
+      }
+      await loadProjects()
+    } finally {
+      setMovingProjectIds((prev) => { const s = new Set(prev); s.delete(projectId); return s })
     }
-    await loadProjects()
   }
 
   const updateProjectVisibility = async (projectId: string, visibility: ProjectVisibility) => {
-    const response = await fetch(`/api/v1/projects/${projectId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ visibility }),
-    })
-    if (!response.ok) {
-      const data = await response.json().catch(() => null)
-      setError(data?.error?.message ?? t("dashboards.error"))
-      return
+    if (updatingVisibilityIds.has(projectId)) return
+    setUpdatingVisibilityIds((prev) => new Set([...prev, projectId]))
+    try {
+      const response = await fetch(`/api/v1/projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ visibility }),
+      })
+      if (!response.ok) {
+        const data = await response.json().catch(() => null)
+        setError(data?.error?.message ?? t("dashboards.error"))
+        return
+      }
+      await loadProjects()
+    } finally {
+      setUpdatingVisibilityIds((prev) => { const s = new Set(prev); s.delete(projectId); return s })
     }
-    await loadProjects()
   }
 
   const deleteProject = async () => {
-    if (!pendingDelete) return
-    const response = await fetch(`/api/v1/projects/${pendingDelete.id}`, { method: "DELETE" })
-    setPendingDelete(null)
-    if (!response.ok) {
-      const data = await response.json().catch(() => null)
-      setError(data?.error?.message ?? t("dashboards.error"))
-      return
+    if (!pendingDelete || deletingProject) return
+    setDeletingProject(true)
+    try {
+      const response = await fetch(`/api/v1/projects/${pendingDelete.id}`, { method: "DELETE" })
+      setPendingDelete(null)
+      if (!response.ok) {
+        const data = await response.json().catch(() => null)
+        setError(data?.error?.message ?? t("dashboards.error"))
+        return
+      }
+      await loadProjects()
+    } finally {
+      setDeletingProject(false)
     }
-    await loadProjects()
   }
 
   const deleteDataset = async () => {
-    if (!pendingDeleteDataset) return
-    const { id, project_id } = pendingDeleteDataset
-    const response = await fetch(`/api/v1/projects/${project_id}/datasets/${id}`, { method: "DELETE" })
-    setPendingDeleteDataset(null)
-    if (!response.ok) {
-      const data = await response.json().catch(() => null)
-      setError(data?.error?.message ?? t("dashboards.error"))
-      return
+    if (!pendingDeleteDataset || deletingDataset) return
+    setDeletingDataset(true)
+    try {
+      const { id, project_id } = pendingDeleteDataset
+      const response = await fetch(`/api/v1/projects/${project_id}/datasets/${id}`, { method: "DELETE" })
+      setPendingDeleteDataset(null)
+      if (!response.ok) {
+        const data = await response.json().catch(() => null)
+        setError(data?.error?.message ?? t("dashboards.error"))
+        return
+      }
+      setProjectDatasets((prev) => ({
+        ...prev,
+        [project_id]: (prev[project_id] ?? []).filter((ds) => ds.id !== id),
+      }))
+    } finally {
+      setDeletingDataset(false)
     }
-    setProjectDatasets((prev) => ({
-      ...prev,
-      [project_id]: (prev[project_id] ?? []).filter((ds) => ds.id !== id),
-    }))
   }
 
   return (
@@ -307,12 +356,12 @@ export default function DashboardsPage() {
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                   <Input
                     placeholder={t("dashboards.search.placeholder")}
-                    value={searchQuery}
-                    onChange={(event) => { setSearchQuery(event.target.value); setCurrentPage(1) }}
+                    value={searchInput}
+                    onChange={(event) => setSearchInput(event.target.value)}
                     className="h-8 pl-8 text-sm"
                   />
-                  {searchQuery && (
-                    <Button variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-5 w-5" onClick={() => setSearchQuery("")}>
+                  {searchInput && (
+                    <Button variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-5 w-5" onClick={() => setSearchInput("")}>
                       <X className="h-3 w-3" />
                     </Button>
                   )}
@@ -351,6 +400,12 @@ export default function DashboardsPage() {
               </Alert>
             )}
 
+            {isLoading && !payload ? (
+              <div className="rounded-lg border border-border bg-card flex flex-col items-center justify-center gap-2 py-24 text-sm text-muted-foreground">
+                <Spinner className="size-5" />
+                加载中…
+              </div>
+            ) : (
             <div className="rounded-lg border border-border bg-card">
               <div className="overflow-x-auto">
                 <Table className="min-w-[720px]">
@@ -388,6 +443,8 @@ export default function DashboardsPage() {
                       const isLoadingDs = loadingDatasetIds.has(project.id)
                       const datasets = projectDatasets[project.id]
                       const datasetError = projectDatasetErrors[project.id]
+                      const isMoving = movingProjectIds.has(project.id)
+                      const isUpdatingVisibility = updatingVisibilityIds.has(project.id)
                       return (
                         <React.Fragment key={project.id}>
                           <TableRow className="hover:bg-secondary/50 group">
@@ -444,13 +501,13 @@ export default function DashboardsPage() {
                                       {t("dashboards.move_to")}
                                     </DropdownMenuSubTrigger>
                                     <DropdownMenuSubContent>
-                                      <DropdownMenuItem onClick={() => moveProject(project.id, null)}>
+                                      <DropdownMenuItem disabled={isMoving} onClick={() => moveProject(project.id, null)}>
                                         <Home className="h-4 w-4 mr-2" />
                                         {t("dashboards.folder.root")}
                                       </DropdownMenuItem>
                                       <DropdownMenuSeparator />
                                       {(payload?.folders ?? []).map((folder) => (
-                                        <DropdownMenuItem key={folder.id} onClick={() => moveProject(project.id, folder.id)}>
+                                        <DropdownMenuItem key={folder.id} disabled={isMoving} onClick={() => moveProject(project.id, folder.id)}>
                                           <Folder className="h-4 w-4 mr-2" />
                                           {folder.name}
                                         </DropdownMenuItem>
@@ -469,9 +526,9 @@ export default function DashboardsPage() {
                                       {t("dashboards.visibility.change")}
                                     </DropdownMenuSubTrigger>
                                     <DropdownMenuSubContent>
-                                      <DropdownMenuItem onClick={() => updateProjectVisibility(project.id, "private")}>{t("common.visibility.private")}</DropdownMenuItem>
-                                      <DropdownMenuItem onClick={() => updateProjectVisibility(project.id, "team")}>{t("common.visibility.team")}</DropdownMenuItem>
-                                      <DropdownMenuItem onClick={() => updateProjectVisibility(project.id, "public")}>{t("common.visibility.public")}</DropdownMenuItem>
+                                      <DropdownMenuItem disabled={isUpdatingVisibility} onClick={() => updateProjectVisibility(project.id, "private")}>{t("common.visibility.private")}</DropdownMenuItem>
+                                      <DropdownMenuItem disabled={isUpdatingVisibility} onClick={() => updateProjectVisibility(project.id, "team")}>{t("common.visibility.team")}</DropdownMenuItem>
+                                      <DropdownMenuItem disabled={isUpdatingVisibility} onClick={() => updateProjectVisibility(project.id, "public")}>{t("common.visibility.public")}</DropdownMenuItem>
                                     </DropdownMenuSubContent>
                                   </DropdownMenuSub>
                                   <DropdownMenuSeparator />
@@ -532,6 +589,7 @@ export default function DashboardsPage() {
                 </div>
               </div>
             </div>
+            )}
           </div>
         </main>
       </div>
@@ -553,7 +611,7 @@ export default function DashboardsPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={deleteProject}>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={deletingProject} onClick={(event) => { event.preventDefault(); deleteProject() }}>
               {t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -570,7 +628,7 @@ export default function DashboardsPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={deleteDataset}>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={deletingDataset} onClick={(event) => { event.preventDefault(); deleteDataset() }}>
               {t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -590,7 +648,7 @@ export default function DashboardsPage() {
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setCreateFolderOpen(false)}>{t("common.cancel")}</Button>
-              <Button onClick={createFolder} disabled={!newFolderName.trim()}>{t("common.create")}</Button>
+              <Button onClick={createFolder} disabled={!newFolderName.trim() || creatingFolder}>{t("common.create")}</Button>
             </div>
           </div>
         </DialogContent>
@@ -697,6 +755,7 @@ function DatasetConfigDialog({
   const [dialogError, setDialogError] = useState("")
   const [preview, setPreview] = useState<DatasetPreviewPayload | null>(null)
   const [versions, setVersions] = useState<DatasetVersionPayload["data"]>([])
+  const [versionsFailed, setVersionsFailed] = useState(false)
   const [syncHistory, setSyncHistory] = useState<Array<{
     sync_id: string
     status: string
@@ -705,23 +764,32 @@ function DatasetConfigDialog({
     rows_synced: number
     error: string | null
   }>>([])
+  const [syncHistoryFailed, setSyncHistoryFailed] = useState(false)
 
   useEffect(() => {
     if (!dataset) return
     setDialogError("")
     setPreview(null)
     setVersions([])
+    setVersionsFailed(false)
     setSyncHistory([])
+    setSyncHistoryFailed(false)
+    const readJson = async (response: Response) => ({ ok: response.ok, body: await response.json().catch(() => null) })
     Promise.all([
-      fetch(`/api/v1/projects/${dataset.project_id}/datasets/${dataset.id}/preview`).then((r) => r.json()),
-      fetch(`/api/v1/projects/${dataset.project_id}/datasets/${dataset.id}/versions`).then((r) => r.json()),
-      fetch(`/api/v1/projects/${dataset.project_id}/datasets/${dataset.id}/sync/history?per_page=10`).then((r) => r.json()),
+      fetch(`/api/v1/projects/${dataset.project_id}/datasets/${dataset.id}/preview`).then(readJson),
+      fetch(`/api/v1/projects/${dataset.project_id}/datasets/${dataset.id}/versions`).then(readJson),
+      fetch(`/api/v1/projects/${dataset.project_id}/datasets/${dataset.id}/sync/history?per_page=10`).then(readJson),
     ])
-      .then(([previewPayload, versionPayload, historyPayload]) => {
-        if (previewPayload?.error) setDialogError(previewPayload.error.message)
-        else setPreview(previewPayload)
-        if (versionPayload?.data) setVersions(versionPayload.data)
-        setSyncHistory(historyPayload?.data ?? [])
+      .then(([previewResult, versionResult, historyResult]) => {
+        if (!previewResult.ok || previewResult.body?.error) {
+          setDialogError(previewResult.body?.error?.message ?? "无法加载数据集预览。")
+        } else {
+          setPreview(previewResult.body)
+        }
+        if (!versionResult.ok) setVersionsFailed(true)
+        else setVersions(versionResult.body?.data ?? [])
+        if (!historyResult.ok) setSyncHistoryFailed(true)
+        else setSyncHistory(historyResult.body?.data ?? [])
       })
       .catch(() => setDialogError(t("dashboards.ds.error")))
   }, [dataset, t])
@@ -766,7 +834,9 @@ function DatasetConfigDialog({
           </TabsContent>
           <TabsContent value="history" className="pt-4">
             <div className="space-y-2">
-              {versions.length === 0 && <p className="text-sm text-muted-foreground">{t("dashboards.ds.history.empty")}</p>}
+              {versionsFailed ? (
+                <p className="text-sm text-destructive">{t("dashboards.ds.history.error")}</p>
+              ) : versions.length === 0 && <p className="text-sm text-muted-foreground">{t("dashboards.ds.history.empty")}</p>}
               {versions.map((version) => (
                 <div key={version.id} className="flex items-center justify-between rounded-lg border p-3 text-sm">
                   <div>
@@ -779,7 +849,9 @@ function DatasetConfigDialog({
             </div>
           </TabsContent>
           <TabsContent value="runs" className="pt-4 space-y-2">
-            {syncHistory.length === 0 && <p className="text-sm text-muted-foreground">{t("dashboards.ds.runs.empty")}</p>}
+            {syncHistoryFailed ? (
+              <p className="text-sm text-destructive">{t("dashboards.ds.runs.error")}</p>
+            ) : syncHistory.length === 0 && <p className="text-sm text-muted-foreground">{t("dashboards.ds.runs.empty")}</p>}
             {syncHistory.map((run) => (
               <div key={run.sync_id} className="rounded-lg border p-3 text-sm space-y-1">
                 <div className="flex items-center justify-between">

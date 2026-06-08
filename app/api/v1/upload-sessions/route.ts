@@ -38,14 +38,18 @@ export async function POST(request: Request) {
   }
 
   try {
-    const payload = await updateDatabase(async (nextDatabase) => {
+    // Parse + validate + write the ZIP to disk BEFORE taking the global write
+    // lock — createUploadSession touches no DB state, and holding the lock
+    // through multi-megabyte I/O would serialize every other write app-wide.
+    const { session, fileTree, manifestDetected } = await createUploadSession({
+      file: file as File,
+      userId: auth.user.id,
+      organizationId: auth.user.organizationId,
+      projectId: projectIdInput,
+    })
+
+    const payload = await updateDatabase((nextDatabase) => {
       cleanExpiredSessions(nextDatabase)
-      const { session, fileTree, manifestDetected } = await createUploadSession({
-        file: file as File,
-        userId: auth.user.id,
-        organizationId: auth.user.organizationId,
-        projectId: projectIdInput,
-      })
       nextDatabase.uploadSessions.push(session)
       const annotatedTree = projectIdInput
         ? annotateFileTreeWithExistingDatasets(nextDatabase, projectIdInput, fileTree)

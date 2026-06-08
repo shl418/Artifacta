@@ -31,3 +31,10 @@ export function contentTypeForPath(filePath: string) {
 export function isBlockedHostedExtension(filePath: string) {
   return BLOCKED_HOSTED_EXTENSIONS.has(path.extname(filePath).toLowerCase())
 }
+
+// A bundle entry that counts as an HTML page (.html or .htm). Used for both the
+// single-HTML-per-bundle rule and entrypoint resolution so every code path
+// agrees on which files are HTML.
+export function isHtmlBundleEntry(filePath: string) {
+  return BLOCKED_HOSTED_EXTENSIONS.has(path.extname(filePath).toLowerCase())
+}

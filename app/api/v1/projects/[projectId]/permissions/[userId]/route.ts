@@ -1,5 +1,5 @@
 import type { ProjectPermission } from "@/lib/types"
-import { authenticateRequest } from "@/lib/server/auth"
+import { requireRequestAuth } from "@/lib/server/auth"
 import { canEditProject } from "@/lib/server/access"
 import { readDatabase, updateDatabase } from "@/lib/server/db"
 import { dispatch } from "@/lib/server/dispatch"
@@ -14,8 +14,8 @@ const permissionValues = new Set(["view", "edit"])
 
 export async function PATCH(request: Request, context: RouteContext) {
   const { projectId, userId } = await context.params
-  const auth = await authenticateRequest(request)
-  if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
+  const auth = await requireRequestAuth(request, "projects:write")
+  if (auth instanceof Response) return auth
 
   const body = await request.json().catch(() => null)
   const permission = String(body?.permission ?? "")
@@ -42,8 +42,8 @@ export async function PATCH(request: Request, context: RouteContext) {
 
 export async function DELETE(request: Request, context: RouteContext) {
   const { projectId, userId } = await context.params
-  const auth = await authenticateRequest(request)
-  if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
+  const auth = await requireRequestAuth(request, "projects:write")
+  if (auth instanceof Response) return auth
 
   const database = await readDatabase()
   const project = database.projects.find((candidate) => candidate.id === projectId)

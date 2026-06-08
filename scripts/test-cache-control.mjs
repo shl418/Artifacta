@@ -20,13 +20,13 @@ try {
   )
   assert.equal(
     cacheControl.cacheControlForVisibility("team"),
-    "private, max-age=300",
-    "team-only assets must not be cached by shared caches",
+    "private, no-store",
+    "team-only assets must not be cached (may be reached via short-lived embed token)",
   )
   assert.equal(
     cacheControl.cacheControlForVisibility("private"),
-    "private, max-age=300",
-    "private assets must not be cached by shared caches",
+    "private, no-store",
+    "private assets must not be cached (may be reached via short-lived embed token)",
   )
 
   console.log("Cache-Control visibility tests passed.")

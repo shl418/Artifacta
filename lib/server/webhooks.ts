@@ -29,7 +29,8 @@ export function emitWebhooks(database: Database, organizationId: string, event: 
   }
 }
 
-const RETRY_DELAYS_MS = [1_000, 3_000, 9_000]
+const DELIVERY_MAX_ATTEMPTS = Number(process.env.ARTIFACTA_WEBHOOK_MAX_ATTEMPTS ?? 3)
+const DELIVERY_BACKOFF_MS = Number(process.env.ARTIFACTA_WEBHOOK_BACKOFF_MS ?? 500)
 
 async function deliverWebhook(endpoint: WebhookEndpoint, event: WebhookEvent, payload: Record<string, unknown>) {
   const body = JSON.stringify({
@@ -44,7 +45,9 @@ async function deliverWebhook(endpoint: WebhookEndpoint, event: WebhookEvent, pa
     "X-Artifacta-Signature": `sha256=${signature}`,
   }
 
-  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+  // Best-effort retry with backoff so a transient blip doesn't silently drop the
+  // event. (A durable cross-restart delivery queue remains a documented follow-up.)
+  for (let attempt = 1; attempt <= DELIVERY_MAX_ATTEMPTS; attempt += 1) {
     try {
       const response = await fetch(endpoint.url, { method: "POST", headers, body })
       if (response.ok) {
@@ -52,11 +55,10 @@ async function deliverWebhook(endpoint: WebhookEndpoint, event: WebhookEvent, pa
         return
       }
     } catch {
-      // network error — fall through to retry
+      // network error — fall through to retry/backoff
     }
-
-    if (attempt < RETRY_DELAYS_MS.length) {
-      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt]))
+    if (attempt < DELIVERY_MAX_ATTEMPTS) {
+      await new Promise((resolve) => setTimeout(resolve, DELIVERY_BACKOFF_MS * attempt))
     }
   }
 

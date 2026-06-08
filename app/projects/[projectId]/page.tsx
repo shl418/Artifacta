@@ -16,6 +16,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AlertCircle, Clock, Database, Eye, FileBarChart, RefreshCw, Shield, Users } from "lucide-react"
 import { useLanguage } from "@/lib/i18n/context"
 
+const visibilityLabel: Record<ProjectVisibility, string> = {
+  private: "私有",
+  team: "团队",
+  public: "公开",
+}
+
 interface ProjectDetail {
   id: string
   name: string
@@ -60,6 +66,7 @@ export default function ProjectDetailPage() {
   const [error, setError] = useState("")
   const [embedUrl, setEmbedUrl] = useState("")
   const [actionMessage, setActionMessage] = useState("")
+  const [pendingAction, setPendingAction] = useState<string | null>(null)
   const actionMessageTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const showActionMessage = (message: string) => {
@@ -94,40 +101,58 @@ export default function ProjectDetailPage() {
   }, [loadProject, t])
 
   const createEmbedLink = async () => {
-    const response = await fetch(`/api/v1/projects/${params.projectId}/embed-token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ expires_in_seconds: 3600 }),
-    })
-    const payload = await response.json().catch(() => null)
-    if (!response.ok) {
-      showActionMessage(payload?.error?.message ?? t("project.embed.error"))
-      return
+    if (pendingAction) return
+    setPendingAction("embed")
+    try {
+      const response = await fetch(`/api/v1/projects/${params.projectId}/embed-token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expires_in_seconds: 3600 }),
+      })
+      const payload = await response.json().catch(() => null)
+      if (!response.ok) {
+        showActionMessage(payload?.error?.message ?? t("project.embed.error"))
+        return
+      }
+      setEmbedUrl(payload.embed_url)
+      showActionMessage(t("project.embed.generated"))
+    } finally {
+      setPendingAction(null)
     }
-    setEmbedUrl(payload.embed_url)
-    showActionMessage(t("project.embed.generated"))
   }
 
   const rollbackVersion = async (versionId: string) => {
-    const response = await fetch(`/api/v1/projects/${params.projectId}/versions/${versionId}/rollback`, { method: "POST" })
-    const payload = await response.json().catch(() => null)
-    if (!response.ok) {
-      showActionMessage(payload?.error?.message ?? t("project.versions.rollback.error"))
-      return
+    if (pendingAction) return
+    setPendingAction(`rollback:${versionId}`)
+    try {
+      const response = await fetch(`/api/v1/projects/${params.projectId}/versions/${versionId}/rollback`, { method: "POST" })
+      const payload = await response.json().catch(() => null)
+      if (!response.ok) {
+        showActionMessage(payload?.error?.message ?? t("project.versions.rollback.error"))
+        return
+      }
+      showActionMessage(t("project.versions.rollback.success"))
+      await loadProject()
+    } finally {
+      setPendingAction(null)
     }
-    showActionMessage(t("project.versions.rollback.success"))
-    await loadProject()
   }
 
   const triggerScriptSync = async (scriptId: string) => {
-    const response = await fetch(`/api/v1/projects/${params.projectId}/sync-scripts/${scriptId}/trigger`, { method: "POST" })
-    const payload = await response.json().catch(() => null)
-    if (!response.ok) {
-      showActionMessage(payload?.error?.message ?? t("project.scripts.trigger.error"))
-      return
+    if (pendingAction) return
+    setPendingAction(`sync:${scriptId}`)
+    try {
+      const response = await fetch(`/api/v1/projects/${params.projectId}/sync-scripts/${scriptId}/trigger`, { method: "POST" })
+      const payload = await response.json().catch(() => null)
+      if (!response.ok) {
+        showActionMessage(payload?.error?.message ?? t("project.scripts.trigger.error"))
+        return
+      }
+      showActionMessage(`${t("project.scripts.trigger.success")}${payload.job_id}`)
+      await loadProject()
+    } finally {
+      setPendingAction(null)
     }
-    showActionMessage(`${t("project.scripts.trigger.success")}${payload.job_id}`)
-    await loadProject()
   }
 
   const updateVisibility = async (visibility: ProjectVisibility) => {
@@ -193,13 +218,13 @@ export default function ProjectDetailPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <FileBarChart className="h-5 w-5 shrink-0 text-primary" />
                         <h2 className="text-xl font-semibold">{project.name}</h2>
-                        <Badge variant="outline">{project.visibility}</Badge>
+                        <Badge variant="outline">{visibilityLabel[project.visibility]}</Badge>
                       </div>
                       <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{project.description || t("project.no_desc")}</p>
                     </div>
                     <div className="flex shrink-0 flex-wrap gap-2">
                       <Button asChild variant="outline" size="sm"><Link href={`/view/${project.id}`}>{t("project.preview")}</Link></Button>
-                      <Button variant="outline" size="sm" onClick={createEmbedLink}>{t("project.embed")}</Button>
+                      <Button variant="outline" size="sm" onClick={createEmbedLink} disabled={pendingAction === "embed"}>{t("project.embed")}</Button>
                       <Select value={project.visibility} onValueChange={(value) => updateVisibility(value as ProjectVisibility)}>
                         <SelectTrigger className="h-9 w-32"><SelectValue /></SelectTrigger>
                         <SelectContent>
@@ -214,12 +239,15 @@ export default function ProjectDetailPage() {
                     <div className="space-y-2 rounded-lg border border-border bg-muted/30 px-3 py-2.5">
                       {actionMessage && <p className="text-sm text-muted-foreground">{actionMessage}</p>}
                       {embedUrl && (
-                        <p className="text-xs text-muted-foreground">
-                          <span className="font-medium">{t("project.embed.label")}</span>
-                          <a className="break-all text-primary underline" href={embedUrl} target="_blank" rel="noreferrer">
-                            {embedUrl}
-                          </a>
-                        </p>
+                        <div className="space-y-1">
+                          <p className="text-xs text-muted-foreground">
+                            <span className="font-medium">{t("project.embed.label")}</span>
+                            <a className="break-all text-primary underline" href={embedUrl} target="_blank" rel="noreferrer">
+                              {embedUrl}
+                            </a>
+                          </p>
+                          <p className="text-xs text-amber-600">{t("project.embed.token_warning")}</p>
+                        </div>
                       )}
                     </div>
                   )}
@@ -301,7 +329,7 @@ export default function ProjectDetailPage() {
                           <div className="flex items-center gap-2">
                             <Badge variant={script.enabled ? "default" : "secondary"}>{script.enabled ? t("project.scripts.status.enabled") : t("project.scripts.status.disabled")}</Badge>
                             <Badge variant="outline">{script.last_run_status ?? t("project.scripts.status.unrun")}</Badge>
-                            <Button variant="outline" size="sm" disabled={!script.enabled} onClick={() => triggerScriptSync(script.id)}>
+                            <Button variant="outline" size="sm" disabled={!script.enabled || pendingAction !== null} onClick={() => triggerScriptSync(script.id)}>
                               {t("project.scripts.trigger")}
                             </Button>
                           </div>
@@ -346,7 +374,7 @@ export default function ProjectDetailPage() {
                           </div>
                           <div className="flex items-center gap-2">
                             <p className="text-xs text-muted-foreground">{new Date(version.created_at).toLocaleString()}</p>
-                            <Button variant="outline" size="sm" onClick={() => rollbackVersion(version.id)}>{t("project.versions.rollback")}</Button>
+                            <Button variant="outline" size="sm" disabled={pendingAction !== null} onClick={() => rollbackVersion(version.id)}>{t("project.versions.rollback")}</Button>
                           </div>
                         </CardContent>
                       </Card>

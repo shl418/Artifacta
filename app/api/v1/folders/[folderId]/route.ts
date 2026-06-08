@@ -1,4 +1,4 @@
-import { authenticateRequest } from "@/lib/server/auth"
+import { requireRequestAuth } from "@/lib/server/auth"
 import { now, readDatabase, updateDatabase } from "@/lib/server/db"
 import { apiError, noContent, ok } from "@/lib/server/responses"
 import { serializeFolder } from "@/lib/server/serializers"
@@ -9,8 +9,8 @@ type RouteContext = { params: Promise<{ folderId: string }> }
 
 export async function PATCH(request: Request, context: RouteContext) {
   const { folderId } = await context.params
-  const auth = await authenticateRequest(request)
-  if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
+  const auth = await requireRequestAuth(request, "projects:write")
+  if (auth instanceof Response) return auth
 
   const body = await request.json().catch(() => null)
   const name = String(body?.name ?? "").trim()
@@ -33,8 +33,8 @@ export async function PATCH(request: Request, context: RouteContext) {
 
 export async function DELETE(request: Request, context: RouteContext) {
   const { folderId } = await context.params
-  const auth = await authenticateRequest(request)
-  if (!auth) return apiError(401, "UNAUTHORIZED", "请先登录或提供有效 API Key。")
+  const auth = await requireRequestAuth(request, "projects:write")
+  if (auth instanceof Response) return auth
 
   const url = new URL(request.url)
   const moveTo = url.searchParams.get("move_to")

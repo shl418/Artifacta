@@ -10,6 +10,26 @@ import { recordDatasetVersion } from "@/lib/server/versions"
 import { findProjectSyncScript } from "@/lib/server/sync/sync-scripts"
 
 const SCRIPT_TIMEOUT_MS = Number(process.env.ARTIFACTA_SCRIPT_TIMEOUT_MS ?? 300_000)
+// Cap captured stdout+stderr so a noisy or malicious script cannot OOM the
+// server by streaming unbounded output into memory.
+const SCRIPT_OUTPUT_LIMIT_BYTES = Number(process.env.ARTIFACTA_SCRIPT_OUTPUT_LIMIT_MB ?? 8) * 1024 * 1024
+
+// The sync subprocess is untrusted (authored by project editors). Pass only the
+// environment it needs rather than the parent process env, which may hold the
+// database URL, object-storage credentials, and the auth secret.
+function buildScriptEnv(bundleRoot: string, script: ProjectSyncScript): Record<string, string> {
+  const passthrough = ["PATH", "HOME", "LANG", "LC_ALL", "LC_CTYPE", "TMPDIR", "TMP", "TEMP", "SystemRoot", "ARTIFACTA_PYTHON"]
+  const env: Record<string, string> = {}
+  for (const key of passthrough) {
+    const value = process.env[key]
+    if (value !== undefined) env[key] = value
+  }
+  env.ARTIFACTA_BUNDLE_ROOT = bundleRoot
+  env.ARTIFACTA_OUTPUT_PATHS = script.outputs.join(",")
+  env.ARTIFACTA_SCRIPT_ID = script.manifestId
+  env.ARTIFACTA_SOURCE_CONFIG = JSON.stringify(script.sourceConfig ?? {})
+  return env
+}
 
 function bundleAbsoluteRoot(assetRoot: string) {
   return path.resolve(absoluteUploadPath(assetRoot))
@@ -173,43 +193,69 @@ async function executeBundledScript(script: ProjectSyncScript, bundleRoot: strin
   await fs.access(scriptAbsolute)
 
   const runtimeCommand = script.runtime === "python" ? process.env.ARTIFACTA_PYTHON ?? "python3" : process.execPath
-  const runtimeArgs = script.runtime === "python" ? [scriptAbsolute] : [scriptAbsolute]
 
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(runtimeCommand, runtimeArgs, {
+    const child = spawn(runtimeCommand, [scriptAbsolute], {
       cwd: bundleRoot,
-      env: {
-        ...process.env,
-        ARTIFACTA_BUNDLE_ROOT: bundleRoot,
-        ARTIFACTA_OUTPUT_PATHS: script.outputs.join(","),
-        ARTIFACTA_SCRIPT_ID: script.manifestId,
-        ARTIFACTA_SOURCE_CONFIG: JSON.stringify(script.sourceConfig ?? {}),
-      },
+      env: buildScriptEnv(bundleRoot, script) as NodeJS.ProcessEnv,
+      // detached so the child leads its own process group and we can SIGKILL the
+      // whole group (including any grandchildren it spawned) on timeout/overflow.
+      detached: process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],
     })
 
-    const timeout = setTimeout(() => {
+    let settled = false
+    const finish = (fn: () => void) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      fn()
+    }
+
+    const killTree = () => {
+      if (child.pid && process.platform !== "win32") {
+        try {
+          process.kill(-child.pid, "SIGKILL")
+          return
+        } catch {
+          // fall through to direct kill if the group is already gone
+        }
+      }
       child.kill("SIGKILL")
-      reject(new Error("Script execution timed out."))
+    }
+
+    const timeout = setTimeout(() => {
+      killTree()
+      finish(() => reject(new Error("Script execution timed out.")))
     }, SCRIPT_TIMEOUT_MS)
 
-    let stderr = ""
-    child.stderr?.on("data", (chunk) => {
-      stderr += String(chunk)
-    })
-
-    child.on("error", (error) => {
-      clearTimeout(timeout)
-      reject(error)
-    })
-
-    child.on("close", (code) => {
-      clearTimeout(timeout)
-      if (code === 0) {
-        resolve()
+    // Drain both streams. An undrained stdout pipe fills its OS buffer and blocks
+    // the child until the timeout fires; capture (bounded) so failures are useful.
+    let captured = ""
+    let capturedBytes = 0
+    let overflowed = false
+    const collect = (chunk: Buffer) => {
+      capturedBytes += chunk.length
+      if (capturedBytes > SCRIPT_OUTPUT_LIMIT_BYTES) {
+        if (!overflowed) {
+          overflowed = true
+          killTree()
+          finish(() => reject(new Error("Script output exceeded the allowed size limit.")))
+        }
         return
       }
-      reject(new Error(stderr.trim() || `Script exited with code ${code ?? "unknown"}.`))
+      captured += String(chunk)
+    }
+    child.stdout?.on("data", collect)
+    child.stderr?.on("data", collect)
+
+    child.on("error", (error) => finish(() => reject(error)))
+
+    child.on("close", (code) => {
+      finish(() => {
+        if (code === 0) resolve()
+        else reject(new Error(captured.trim() || `Script exited with code ${code ?? "unknown"}.`))
+      })
     })
   })
 }

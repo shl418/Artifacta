@@ -1,6 +1,6 @@
 import type { ApiKey } from "@/lib/types"
 import { parseRequestedScopes } from "@/lib/server/api-key-scopes"
-import { createApiKeySecret, requireRequestAuth } from "@/lib/server/auth"
+import { createApiKeySecret, requireSessionAuth } from "@/lib/server/auth"
 import { defaultApiKeyExpiryDays } from "@/lib/server/config"
 import { addActivity, now, readDatabase, updateDatabase } from "@/lib/server/db"
 import { apiError, created, ok } from "@/lib/server/responses"
@@ -9,7 +9,7 @@ import { rateLimitResponse } from "@/lib/server/rate-limit"
 export const runtime = "nodejs"
 
 export async function GET(request: Request) {
-  const auth = await requireRequestAuth(request)
+  const auth = await requireSessionAuth(request)
   if (auth instanceof Response) return auth
 
   const database = await readDatabase()
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   const limited = rateLimitResponse(request, "api-keys-create", 30)
   if (limited) return limited
 
-  const auth = await requireRequestAuth(request)
+  const auth = await requireSessionAuth(request)
   if (auth instanceof Response) return auth
 
   const body = await request.json().catch(() => null)

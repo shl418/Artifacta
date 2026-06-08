@@ -79,6 +79,8 @@ export async function DELETE(request: Request, context: RouteContext) {
   await updateDatabase((mutable) => {
     mutable.datasets = mutable.datasets.filter((candidate) => candidate.id !== datasetId)
     mutable.syncHistory = mutable.syncHistory.filter((history) => history.datasetId !== datasetId)
+    mutable.datasetVersions = mutable.datasetVersions.filter((version) => version.datasetId !== datasetId)
+    mutable.syncJobs = mutable.syncJobs.filter((job) => job.datasetId !== datasetId)
     const record = mutable.projects.find((candidate) => candidate.id === projectId)
     if (record) record.updatedAt = now()
     dispatch(mutable, { type: "dataset.deleted", organizationId: auth.user.organizationId, actorId: auth.user.id, dataset: { id: datasetId, name: dataset.name, projectId } })

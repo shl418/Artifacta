@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
+import { Spinner } from "@/components/ui/spinner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
@@ -70,17 +71,22 @@ export default function HomePage() {
   const [payload, setPayload] = useState<OverviewPayload | null>(null)
   const [activeTab, setActiveTab] = useState("recent")
   const [error, setError] = useState("")
+  const [isLoading, setIsLoading] = useState(true)
 
   const loadOverview = useCallback(async () => {
-    const response = await fetch("/api/v1/stats")
-    const nextPayload = await response.json().catch(() => null)
-    if (!response.ok) {
-      setError(nextPayload?.error?.message ?? t("overview.error"))
-      setPayload(null)
-      return
+    try {
+      const response = await fetch("/api/v1/stats")
+      const nextPayload = await response.json().catch(() => null)
+      if (!response.ok) {
+        setError(nextPayload?.error?.message ?? t("overview.error"))
+        setPayload(null)
+        return
+      }
+      setError("")
+      setPayload(nextPayload)
+    } finally {
+      setIsLoading(false)
     }
-    setError("")
-    setPayload(nextPayload)
   }, [t])
 
   useEffect(() => {
@@ -105,6 +111,13 @@ export default function HomePage() {
         <main className="flex-1 flex flex-col bg-card rounded-xl shadow-sm overflow-hidden">
           <Header title={t("overview.title")} />
           <div className="flex-1 overflow-y-auto p-6">
+            {isLoading ? (
+              <div className="flex flex-col items-center justify-center gap-2 py-24 text-sm text-muted-foreground">
+                <Spinner className="size-5" />
+                加载中…
+              </div>
+            ) : (
+            <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
               {stats.map((stat) => (
                 <StatsCard key={stat.title} {...stat} />
@@ -210,6 +223,8 @@ export default function HomePage() {
                 )}
               </TabsContent>
             </Tabs>
+            </>
+            )}
           </div>
         </main>
       </div>

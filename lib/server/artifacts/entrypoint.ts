@@ -18,10 +18,12 @@ export function pickDefaultIndex(htmlFiles: string[]): string | null {
   const lowerByOriginal = new Map<string, string>()
   for (const file of htmlFiles) lowerByOriginal.set(file.toLowerCase(), file)
 
-  const rootMatch = Array.from(lowerByOriginal.entries()).find(([lower]) => lower === "index.html")
+  const rootMatch = Array.from(lowerByOriginal.entries()).find(([lower]) => lower === "index.html" || lower === "index.htm")
   if (rootMatch) return rootMatch[1]
 
-  const nestedMatch = Array.from(lowerByOriginal.entries()).find(([lower]) => lower.endsWith("/index.html"))
+  const nestedMatch = Array.from(lowerByOriginal.entries()).find(
+    ([lower]) => lower.endsWith("/index.html") || lower.endsWith("/index.htm")
+  )
   if (nestedMatch) return nestedMatch[1]
 
   return null

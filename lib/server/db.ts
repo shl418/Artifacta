@@ -881,6 +881,14 @@ function decodePostgresDatabase(value: unknown): Database {
 }
 
 export async function updateDatabase<T>(updater: (database: Database) => T | Promise<T>): Promise<T> {
+  // Postgres can run multiple app instances against one row, where the
+  // in-process queue below provides no isolation. Serialize read+modify+write
+  // inside a single transaction with SELECT ... FOR UPDATE so concurrent
+  // instances can't lose each other's writes (last-writer-wins on the blob).
+  if (dataDriver === "postgres") {
+    return updatePostgresDatabase(updater)
+  }
+
   const previousUpdate = updateDatabaseQueue
   let releaseQueue!: () => void
   updateDatabaseQueue = new Promise((resolve) => {
@@ -895,6 +903,28 @@ export async function updateDatabase<T>(updater: (database: Database) => T | Pro
     return result
   } finally {
     releaseQueue()
+  }
+}
+
+async function updatePostgresDatabase<T>(updater: (database: Database) => T | Promise<T>): Promise<T> {
+  await ensurePostgresDatabase()
+  const client = await getPostgresPool().connect()
+  try {
+    await client.query("BEGIN")
+    const result = await client.query("SELECT data FROM artifacta_state WHERE id = $1 FOR UPDATE", ["singleton"])
+    const database = normalizeDatabase(decodePostgresDatabase(result.rows[0].data))
+    const value = await updater(database)
+    await client.query(
+      "INSERT INTO artifacta_state (id, data, updated_at) VALUES ($1, $2::jsonb, NOW()) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()",
+      ["singleton", JSON.stringify(database)]
+    )
+    await client.query("COMMIT")
+    return value
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined)
+    throw error
+  } finally {
+    client.release()
   }
 }
 

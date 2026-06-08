@@ -1,5 +1,5 @@
 import { authenticateRequest } from "@/lib/server/auth"
-import { canViewProject } from "@/lib/server/access"
+import { canEditProject, canViewProject } from "@/lib/server/access"
 import { readDatabase } from "@/lib/server/db"
 import { apiError, ok } from "@/lib/server/responses"
 import { findProjectSyncScript } from "@/lib/server/sync/sync-scripts"
@@ -24,8 +24,9 @@ export async function GET(request: Request, context: RouteContext) {
     (job) => job.scriptId === scriptId && (job.status === "queued" || job.status === "running")
   )
 
+  const includeSecrets = auth ? canEditProject(database, auth.user, project) : false
   return ok({
-    script: serializeProjectSyncScript(script),
+    script: serializeProjectSyncScript(script, includeSecrets),
     last_run: latest
       ? {
           history_id: latest.id,

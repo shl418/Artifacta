@@ -1,5 +1,9 @@
 import type { Database, ScriptSyncJob } from "@/lib/types"
-import { claimNext, completeJob, failJob } from "@/lib/server/sync/job-lifecycle"
+import { claimNext, completeJob, failJob, reclaimStaleJobs } from "@/lib/server/sync/job-lifecycle"
+
+// Lease after which a still-"running" job is presumed dead. Defaults to well
+// beyond the script timeout (300s) so legitimate long runs are never reclaimed.
+const SCRIPT_JOB_LEASE_MS = Number(process.env.ARTIFACTA_SCRIPT_JOB_LEASE_MS ?? 900_000)
 
 interface EnqueueScriptSyncJobInput {
   projectId: string
@@ -11,6 +15,7 @@ interface EnqueueScriptSyncJobInput {
 
 export function enqueueScriptSyncJob(database: Database, input: EnqueueScriptSyncJobInput) {
   database.scriptSyncJobs ??= []
+  reclaimStaleJobs(database.scriptSyncJobs, SCRIPT_JOB_LEASE_MS)
 
   const existing = database.scriptSyncJobs.find(
     (job) =>
@@ -45,6 +50,7 @@ export function enqueueScriptSyncJob(database: Database, input: EnqueueScriptSyn
 
 export function claimNextScriptSyncJob(database: Database, organizationId?: string) {
   database.scriptSyncJobs ??= []
+  reclaimStaleJobs(database.scriptSyncJobs, SCRIPT_JOB_LEASE_MS)
   return claimNext(database.scriptSyncJobs, organizationId)
 }
 
