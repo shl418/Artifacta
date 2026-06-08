@@ -27,6 +27,9 @@ export function upsertProjectSyncScriptsFromManifest(
     if (current) {
       current.scriptPath = manifestScript.path
       current.runtime = manifestScript.runtime
+      current.outputs = [...manifestScript.outputs]
+      current.schedule = manifestScript.schedule ?? null
+      current.nextRunAt = null
       current.updatedAt = timestamp
       continue
     }
@@ -38,7 +41,7 @@ export function upsertProjectSyncScriptsFromManifest(
       scriptPath: manifestScript.path,
       runtime: manifestScript.runtime,
       outputs: [...manifestScript.outputs],
-      schedule: null,
+      schedule: manifestScript.schedule ?? null,
       enabled: true,
       sourceConfig: {},
       lastRunAt: null,

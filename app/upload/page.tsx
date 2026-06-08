@@ -129,10 +129,10 @@ export default function UploadPage() {
           <div className="flex-1 overflow-y-auto p-6">
             <div className="mx-auto mb-6 max-w-3xl rounded-lg border bg-secondary/20 p-4 text-sm text-muted-foreground">
               <div className="grid gap-2 md:grid-cols-2">
-                <p><span className="font-medium text-foreground">{t("upload.file.label")}：</span>HTML {t("common.none")} ZIP，最大 100 MB。</p>
-                <p><span className="font-medium text-foreground">ZIP：</span>500 {t("common.rows")}，25 MB，100 MB。</p>
-                <p><span className="font-medium text-foreground">{t("datasets.title")}：</span>{t("upload.card.desc")}</p>
-                <p><span className="font-medium text-foreground">{t("project.tab.scripts")}：</span>{t("project.scripts.empty")}</p>
+                <p><span className="font-medium text-foreground">{t("upload.file.label")}{t("common.colon")}</span>{t("upload.limits.file")}</p>
+                <p><span className="font-medium text-foreground">ZIP{t("common.colon")}</span>{t("upload.limits.zip")}</p>
+                <p><span className="font-medium text-foreground">{t("datasets.title")}{t("common.colon")}</span>{t("upload.card.desc")}</p>
+                <p><span className="font-medium text-foreground">{t("project.tab.scripts")}{t("common.colon")}</span>{t("project.scripts.empty")}</p>
               </div>
             </div>
 

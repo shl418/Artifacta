@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "name": "Add-One Demo",
+  "entrypoint": "index.html",
+  "datasets": [
+    {
+      "id": "metrics",
+      "name": "Funnel Metrics",
+      "kind": "csv",
+      "path": "data/metrics.csv",
+      "refresh": "sync"
+    }
+  ],
+  "sync_scripts": [
+    {
+      "id": "main",
+      "path": "scripts/sync.py",
+      "runtime": "python",
+      "outputs": ["data/metrics.csv"],
+      "schedule": "0 8 * * *"
+    }
+  ]
+}

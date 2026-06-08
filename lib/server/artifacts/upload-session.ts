@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs"
 import path from "node:path"
 import AdmZip from "adm-zip"
 import type { BundleFileEntry, Database } from "@/lib/types"
-import { normalizeBundleEntry, validateZipBundle } from "@/lib/server/artifacts/zip-security"
+import { normalizeZipBundleEntries, validateZipBundle } from "@/lib/server/artifacts/zip-security"
 import { dataDir, maxArtifactBytes } from "@/lib/server/config"
 import { now } from "@/lib/server/db"
 
@@ -11,6 +11,15 @@ const UPLOAD_SESSION_TTL_MS = 60 * 60 * 1000
 
 function inferDatasetFromExtension(extension: string) {
   return DATASET_EXTENSIONS.has(extension.toLowerCase())
+}
+
+function isProtocolMetadataPath(bundlePath: string) {
+  return path.posix.basename(bundlePath).toLowerCase() === "artifacta.json"
+}
+
+function inferDatasetFromPath(bundlePath: string) {
+  if (isProtocolMetadataPath(bundlePath)) return false
+  return inferDatasetFromExtension(path.posix.extname(bundlePath))
 }
 
 export function relativizeBundlePath(filePath: string, assetRoot: string) {
@@ -29,18 +38,13 @@ export function buildFileTreeFromZipBuffer(buffer: Buffer): BundleFileEntry[] {
   validateZipBundle(zip)
 
   const entries: BundleFileEntry[] = []
-  for (const entry of zip.getEntries()) {
-    if (entry.isDirectory) continue
-
-    const safePath = normalizeBundleEntry(entry.entryName)
-    if (!safePath) continue
-
-    const extension = path.extname(safePath).toLowerCase()
+  for (const { entry, path: safePath } of normalizeZipBundleEntries(zip)) {
+    const extension = path.posix.extname(safePath).toLowerCase()
     entries.push({
       path: safePath,
       size: entry.header.size,
       extension: extension.replace(/^\./, ""),
-      inferredDataset: inferDatasetFromExtension(extension),
+      inferredDataset: inferDatasetFromPath(safePath),
     })
   }
 
@@ -49,7 +53,7 @@ export function buildFileTreeFromZipBuffer(buffer: Buffer): BundleFileEntry[] {
 
 export function autoDiscoverDatasetsFromFileTree(fileTree: BundleFileEntry[]) {
   return fileTree
-    .filter((entry) => inferDatasetFromExtension(path.extname(entry.path)))
+    .filter((entry) => inferDatasetFromPath(entry.path))
     .map((entry) => ({
       bundle_path: entry.path,
       name: path.basename(entry.path),

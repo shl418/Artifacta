@@ -17,6 +17,27 @@ try {
   assert.equal(zipSecurity.normalizeBundleEntry("dashboards/index.html"), "dashboards/index.html")
   assert.equal(zipSecurity.normalizeBundleEntry("assets\\charts\\main.js"), "assets/charts/main.js")
   assert.equal(zipSecurity.normalizeBundleEntry("__MACOSX/._index.html"), null)
+  assert.deepEqual(
+    Array.from(zipSecurity.stripSingleRootDirectory(["demo/index.html", "demo/data/metrics.csv"]).values()).sort(),
+    ["data/metrics.csv", "index.html"],
+  )
+  assert.deepEqual(
+    Array.from(zipSecurity.stripSingleRootDirectory(["index.html", "data/metrics.csv"]).values()).sort(),
+    ["data/metrics.csv", "index.html"],
+  )
+
+  const folderZipEntries = zipSecurity
+    .normalizeZipBundleEntries(
+      zipWithFiles([
+        ["5-add-one-script/index.html", "<html></html>"],
+        ["5-add-one-script/artifacta.json", "{}"],
+        ["5-add-one-script/data/metrics.csv", "stage,users\nVisit,10"],
+        ["__MACOSX/5-add-one-script/._index.html", "metadata"],
+      ]),
+    )
+    .map((entry) => entry.path)
+    .sort()
+  assert.deepEqual(folderZipEntries, ["artifacta.json", "data/metrics.csv", "index.html"])
 
   for (const unsafePath of [
     "",

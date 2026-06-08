@@ -10,7 +10,7 @@ import {
 import { BundleIncompleteError } from "@/lib/server/artifacts/errors"
 import { pickDefaultIndex, resolveBundleEntryPath } from "@/lib/server/artifacts/entrypoint"
 import { contentTypeForPath, fileExtension } from "@/lib/server/artifacts/mime"
-import { normalizeBundleEntry, validateZipBundle } from "@/lib/server/artifacts/zip-security"
+import { normalizeZipBundleEntries, validateZipBundle } from "@/lib/server/artifacts/zip-security"
 import {
   listStorageEntries,
   readStorageObject,
@@ -199,11 +199,7 @@ export async function extractProjectZip(
     await removeStoragePrefix(assetRoot)
   }
 
-  for (const entry of zip.getEntries()) {
-    if (entry.isDirectory) continue
-
-    const safePath = normalizeBundleEntry(entry.entryName)
-    if (!safePath) continue
+  for (const { entry, path: safePath } of normalizeZipBundleEntries(zip)) {
     if (skipPaths?.has(safePath)) continue
 
     await writeStorageObject(path.posix.join(assetRoot, safePath), entry.getData(), contentTypeForPath(safePath))
@@ -280,4 +276,3 @@ function buildFetchPatchScript(token: string): string {
     `})();</script>`
   )
 }
-

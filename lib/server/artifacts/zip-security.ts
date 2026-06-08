@@ -9,6 +9,12 @@ export const zipSecurityLimits = {
 
 const blockedExtensions = new Set([".exe", ".dll", ".bat", ".cmd", ".ps1", ".sh", ".jar"])
 
+export interface NormalizedZipBundleEntry {
+  entry: AdmZip.IZipEntry
+  originalPath: string
+  path: string
+}
+
 export function normalizeBundleEntry(entryName: string): string | null {
   const cleanPath = entryName.replace(/\\/g, "/")
   if (!cleanPath || cleanPath.startsWith("/") || /^[a-zA-Z]:/.test(cleanPath)) return null
@@ -21,6 +27,48 @@ export function normalizeBundleEntry(entryName: string): string | null {
   if (normalized === "__MACOSX" || normalized.startsWith("__MACOSX/")) return null
 
   return normalized
+}
+
+export function stripSingleRootDirectory(bundlePaths: string[]): Map<string, string> {
+  const identity = () => new Map(bundlePaths.map((bundlePath) => [bundlePath, bundlePath]))
+  if (bundlePaths.length === 0) return identity()
+
+  const topLevel = new Set<string>()
+  let allNested = true
+
+  for (const bundlePath of bundlePaths) {
+    const [root, ...rest] = bundlePath.split("/")
+    if (!root) return identity()
+    topLevel.add(root)
+    if (rest.length === 0) allNested = false
+  }
+
+  if (topLevel.size !== 1 || !allNested) return identity()
+
+  const root = Array.from(topLevel)[0]
+  return new Map(
+    bundlePaths
+      .map((bundlePath) => [bundlePath, bundlePath.slice(root.length + 1)] as const)
+      .filter(([, strippedPath]) => Boolean(strippedPath))
+  )
+}
+
+export function normalizeZipBundleEntries(zip: AdmZip): NormalizedZipBundleEntry[] {
+  const entries = zip
+    .getEntries()
+    .filter((entry) => !entry.isDirectory)
+    .map((entry) => {
+      const safePath = normalizeBundleEntry(entry.entryName)
+      return safePath ? { entry, originalPath: safePath } : null
+    })
+    .filter((item): item is { entry: AdmZip.IZipEntry; originalPath: string } => Boolean(item))
+
+  const strippedPaths = stripSingleRootDirectory(entries.map((item) => item.originalPath))
+
+  return entries.map((item) => ({
+    ...item,
+    path: strippedPaths.get(item.originalPath) ?? item.originalPath,
+  }))
 }
 
 export function validateZipBundle(zip: AdmZip): void {

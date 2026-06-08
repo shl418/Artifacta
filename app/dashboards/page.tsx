@@ -143,6 +143,7 @@ export default function DashboardsPage() {
 
   const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(new Set())
   const [projectDatasets, setProjectDatasets] = useState<Record<string, DatasetRecord[]>>({})
+  const [projectDatasetErrors, setProjectDatasetErrors] = useState<Record<string, string>>({})
   const [loadingDatasetIds, setLoadingDatasetIds] = useState<Set<string>>(new Set())
   const [selectedDataset, setSelectedDataset] = useState<{ dataset: DatasetRecord; projectName: string } | null>(null)
   const [pendingDeleteDataset, setPendingDeleteDataset] = useState<DatasetRecord | null>(null)
@@ -181,15 +182,28 @@ export default function DashboardsPage() {
     setExpandedProjectIds((prev) => new Set([...prev, projectId]))
     if (!projectDatasets[projectId]) {
       setLoadingDatasetIds((prev) => new Set([...prev, projectId]))
+      setProjectDatasetErrors((prev) => {
+        const next = { ...prev }
+        delete next[projectId]
+        return next
+      })
       try {
         const response = await fetch(`/api/v1/projects/${projectId}/datasets`)
         const data = await response.json().catch(() => null)
-        if (response.ok) setProjectDatasets((prev) => ({ ...prev, [projectId]: data.data ?? [] }))
+        if (!response.ok) {
+          setProjectDatasetErrors((prev) => ({ ...prev, [projectId]: data?.error?.message ?? t("datasets.load.error") }))
+          setProjectDatasets((prev) => ({ ...prev, [projectId]: [] }))
+          return
+        }
+        setProjectDatasets((prev) => ({ ...prev, [projectId]: data.data ?? [] }))
+      } catch {
+        setProjectDatasetErrors((prev) => ({ ...prev, [projectId]: t("common.error.network") }))
+        setProjectDatasets((prev) => ({ ...prev, [projectId]: [] }))
       } finally {
         setLoadingDatasetIds((prev) => { const s = new Set(prev); s.delete(projectId); return s })
       }
     }
-  }, [expandedProjectIds, projectDatasets])
+  }, [expandedProjectIds, projectDatasets, t])
 
   const createFolder = async () => {
     if (!newFolderName.trim()) return
@@ -373,6 +387,7 @@ export default function DashboardsPage() {
                       const isExpanded = expandedProjectIds.has(project.id)
                       const isLoadingDs = loadingDatasetIds.has(project.id)
                       const datasets = projectDatasets[project.id]
+                      const datasetError = projectDatasetErrors[project.id]
                       return (
                         <React.Fragment key={project.id}>
                           <TableRow className="hover:bg-secondary/50 group">
@@ -476,6 +491,7 @@ export default function DashboardsPage() {
                                   projectId={project.id}
                                   projectName={project.name}
                                   datasets={datasets}
+                                  error={datasetError}
                                   isLoading={isLoadingDs}
                                   onConfigure={(dataset) => setSelectedDataset({ dataset, projectName: project.name })}
                                   onDelete={(dataset) => setPendingDeleteDataset(dataset)}
@@ -587,6 +603,7 @@ function ProjectDatasetsPanel({
   projectId,
   projectName,
   datasets,
+  error,
   isLoading,
   onConfigure,
   onDelete,
@@ -594,6 +611,7 @@ function ProjectDatasetsPanel({
   projectId: string
   projectName: string
   datasets: DatasetRecord[] | undefined
+  error?: string
   isLoading: boolean
   onConfigure: (dataset: DatasetRecord) => void
   onDelete: (dataset: DatasetRecord) => void
@@ -601,10 +619,24 @@ function ProjectDatasetsPanel({
   const { t } = useLanguage()
   void projectId
   void projectName
-  if (isLoading || datasets === undefined) {
+  if (isLoading) {
     return (
       <div className="px-12 py-3 bg-secondary/20 text-xs text-muted-foreground">
         {t("dashboards.ds.loading")}
+      </div>
+    )
+  }
+  if (error) {
+    return (
+      <div className="px-12 py-3 bg-destructive/5 text-xs text-destructive">
+        {error}
+      </div>
+    )
+  }
+  if (datasets === undefined) {
+    return (
+      <div className="px-12 py-3 bg-secondary/20 text-xs text-muted-foreground">
+        {t("dashboards.ds.empty")}
       </div>
     )
   }
