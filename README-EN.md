@@ -107,7 +107,17 @@ npm install -g @artifacta/cli
 
 The CLI can create projects, replace dashboard HTML, upload or replace datasets, and submit dataset sync configuration JSON from a local skill or CI job.
 
-For the zero-repo end-user path, see [docs/ONBOARDING.md](docs/ONBOARDING.md). For a copyable Claude Code skill template, see [templates/claude-code-artifacta-publisher/SKILL.md](templates/claude-code-artifacta-publisher/SKILL.md). Maintainers bumping a new release should follow [docs/CLI-RELEASE.md](docs/CLI-RELEASE.md).
+For the zero-repo end-user path, see [docs/ONBOARDING.md](docs/ONBOARDING.md). Maintainers bumping a new release should follow [docs/CLI-RELEASE.md](docs/CLI-RELEASE.md).
+
+## AI Coding Agent Skill
+
+Artifacta ships an open-source `artifacta-publisher` skill for [70+ AI coding agents](https://skills.sh) (Claude Code, Cursor, Codex, and more), letting agents scaffold, test, and publish dashboards end-to-end.
+
+```bash
+npx skills add github:shl418/Artifacta --skill artifacta-publisher
+```
+
+Or copy [skills/artifacta-publisher/SKILL.md](skills/artifacta-publisher/SKILL.md) manually.
 
 ## REST API Example
 
@@ -186,11 +196,21 @@ See [docs/plans/2026-05-21-open-source-excellence-roadmap.md](docs/plans/2026-05
 
 ## Documentation
 
-- [docs/IMPLEMENTED-FEATURES.md](docs/IMPLEMENTED-FEATURES.md): code-to-docs checklist for pages, API routes, CLI, worker, and storage boundaries.
-- [docs/DEVELOPMENT-ENVIRONMENT.md](docs/DEVELOPMENT-ENVIRONMENT.md): `fnm`, Node, and `pnpm` setup, including non-interactive shells that miss the environment.
-- [docs/API.md](docs/API.md): human-readable API guide; [docs/openapi/artifacta.v1.yaml](docs/openapi/artifacta.v1.yaml): partial OpenAPI contract for integrations.
-- [docs/PRODUCT.md](docs/PRODUCT.md): current MVP vs roadmap and enterprise extension points.
-- [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [CHANGELOG.md](CHANGELOG.md): contribution, vulnerability reporting, and release notes.
+| Category | Document | Description |
+|----------|----------|-------------|
+| **Onboarding** | [docs/ONBOARDING.md](docs/ONBOARDING.md) | Zero-repo end-user path |
+| | [docs/ONBOARDING.zh-CN.md](docs/ONBOARDING.zh-CN.md) | Same (Chinese) |
+| **API & Integrations** | [docs/API.md](docs/API.md) | Human-readable REST API guide |
+| | [docs/openapi/artifacta.v1.yaml](docs/openapi/artifacta.v1.yaml) | Partial OpenAPI contract for integrations |
+| | [skills/artifacta-publisher/SKILL.md](skills/artifacta-publisher/SKILL.md) | AI coding agent skill |
+| **Operations** | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Deployment guide |
+| | [docs/CLI-RELEASE.md](docs/CLI-RELEASE.md) | How to cut a new CLI release |
+| **Product** | [docs/PRODUCT.md](docs/PRODUCT.md) | Current MVP, roadmap, and enterprise extension points |
+| | [docs/IMPLEMENTED-FEATURES.md](docs/IMPLEMENTED-FEATURES.md) | Code-to-docs checklist |
+| **Development** | [docs/DEVELOPMENT-ENVIRONMENT.md](docs/DEVELOPMENT-ENVIRONMENT.md) | `fnm`, Node, and `pnpm` setup |
+| | [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution guide |
+| | [SECURITY.md](SECURITY.md) | Vulnerability reporting |
+| | [CHANGELOG.md](CHANGELOG.md) | Release notes |
 
 ## Current Boundaries
 

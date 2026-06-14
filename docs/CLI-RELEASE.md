@@ -79,4 +79,4 @@ When bumping `@artifacta/cli`, document behavior changes in `CHANGELOG.md`:
 
 Server requirements for script sync: Python 3 on the worker host (`ARTIFACTA_PYTHON`), running `scripts/sync-worker.mjs` with an API key that has `sync:run`.
 
-For the end-user path, see `docs/ONBOARDING.md` and the Claude Code skill template under `templates/claude-code-artifacta-publisher/SKILL.md`.
+For the end-user path, see `docs/ONBOARDING.md` and the `artifacta-publisher` skill under `skills/artifacta-publisher/SKILL.md`.

@@ -164,7 +164,13 @@ The recommended agent pattern is:
 5. Optionally trigger a bundle sync script (`sync-scripts trigger`) for dynamic data
 6. Return the Artifacta `preview_url` to the user
 
-Use `templates/claude-code-artifacta-publisher/SKILL.md` as the copyable starting point.
+Install the skill (works with Claude Code, Cursor, Codex, and 70+ other AI coding agents):
+
+```bash
+npx skills add github:shl418/Artifacta --skill artifacta-publisher
+```
+
+Or copy `skills/artifacta-publisher/SKILL.md` manually.
 
 ## Good Defaults
 

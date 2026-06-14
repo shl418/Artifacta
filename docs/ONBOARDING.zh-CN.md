@@ -163,7 +163,13 @@ artifacta sync-scripts trigger --project-id proj_123 --script-id sscript_xxxxxxx
 5. 需要动态更新时，触发 bundle 同步脚本（`sync-scripts trigger`）
 6. 把 `preview_url` 返回给用户
 
-可以直接从 `templates/claude-code-artifacta-publisher/SKILL.md` 开始复制。
+安装 skill（支持 Claude Code、Cursor、Codex 等 70+ 个 AI 编程助手）：
+
+```bash
+npx skills add github:shl418/Artifacta --skill artifacta-publisher
+```
+
+或手动复制 `skills/artifacta-publisher/SKILL.md`。
 
 ## 默认建议
 

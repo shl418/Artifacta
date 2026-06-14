@@ -1024,7 +1024,7 @@ GET /stats
 - 仓库内开发：`pnpm cli -- ...`
 - 对外 npm 包：[`@artifacta/cli`](https://www.npmjs.com/package/@artifacta/cli)（源码位于 `packages/cli`）
 
-零仓库终端用户接入流程见 `docs/ONBOARDING.md` / `docs/ONBOARDING.zh-CN.md`。Claude Code skill 模板见 `templates/claude-code-artifacta-publisher/SKILL.md`。
+零仓库终端用户接入流程见 `docs/ONBOARDING.md` / `docs/ONBOARDING.zh-CN.md`。`artifacta-publisher` skill 见 `skills/artifacta-publisher/SKILL.md`。
 
 ### 认证配置
 

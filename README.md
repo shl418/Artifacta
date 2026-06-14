@@ -107,7 +107,17 @@ npm install -g @artifacta/cli
 
 当前 CLI 已经可以让本地 skill 或 CI 直接创建项目、替换看板 HTML、上传/替换数据集，并提交数据同步配置 JSON。
 
-零仓库用户接入流程见 [docs/ONBOARDING.zh-CN.md](docs/ONBOARDING.zh-CN.md)。可复制的 Claude Code skill 模板见 [templates/claude-code-artifacta-publisher/SKILL.md](templates/claude-code-artifacta-publisher/SKILL.md)。维护者发新版本见 [docs/CLI-RELEASE.md](docs/CLI-RELEASE.md)。
+零仓库用户接入流程见 [docs/ONBOARDING.zh-CN.md](docs/ONBOARDING.zh-CN.md)。维护者发新版本见 [docs/CLI-RELEASE.md](docs/CLI-RELEASE.md)。
+
+## AI 编程助手 Skill
+
+Artifacta 提供开源的 `artifacta-publisher` skill，支持 Claude Code、Cursor、Codex 等 [70+ 个 AI 编程助手](https://skills.sh)，帮助 agent 直接完成看板的打包、上传和同步配置。
+
+```bash
+npx skills add github:shl418/Artifacta --skill artifacta-publisher
+```
+
+或手动复制 [skills/artifacta-publisher/SKILL.md](skills/artifacta-publisher/SKILL.md)。
 
 ## REST API 示例
 
@@ -191,11 +201,21 @@ pnpm worker:once  # 执行一次同步 Worker
 
 ## 文档索引
 
-- [docs/IMPLEMENTED-FEATURES.md](docs/IMPLEMENTED-FEATURES.md)：代码和文档同步清单，覆盖页面、API 路由、CLI、Worker、存储边界。
-- [docs/DEVELOPMENT-ENVIRONMENT.md](docs/DEVELOPMENT-ENVIRONMENT.md)：记录 `fnm`、Node、`pnpm` 的开发环境要求，以及非交互 shell 没加载到环境时的处理方式。
-- [docs/API.md](docs/API.md)：人工可读 API 文档；[docs/openapi/artifacta.v1.yaml](docs/openapi/artifacta.v1.yaml)：当前用于集成的部分 OpenAPI 契约。
-- [docs/PRODUCT.md](docs/PRODUCT.md)：区分当前 MVP 已实现能力、路线图和企业扩展点。
-- [CONTRIBUTING.md](CONTRIBUTING.md)、[SECURITY.md](SECURITY.md)、[CHANGELOG.md](CHANGELOG.md)：贡献、漏洞报告和变更记录要求。
+| 分类 | 文档 | 说明 |
+|------|------|------|
+| **入门** | [docs/ONBOARDING.zh-CN.md](docs/ONBOARDING.zh-CN.md) | 零仓库用户接入流程 |
+| | [docs/ONBOARDING.md](docs/ONBOARDING.md) | 同上（英文） |
+| **API 与集成** | [docs/API.md](docs/API.md) | 人工可读 REST API 文档 |
+| | [docs/openapi/artifacta.v1.yaml](docs/openapi/artifacta.v1.yaml) | 当前用于集成的部分 OpenAPI 契约 |
+| | [skills/artifacta-publisher/SKILL.md](skills/artifacta-publisher/SKILL.md) | AI 编程助手 skill |
+| **运维** | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | 部署说明 |
+| | [docs/CLI-RELEASE.md](docs/CLI-RELEASE.md) | 维护者发布新版 CLI |
+| **产品** | [docs/PRODUCT.md](docs/PRODUCT.md) | MVP 已实现能力、路线图与企业扩展点 |
+| | [docs/IMPLEMENTED-FEATURES.md](docs/IMPLEMENTED-FEATURES.md) | 代码和文档同步清单 |
+| **开发** | [docs/DEVELOPMENT-ENVIRONMENT.md](docs/DEVELOPMENT-ENVIRONMENT.md) | 开发环境要求（fnm / Node / pnpm） |
+| | [CONTRIBUTING.md](CONTRIBUTING.md) | 贡献指南 |
+| | [SECURITY.md](SECURITY.md) | 漏洞报告 |
+| | [CHANGELOG.md](CHANGELOG.md) | 变更记录 |
 
 ## 当前边界
 
