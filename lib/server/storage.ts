@@ -1,4 +1,5 @@
 import path from "node:path"
+import { createHash } from "node:crypto"
 import AdmZip from "adm-zip"
 import type { DashboardArtifact, Project } from "@/lib/types"
 import { maxArtifactBytes, maxDatasetBytes } from "@/lib/server/config"
@@ -30,7 +31,19 @@ export function sanitizeFileName(fileName: string) {
   return baseName || "upload.bin"
 }
 
-export async function saveProjectArtifact(projectId: string, file: File): Promise<DashboardArtifact> {
+export function createArtifactRevisionId() {
+  return `artrev_${crypto.randomUUID()}`
+}
+
+export function hashArtifactSource(source: string | Buffer) {
+  return createHash("sha256").update(source).digest("hex")
+}
+
+export async function saveProjectArtifact(
+  projectId: string,
+  file: File,
+  revisionId = createArtifactRevisionId(),
+): Promise<DashboardArtifact> {
   const extension = fileExtension(file.name)
   const isHtml = extension === "html" || file.type === "text/html"
   const isZip = extension === "zip" || file.type === "application/zip"
@@ -42,15 +55,16 @@ export async function saveProjectArtifact(projectId: string, file: File): Promis
     throw new Error(`Dashboard artifact exceeds the ${formatBytes(maxArtifactBytes)} upload limit.`)
   }
 
+  const revisionRoot = `projects/${projectId}/revisions/${revisionId}`
   const relativePath = isHtml
-    ? `projects/${projectId}/index.html`
-    : `projects/${projectId}/${sanitizeFileName(file.name)}`
+    ? `${revisionRoot}/source.html`
+    : `${revisionRoot}/${sanitizeFileName(file.name)}`
   const buffer = Buffer.from(await file.arrayBuffer())
 
   await writeStorageObject(relativePath, buffer, file.type || (isZip ? "application/zip" : "text/html"))
 
   if (isZip) {
-    const extracted = await extractProjectZip(projectId, buffer)
+    const extracted = await extractProjectZip(projectId, buffer, undefined, `${revisionRoot}/bundle`)
     let entryPath: string
     try {
       entryPath = resolveBundleEntryPath({
@@ -68,6 +82,8 @@ export async function saveProjectArtifact(projectId: string, file: File): Promis
       path: relativePath,
       size: buffer.byteLength,
       contentType: file.type || "application/zip",
+      revisionId,
+      sourceHash: hashArtifactSource(await readStorageText(path.posix.join(extracted.assetRoot, entryPath))),
       entryPath,
       assetRoot: extracted.assetRoot,
     }
@@ -79,6 +95,8 @@ export async function saveProjectArtifact(projectId: string, file: File): Promis
     path: relativePath,
     size: buffer.byteLength,
     contentType: file.type || "text/html",
+    revisionId,
+    sourceHash: hashArtifactSource(buffer),
   }
 }
 
@@ -114,19 +132,109 @@ export async function writeDatasetBuffer(relativePath: string, buffer: Buffer) {
   await writeStorageObject(relativePath, buffer, contentTypeForPath(relativePath))
 }
 
-export async function readDashboardHtml(project: Project) {
-  if (project.htmlArtifact.kind === "html") {
-    return readStorageText(project.htmlArtifact.path)
+export async function readDashboardArtifactSource(artifact: DashboardArtifact) {
+  if (artifact.kind === "html") {
+    return readStorageText(artifact.path)
   }
 
-  const entryPath = project.htmlArtifact.entryPath
-  const assetRoot = project.htmlArtifact.assetRoot
+  const entryPath = artifact.entryPath
+  const assetRoot = artifact.assetRoot
   if (!entryPath || !assetRoot) throw new BundleIncompleteError()
 
-  const html = await readStorageText(path.posix.join(assetRoot, entryPath))
+  return readStorageText(artifact.entryHtmlPath ?? path.posix.join(assetRoot, entryPath))
+}
+
+export async function readDashboardArtifactHtml(projectId: string, artifact: DashboardArtifact) {
+  const html = await readDashboardArtifactSource(artifact)
+  if (artifact.kind === "html") return html
+
+  const entryPath = artifact.entryPath
+  if (!entryPath || !artifact.assetRoot) throw new BundleIncompleteError()
   const entryDirectory = path.posix.dirname(entryPath)
-  const baseHref = `/api/v1/projects/${project.id}/html/${entryDirectory === "." ? "" : `${entryDirectory}/`}`
+  const baseHref = `/api/v1/projects/${projectId}/html/${entryDirectory === "." ? "" : `${entryDirectory}/`}`
   return injectBaseHref(html, baseHref)
+}
+
+export async function readDashboardHtml(project: Project) {
+  return readDashboardArtifactHtml(project.id, project.htmlArtifact)
+}
+
+export async function createEditedProjectArtifact(
+  projectId: string,
+  parent: DashboardArtifact,
+  html: string,
+  revisionId = createArtifactRevisionId(),
+): Promise<DashboardArtifact> {
+  const buffer = Buffer.from(html, "utf8")
+  if (buffer.byteLength > maxArtifactBytes) {
+    throw new Error(`Dashboard artifact exceeds the ${formatBytes(maxArtifactBytes)} upload limit.`)
+  }
+
+  const entryHtmlPath = `projects/${projectId}/revisions/${revisionId}/entry.html`
+  await writeStorageObject(entryHtmlPath, buffer, "text/html; charset=utf-8")
+
+  if (parent.kind === "html") {
+    return {
+      ...parent,
+      path: entryHtmlPath,
+      size: buffer.byteLength,
+      contentType: "text/html",
+      revisionId,
+      sourceHash: hashArtifactSource(buffer),
+      entryHtmlPath: undefined,
+    }
+  }
+
+  return {
+    ...parent,
+    revisionId,
+    sourceHash: hashArtifactSource(buffer),
+    entryHtmlPath,
+  }
+}
+
+export async function snapshotProjectArtifact(
+  projectId: string,
+  artifact: DashboardArtifact,
+  revisionId = createArtifactRevisionId(),
+): Promise<DashboardArtifact> {
+  if (artifact.revisionId) return artifact
+
+  const revisionRoot = `projects/${projectId}/revisions/${revisionId}`
+  if (artifact.kind === "html") {
+    const buffer = await readStorageObject(artifact.path)
+    const targetPath = `${revisionRoot}/source.html`
+    await writeStorageObject(targetPath, buffer, artifact.contentType)
+    return {
+      ...artifact,
+      path: targetPath,
+      revisionId,
+      sourceHash: hashArtifactSource(buffer),
+    }
+  }
+
+  if (!artifact.assetRoot || !artifact.entryPath) throw new BundleIncompleteError()
+  const zipBuffer = await readStorageObject(artifact.path)
+  const targetZipPath = `${revisionRoot}/${sanitizeFileName(artifact.originalName)}`
+  const targetAssetRoot = `${revisionRoot}/bundle`
+  await writeStorageObject(targetZipPath, zipBuffer, artifact.contentType)
+  await copyStorageEntries(artifact.assetRoot, targetAssetRoot)
+  const source = await readStorageText(path.posix.join(targetAssetRoot, artifact.entryPath))
+  return {
+    ...artifact,
+    path: targetZipPath,
+    assetRoot: targetAssetRoot,
+    revisionId,
+    sourceHash: hashArtifactSource(source),
+  }
+}
+
+export async function copyStorageEntries(sourceRoot: string, targetRoot: string, paths?: Iterable<string>) {
+  const entries = paths ? Array.from(paths) : await listStorageEntries(sourceRoot)
+  for (const entry of entries) {
+    const buffer = await readStorageObject(path.posix.join(sourceRoot, entry))
+    await writeStorageObject(path.posix.join(targetRoot, entry), buffer, contentTypeForPath(entry))
+  }
 }
 
 export type DashboardAssetResult =
@@ -181,11 +289,12 @@ export async function extractProjectZip(
   projectId: string,
   buffer: Buffer,
   skipPaths?: Set<string>,
+  assetRootOverride?: string,
 ): Promise<ExtractProjectZipResult> {
   const zip = new AdmZip(buffer)
   validateZipBundle(zip)
 
-  const assetRoot = `projects/${projectId}/bundle`
+  const assetRoot = assetRootOverride ?? `projects/${projectId}/bundle`
   const htmlFiles: string[] = []
 
   if (skipPaths && skipPaths.size > 0) {

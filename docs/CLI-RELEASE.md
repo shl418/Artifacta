@@ -5,7 +5,7 @@ The standalone CLI is published on npm as [`@artifacta/cli`](https://www.npmjs.c
 External users can install it without cloning this repository:
 
 ```bash
-npx @artifacta/cli@latest --help
+npx -y @artifacta/cli@latest --help
 npm install -g @artifacta/cli
 ```
 
@@ -40,7 +40,7 @@ npm publish --access public
 5. Verify the public install path after publish:
 
 ```bash
-npx @artifacta/cli@latest --help
+npx -y @artifacta/cli@latest --help
 ```
 
 ## Offline / Tarball Distribution
@@ -50,7 +50,7 @@ If a user cannot reach the public npm registry, you can still hand off the tarba
 Consumers can install that tarball directly:
 
 ```bash
-npm install -g ./artifacta-cli-0.1.0.tgz
+npm install -g ./artifacta-cli-0.1.2.tgz
 ```
 
 That gives them the same `artifacta` command locally.
@@ -64,7 +64,7 @@ The CLI itself is stateless. External users still need:
 - local HTML or ZIP dashboard artifacts
 - for ZIP bundles: optional `artifacta.json` inside the ZIP (`docs/protocol/manifest-v1.md`)
 - optional dataset files (legacy HTML path only, or separate `datasets upload`)
-- optional per-dataset sync JSON (`datasets sync set`) or bundle script secrets (`sync-scripts set`)
+- optional bundle script secrets (`sync-scripts set`); dataset-level external sync has been removed
 
 ### CLI surface to mention in release notes
 

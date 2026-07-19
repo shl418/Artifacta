@@ -32,9 +32,11 @@ import {
   AlertTriangle,
 } from "lucide-react"
 import { useLanguage } from "@/lib/i18n/context"
+import { useTheme } from "next-themes"
 
 export default function SettingsPage() {
-  const { t } = useLanguage()
+  const { lang, setLang, t } = useLanguage()
+  const { theme, setTheme } = useTheme()
   const [profile, setProfile] = useState<{ name: string; email: string; role: string; initials: string } | null>(null)
   const [error, setError] = useState("")
 
@@ -112,7 +114,7 @@ export default function SettingsPage() {
                       </AvatarFallback>
                     </Avatar>
                     <div className="space-y-2">
-                      <Button variant="secondary" size="sm" disabled title="暂未开放">
+                      <Button variant="secondary" size="sm" disabled title={t("common.unavailable")}>
                         <Upload className="h-4 w-4 mr-2" />
                         {t("settings.profile.avatar")}
                       </Button>
@@ -154,7 +156,7 @@ export default function SettingsPage() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="department">{t("settings.profile.dept")}</Label>
-                      <Select defaultValue="data">
+                      <Select defaultValue="data" disabled>
                         <SelectTrigger className="bg-secondary/50">
                           <SelectValue />
                         </SelectTrigger>
@@ -175,11 +177,12 @@ export default function SettingsPage() {
                       placeholder={t("settings.profile.bio.placeholder")}
                       className="bg-secondary/50 resize-none"
                       rows={3}
+                      readOnly
                     />
                   </div>
 
                   <div className="flex justify-end">
-                    <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled title="暂未开放">
+                    <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled title={t("common.unavailable")}>
                       <Save className="h-4 w-4 mr-2" />
                       {t("settings.profile.save")}
                     </Button>
@@ -206,7 +209,7 @@ export default function SettingsPage() {
                         {t("settings.danger.delete.desc")}
                       </p>
                     </div>
-                    <Button variant="destructive" disabled title="暂未开放">
+                    <Button variant="destructive" disabled title={t("common.unavailable")}>
                       <Trash2 className="h-4 w-4 mr-2" />
                       {t("settings.danger.delete")}
                     </Button>
@@ -229,6 +232,7 @@ export default function SettingsPage() {
                       <Input
                         defaultValue="Artifacta Inc."
                         className="bg-secondary/50"
+                        readOnly
                       />
                     </div>
                     <div className="space-y-2">
@@ -246,10 +250,11 @@ export default function SettingsPage() {
                       defaultValue="企业级数据可视化与 BI 分析平台"
                       className="bg-secondary/50 resize-none"
                       rows={2}
+                      readOnly
                     />
                   </div>
                   <div className="flex justify-end">
-                    <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled title="暂未开放">
+                    <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled title={t("common.unavailable")}>
                       <Save className="h-4 w-4 mr-2" />
                       {t("settings.org.save")}
                     </Button>
@@ -268,7 +273,7 @@ export default function SettingsPage() {
                 <CardContent className="space-y-6">
                   <div className="space-y-2">
                     <Label>{t("settings.appearance.theme")}</Label>
-                    <Select defaultValue="light">
+                    <Select value={theme ?? "system"} onValueChange={setTheme}>
                       <SelectTrigger className="w-48 bg-secondary/50">
                         <SelectValue />
                       </SelectTrigger>
@@ -281,14 +286,13 @@ export default function SettingsPage() {
                   </div>
                   <div className="space-y-2">
                     <Label>{t("settings.appearance.lang")}</Label>
-                    <Select defaultValue="zh">
+                    <Select value={lang} onValueChange={(value) => setLang(value as "zh" | "en")}>
                       <SelectTrigger className="w-48 bg-secondary/50">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="zh">简体中文</SelectItem>
                         <SelectItem value="en">English</SelectItem>
-                        <SelectItem value="ja">日本語</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

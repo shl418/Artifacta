@@ -22,7 +22,12 @@ export async function GET(request: Request, context: RouteContext) {
   if (!project) return apiError(404, "NOT_FOUND", "项目不存在。")
   if (!canViewProject(database, auth?.user ?? null, project)) return apiError(403, "FORBIDDEN", "无权访问该项目。")
 
-  return ok(serializeProjectDetail(database, project))
+  return ok({
+    ...serializeProjectDetail(database, project),
+    capabilities: {
+      can_edit: Boolean(auth?.user && canEditProject(database, auth.user, project)),
+    },
+  })
 }
 
 export async function PATCH(request: Request, context: RouteContext) {

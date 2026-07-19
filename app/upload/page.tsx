@@ -158,7 +158,7 @@ export default function UploadPage() {
                   <div className="space-y-2">
                     <Label>{t("upload.visibility.label")}</Label>
                     <Select value={visibility} onValueChange={(value) => setProjectVisibility(value as ProjectVisibility)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger aria-label={t("upload.visibility.label")}><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="private"><Lock className="h-4 w-4" />{t("upload.visibility.private")}</SelectItem>
                         <SelectItem value="team"><Users className="h-4 w-4" />{t("upload.visibility.team")}</SelectItem>
@@ -213,6 +213,9 @@ function ZipDropZone({
 }) {
   return (
     <div
+      role={htmlFile ? undefined : "button"}
+      tabIndex={htmlFile ? -1 : 0}
+      aria-label={dropText}
       onDragOver={(event) => { event.preventDefault(); setDragging(true) }}
       onDragLeave={() => setDragging(false)}
       onDrop={(event) => {
@@ -222,6 +225,12 @@ function ZipDropZone({
         if (file && /\.(html|zip)$/i.test(file.name)) onFile(file)
       }}
       onClick={() => document.getElementById("html-input")?.click()}
+      onKeyDown={(event) => {
+        if (!htmlFile && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault()
+          document.getElementById("html-input")?.click()
+        }
+      }}
       className={cn(
         "border-2 border-dashed rounded-lg p-8 text-center transition-all cursor-pointer",
         isDragging ? "border-primary bg-primary/5" : "border-border/50 hover:border-primary/50",
@@ -236,7 +245,14 @@ function ZipDropZone({
             <p className="font-medium text-foreground">{htmlFile.name}</p>
             <p className="text-sm text-muted-foreground">{formatSize(htmlFile.size)}</p>
           </div>
-          <Button variant="ghost" size="icon" type="button" onClick={(event) => { event.stopPropagation(); onClear() }}>
+          <Button
+            variant="ghost"
+            size="icon"
+            type="button"
+            aria-label={clearText}
+            title={clearText}
+            onClick={(event) => { event.stopPropagation(); onClear() }}
+          >
             <X className="h-4 w-4" />
           </Button>
         </div>

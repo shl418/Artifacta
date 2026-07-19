@@ -361,14 +361,21 @@ export default function DashboardsPage() {
                     className="h-8 pl-8 text-sm"
                   />
                   {searchInput && (
-                    <Button variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-5 w-5" onClick={() => setSearchInput("")}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 h-5 w-5"
+                      aria-label={t("dashboards.search.clear")}
+                      title={t("dashboards.search.clear")}
+                      onClick={() => setSearchInput("")}
+                    >
                       <X className="h-3 w-3" />
                     </Button>
                   )}
                 </div>
 
                 <Select value={visibilityFilter} onValueChange={(value) => { setProjectVisibilityFilter(value as "all" | ProjectVisibility); setCurrentPage(1) }}>
-                  <SelectTrigger className="w-28 h-8 text-xs">
+                  <SelectTrigger className="w-28 h-8 text-xs" aria-label={t("dashboards.filter.perm")}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -454,6 +461,9 @@ export default function DashboardsPage() {
                                   variant="ghost"
                                   size="icon"
                                   className="h-6 w-6 shrink-0 text-muted-foreground"
+                                  aria-label={`${isExpanded ? t("dashboards.project.collapse") : t("dashboards.project.expand")} ${project.name}`}
+                                  title={`${isExpanded ? t("dashboards.project.collapse") : t("dashboards.project.expand")} ${project.name}`}
+                                  aria-expanded={isExpanded}
                                   onClick={() => toggleProjectExpand(project.id)}
                                 >
                                   <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", isExpanded && "rotate-90")} />
@@ -490,7 +500,13 @@ export default function DashboardsPage() {
                             <TableCell>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-7 w-7">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7"
+                                    aria-label={`${t("dashboards.manage")} ${project.name}`}
+                                    title={`${t("dashboards.manage")} ${project.name}`}
+                                  >
                                     <MoreHorizontal className="h-4 w-4" />
                                   </Button>
                                 </DropdownMenuTrigger>
@@ -579,11 +595,11 @@ export default function DashboardsPage() {
               <div className="flex items-center justify-between px-4 py-3 border-t border-border">
                 <div className="text-sm text-muted-foreground">{payload?.pagination.total ?? 0} {t("dashboards.count")}</div>
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage <= 1} onClick={() => setCurrentPage((page) => page - 1)}>
+                  <Button variant="outline" size="icon" className="h-8 w-8" aria-label={t("common.prev")} title={t("common.prev")} disabled={currentPage <= 1} onClick={() => setCurrentPage((page) => page - 1)}>
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
                   <span className="text-sm text-muted-foreground">{payload?.pagination.page ?? 1} / {payload?.pagination.total_pages ?? 1}</span>
-                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage >= (payload?.pagination.total_pages ?? 1)} onClick={() => setCurrentPage((page) => page + 1)}>
+                  <Button variant="outline" size="icon" className="h-8 w-8" aria-label={t("common.next")} title={t("common.next")} disabled={currentPage >= (payload?.pagination.total_pages ?? 1)} onClick={() => setCurrentPage((page) => page + 1)}>
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
@@ -726,10 +742,24 @@ function ProjectDatasetsPanel({
               </div>
             </div>
             <div className="flex items-center gap-1 shrink-0">
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onConfigure(dataset)}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                aria-label={`${t("dashboards.ds.configure")} ${dataset.name}`}
+                title={`${t("dashboards.ds.configure")} ${dataset.name}`}
+                onClick={() => onConfigure(dataset)}
+              >
                 <Settings2 className="h-3.5 w-3.5" />
               </Button>
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => onDelete(dataset)}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                aria-label={`${t("common.delete")} ${dataset.name}`}
+                title={`${t("common.delete")} ${dataset.name}`}
+                onClick={() => onDelete(dataset)}
+              >
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
             </div>

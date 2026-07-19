@@ -178,12 +178,22 @@ export default function PermissionsPage() {
                                 <TableCell className="text-foreground text-sm">{t(item.nameKey)}</TableCell>
                                 <TableCell className="text-center">
                                   <div className="flex justify-center">
-                                    <Switch checked={item.admin} disabled className="data-[state=checked]:bg-primary" />
+                                    <Switch
+                                      checked={item.admin}
+                                      disabled
+                                      aria-label={`${t(item.nameKey)} — ${t("settings.permissions.role.admin.name")}`}
+                                      className="data-[state=checked]:bg-primary"
+                                    />
                                   </div>
                                 </TableCell>
                                 <TableCell className="text-center">
                                   <div className="flex justify-center">
-                                    <Switch checked={item.user} disabled className="data-[state=checked]:bg-accent" />
+                                    <Switch
+                                      checked={item.user}
+                                      disabled
+                                      aria-label={`${t(item.nameKey)} — ${t("settings.permissions.role.user.name")}`}
+                                      className="data-[state=checked]:bg-accent"
+                                    />
                                   </div>
                                 </TableCell>
                               </TableRow>

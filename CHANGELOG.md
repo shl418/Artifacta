@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Publisher onboarding and interaction reliability
+
+- Added a working global Help entry with an in-app publishing guide, direct API Key navigation, current-site environment commands, skill installation, CLI doctor, and publish examples.
+- Verified project-local installation with `npx -y skills@latest add github:shl418/Artifacta --skill artifacta-publisher`; updated the skill, READMEs, onboarding, and API & CLI page around the same zero-repo path.
+- Aligned the publisher skill and protocol docs with the shipped manual-only script sync model. Removed stale URL/COS/Presto, cron, egress, and memory-sandbox promises.
+- Updated `@artifacta/cli` to `0.1.2`; CLI help now lists `sync-scripts set` and no longer advertises the removed dataset sync trigger.
+- Enabled the existing theme control, made language selection consistent, removed misleading editable-but-unsavable settings, and added accessible names/keyboard behavior to key controls.
+
 ### Project create: bundle-only data
 
 - **Removed** `POST /projects` fields `data_files`, `datasets`, and `manifest_mode`. Data must live inside the ZIP; bindings come from bundled `artifacta.json` or server-side auto-discovery.
@@ -42,4 +50,3 @@
 - Enforced upload `Content-Length` limits via `requestPayloadTooLarge`, rate-limited API key creation, and improved overview/preview responsive UX with empty and retry states.
 - Added scoped API keys, sync source validation/test endpoint, operations settings UI, expanded sync config examples, and production secret checks via `instrumentation.ts`.
 - Added sync source validation/test endpoint, API key scopes and usage rate limits, dataset sync run history UI, project activity/embed/rollback, and an admin operations console for webhooks and audit logs.
-

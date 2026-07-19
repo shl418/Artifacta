@@ -96,7 +96,7 @@ pnpm cli -- --json projects list
 The standalone CLI is published on npm as [`@artifacta/cli`](https://www.npmjs.com/package/@artifacta/cli). External users can install it without cloning the app:
 
 ```bash
-npx @artifacta/cli@latest --help
+npx -y @artifacta/cli@latest --help
 ```
 
 Or install globally:
@@ -114,7 +114,7 @@ For the zero-repo end-user path, see [docs/ONBOARDING.md](docs/ONBOARDING.md). M
 Artifacta ships an open-source `artifacta-publisher` skill for [70+ AI coding agents](https://skills.sh) (Claude Code, Cursor, Codex, and more), letting agents scaffold, test, and publish dashboards end-to-end.
 
 ```bash
-npx skills add github:shl418/Artifacta --skill artifacta-publisher
+npx -y skills@latest add github:shl418/Artifacta --skill artifacta-publisher
 ```
 
 Or copy [skills/artifacta-publisher/SKILL.md](skills/artifacta-publisher/SKILL.md) manually.

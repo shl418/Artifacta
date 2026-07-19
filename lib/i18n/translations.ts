@@ -17,6 +17,9 @@ export const translations = {
     "nav.new": "新建",
     "nav.new.dashboard": "上传看板项目",
     "nav.new.dataset": "新建数据集",
+    "nav.help": "帮助与发布指南",
+    "help.title": "帮助",
+    "nav.logout": "退出登录",
 
     // --- Common ---
     "common.save": "保存",
@@ -54,6 +57,7 @@ export const translations = {
     "common.status.disabled": "已禁用",
     "common.permission.view": "查看",
     "common.permission.edit": "编辑",
+    "common.unavailable": "当前版本暂未开放",
 
     // --- Login ---
     "login.subtitle": "AI 时代的数据应用托管与分发",
@@ -86,6 +90,7 @@ export const translations = {
     // --- Dashboards ---
     "dashboards.title": "BI 看板",
     "dashboards.search.placeholder": "搜索看板名称或描述…",
+    "dashboards.search.clear": "清除搜索",
     "dashboards.filter.all": "全部",
     "dashboards.empty.title": "还没有看板",
     "dashboards.empty.desc": "上传你的第一个 HTML 看板或 ZIP 数据应用包。",
@@ -99,6 +104,8 @@ export const translations = {
     "dashboards.folder.move": "移动到文件夹",
     "dashboards.project.preview": "预览",
     "dashboards.project.detail": "查看详情",
+    "dashboards.project.expand": "展开数据集",
+    "dashboards.project.collapse": "收起数据集",
     "dashboards.project.edit": "编辑",
     "dashboards.project.delete": "删除",
     "dashboards.project.views": "次浏览",
@@ -291,6 +298,7 @@ export const translations = {
     "dashboards.ds.runs.error": "无法加载同步运行记录，请稍后重试。",
     "dashboards.ds.synced_rows": "同步",
     "dashboards.ds.goto_project": "前往项目管理页 →",
+    "dashboards.ds.configure": "配置数据集",
     "dashboards.folder.create.desc": "创建一个文件夹来整理看板。",
 
     // --- Upload (additional) ---
@@ -432,6 +440,9 @@ export const translations = {
     "nav.new": "New",
     "nav.new.dashboard": "Upload Dashboard",
     "nav.new.dataset": "New Dataset",
+    "nav.help": "Help and publishing guide",
+    "help.title": "Help",
+    "nav.logout": "Sign out",
 
     // --- Common ---
     "common.save": "Save",
@@ -469,6 +480,7 @@ export const translations = {
     "common.status.disabled": "Disabled",
     "common.permission.view": "View",
     "common.permission.edit": "Edit",
+    "common.unavailable": "Not available in this release",
 
     // --- Login ---
     "login.subtitle": "Hosting & distribution for AI-generated data apps",
@@ -501,6 +513,7 @@ export const translations = {
     // --- Dashboards ---
     "dashboards.title": "Dashboards",
     "dashboards.search.placeholder": "Search by name or description…",
+    "dashboards.search.clear": "Clear search",
     "dashboards.filter.all": "All",
     "dashboards.empty.title": "No dashboards yet",
     "dashboards.empty.desc": "Upload your first HTML dashboard or ZIP bundle.",
@@ -514,6 +527,8 @@ export const translations = {
     "dashboards.folder.move": "Move to Folder",
     "dashboards.project.preview": "Preview",
     "dashboards.project.detail": "View Details",
+    "dashboards.project.expand": "Expand datasets",
+    "dashboards.project.collapse": "Collapse datasets",
     "dashboards.project.edit": "Edit",
     "dashboards.project.delete": "Delete",
     "dashboards.project.views": "views",
@@ -706,6 +721,7 @@ export const translations = {
     "dashboards.ds.runs.error": "Failed to load sync runs. Please try again.",
     "dashboards.ds.synced_rows": "Synced",
     "dashboards.ds.goto_project": "Go to project page →",
+    "dashboards.ds.configure": "Configure dataset",
     "dashboards.folder.create.desc": "Create a folder to organize your dashboards.",
 
     // --- Upload (additional) ---

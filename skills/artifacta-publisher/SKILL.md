@@ -3,9 +3,9 @@ name: artifacta-publisher
 description: >-
   Scaffold, test locally, and publish dashboards to a running Artifacta site.
   Preferred path is a ZIP bundle with artifacta.json, in-bundle datasets, and
-  optional sync_scripts (Python/Node). Also covers legacy single HTML, separate
-  data files, dataset replace, and URL/Presto sync JSON. Zero-repo: only
-  ARTIFACTA_URL, API key, and local files. Triggers include "publish to
+  optional manually triggered sync_scripts (Python/Node). Also covers single
+  HTML, separate data files, and dataset replace. Zero-repo: only ARTIFACTA_URL,
+  API key, and local files. Triggers include "publish to
   Artifacta", "上传到 Artifacta", "打包部署看板", "一句话发布", "定时拉取",
   "sync script", "artifacta.json", "push this dashboard", and "推送 zip 看板".
 ---
@@ -18,6 +18,38 @@ Turn local artifacts into a hosted Artifacta project. The user does **not** need
 
 ---
 
+## Install and connect
+
+Install this skill from GitHub with the current skills CLI:
+
+```bash
+npx -y skills@latest add github:shl418/Artifacta --skill artifacta-publisher
+```
+
+The command is verified to discover `artifacta-publisher` in this repository. Users do not need to clone Artifacta.
+
+Before publishing:
+
+1. Sign in to the target Artifacta site.
+2. Open **Help → API & CLI**, or go directly to `/settings/api`.
+3. Create an API Key and copy it immediately; the full secret is shown only once.
+4. Export the site origin and secret:
+
+```bash
+export ARTIFACTA_URL=https://artifacta.example.com
+export ARTIFACTA_API_KEY=art_...
+```
+
+5. Verify the connection:
+
+```bash
+npx -y @artifacta/cli@latest doctor
+```
+
+For zero-repo users, run every CLI command as `npx -y @artifacta/cli@latest ...`. The shorter `artifacta ...` form is only for users who installed `@artifacta/cli` globally.
+
+---
+
 ## Choose a path
 
 | User goal | Path | Upload shape |
@@ -25,9 +57,10 @@ Turn local artifacts into a hosted Artifacta project. The user does **not** need
 | Static dashboard, data won't change (≤ ~500 rows / ~100KB) | **Single HTML, data inlined** | `dashboard.html` only |
 | Dashboard + data that updates (sync, replace, or multi-file assets) | **Bundle** | One ZIP; `artifacta.json` + optional `scripts/sync.py` |
 | Replace data on existing project | Dataset API | `artifacta datasets upload/replace` |
-| URL / COS / Presto sync without custom code | Sync JSON | `artifacta datasets sync set` |
 
 **Default to single HTML with inlined data** for one-shot dashboards where the data is a fixed snapshot. **Default to bundle** as soon as the data needs to update over time, the dashboard has separate CSS/JS assets, or there are multiple datasets / sync scripts.
+
+Artifacta currently has one dynamic-data path: project-level bundle `sync_scripts`, triggered manually. Do not promise cron, URL, COS, S3, or Presto auto-sync.
 
 ---
 
@@ -36,7 +69,7 @@ Turn local artifacts into a hosted Artifacta project. The user does **not** need
 Ask this **before** scaffolding files. It chooses the path for you.
 
 - **No, it's a fixed snapshot** (one-shot AI dashboard, frozen report, demo with hardcoded numbers) → inline the data into `<script>` inside the HTML file. Upload single HTML with `--file dashboard.html`. **No ZIP, no server, no `artifacta.json`.** User can double-click locally.
-- **Yes, via sync scripts / URL / COS / Presto** → real `.csv` / `.json` files + bundle + server preview (next section).
+- **Yes, via a manually triggered sync script** → real `.csv` / `.json` files + bundle + server preview (next section).
 - **Yes, via manual `datasets replace`** → real `.csv` / `.json` files + bundle + server preview.
 
 ### Inline-data pattern (for the static case)
@@ -65,7 +98,7 @@ For CSV-shaped data, inline as a JS array of objects (not as a CSV string) — t
 The hosted upload for this case:
 
 ```bash
-artifacta projects upload \
+npx -y @artifacta/cli@latest projects upload \
   --file ./dashboard.html \
   --name "..." \
   --visibility team
@@ -77,17 +110,17 @@ See `examples/0-single-html/` for a single-HTML upload (its data is in markup, n
 
 ## One-sentence workflow (bundle — for data that updates)
 
-Use this when the data-update decision above sent you to the bundle path. For static dashboards, the upload is one command (`artifacta projects upload --file ./dashboard.html …`) and the steps below don't apply.
+Use this when the data-update decision above sent you to the bundle path. For static dashboards, the upload is one command (`npx -y @artifacta/cli@latest projects upload --file ./dashboard.html …`) and the steps below don't apply.
 
-Example: *「部署到 Artifacta 并每天 8 点拉数据」*
+Example: *「部署到 Artifacta，并提供手动刷新数据的脚本」*
 
 1. Scaffold bundle layout (below) or adapt the user's folder.
 2. Write `artifacta.json` (`entrypoint`, `datasets[]`, optional `sync_scripts[]`).
 3. Add `scripts/sync.py` or `scripts/sync.mjs` that writes only declared `outputs` paths.
 4. **Preview locally over HTTP** (see "Local preview" below) and confirm every `fetch()` returns 200 in DevTools.
 5. Zip **bundle root** (not parent folder): `zip -r ../bundle.zip . -x "*.git*" -x "__MACOSX/*"`.
-6. `artifacta projects upload --file ../bundle.zip --name "..."` — data files must be inside the ZIP (CLI uses `POST /upload-sessions`).
-7. Set secrets on the server with `artifacta sync-scripts set --config-file ./secrets.json`; never in the ZIP.
+6. `npx -y @artifacta/cli@latest projects upload --file ../bundle.zip --name "..."` — data files must be inside the ZIP (CLI uses `POST /upload-sessions`).
+7. Set secrets on the server with `npx -y @artifacta/cli@latest sync-scripts set --config-file ./secrets.json`; never in the ZIP.
 8. Return `preview_url`, `project_id`, script ids, and what was configured.
 
 Put CSV/JSON next to `index.html` in the ZIP, or declare paths in `artifacta.json`. The server imports bindings on commit; no separate dataset upload at create time.
@@ -104,7 +137,7 @@ Use any standard static HTTP server. Tell the user to run one of:
 
 ```bash
 cd my-dashboard
-npx serve .                       # Node available
+npx -y serve .                    # Node available
 python3 -m http.server 5173       # Python available
 ```
 
@@ -185,8 +218,7 @@ my-dashboard/
       "id": "main",
       "path": "scripts/sync.py",
       "runtime": "python",
-      "outputs": ["data/sales.csv", "data/inventory.csv"],
-      "schedule": "0 8 * * *"
+      "outputs": ["data/sales.csv", "data/inventory.csv"]
     }
   ]
 }
@@ -198,7 +230,7 @@ Before zipping, verify:
 - Every `sync_scripts[].outputs` path matches a `datasets[].path` (outputs may be a subset).
 - `sync_scripts[].path` is `.py` or `.mjs` (`.sh` is blocked inside ZIP uploads).
 
-Manifest declares defaults; the server may override `schedule`, `outputs`, and secrets without rebuilding the ZIP.
+The manifest declares script path and output files. The server can store secrets and enabled state without rebuilding the ZIP. Re-uploading the ZIP replaces the declared script and outputs.
 
 ---
 
@@ -215,7 +247,7 @@ One script run may update **multiple files** listed in `outputs`. Platform runs 
 | `ARTIFACTA_SCRIPT_ID` | yes | e.g. `main` from manifest |
 | `ARTIFACTA_SOURCE_CONFIG` | no | JSON; **server-injected only** (keys, URLs, SQL) |
 
-Server defaults: **5 min** timeout, **512MB** memory, **egress off** unless the deployment sets `SYNC_URL_ALLOWLIST`.
+Server defaults: **5 min** timeout and **8MB** captured stdout/stderr. The runner strips server secrets from the child environment, but the current self-hosted release does **not** provide a filesystem, network, or memory sandbox. Only trusted project editors should be allowed to upload or trigger sync scripts.
 
 ### Python starter (`scripts/sync.py`)
 
@@ -258,7 +290,7 @@ python3 scripts/sync.py
 Or use the CLI helper (same env contract):
 
 ```bash
-artifacta bundle run-script \
+npx -y @artifacta/cli@latest bundle run-script \
   --file ./scripts/sync.py \
   --bundle-root . \
   --outputs data/sales.csv,data/inventory.csv \
@@ -281,7 +313,7 @@ Node: same env vars; write under `path.join(process.env.ARTIFACTA_BUNDLE_ROOT, r
 
 Prefer, in order:
 
-1. `npx @artifacta/cli@latest ...` — zero-repo
+1. `npx -y @artifacta/cli@latest ...` — zero-repo and default for this skill
 2. `artifacta ...` — global `@artifacta/cli`
 3. `pnpm cli -- ...` — only when cwd is the Artifacta monorepo
 
@@ -294,7 +326,7 @@ Prefer, in order:
 ```bash
 cd my-dashboard
 zip -r ../bundle.zip . -x "*.git*" -x "__MACOSX/*"
-artifacta projects upload \
+npx -y @artifacta/cli@latest projects upload \
   --file ../bundle.zip \
   --name "Sales Dashboard" \
   --visibility team
@@ -303,7 +335,7 @@ artifacta projects upload \
 ### Update existing project dashboard
 
 ```bash
-artifacta projects update-html \
+npx -y @artifacta/cli@latest projects update-html \
   --project-id proj_123 \
   --file ./bundle-v2.zip
 ```
@@ -311,42 +343,27 @@ artifacta projects update-html \
 ### Upload or replace a standalone dataset (after project exists)
 
 ```bash
-artifacta datasets upload \
+npx -y @artifacta/cli@latest datasets upload \
   --project-id proj_123 \
   --file ./growth.csv \
   --name "Weekly Growth Data"
 
-artifacta datasets replace \
+npx -y @artifacta/cli@latest datasets replace \
   --project-id proj_123 \
   --dataset-id ds_123 \
   --file ./growth-v2.csv
 ```
 
-### Built-in sync (URL / COS / Presto — not custom scripts)
-
-```bash
-artifacta datasets sync set \
-  --project-id proj_123 \
-  --dataset-id ds_123 \
-  --source-type presto \
-  --config-file ./sync.json
-
-artifacta sync trigger \
-  --project-id proj_123 \
-  --dataset-id ds_123
-```
-
 ### List and configure bundle scripts
 
 ```bash
-artifacta sync-scripts list --project-id proj_123
+npx -y @artifacta/cli@latest sync-scripts list --project-id proj_123
 # Use the server id (sscript_...) from the list, not only manifest "main"
 
-artifacta sync-scripts set \
+npx -y @artifacta/cli@latest sync-scripts set \
   --project-id proj_123 \
   --script-id sscript_abc123 \
-  --config-file ./secrets.json \
-  --schedule "0 8 * * *"
+  --config-file ./secrets.json
 ```
 
 `secrets.json` is merged into server `source_config` and injected as `ARTIFACTA_SOURCE_CONFIG` at run time.
@@ -354,16 +371,16 @@ artifacta sync-scripts set \
 ### Trigger bundle script sync
 
 ```bash
-artifacta sync-scripts trigger \
+npx -y @artifacta/cli@latest sync-scripts trigger \
   --project-id proj_123 \
   --script-id sscript_abc123
 
-artifacta sync-scripts status \
+npx -y @artifacta/cli@latest sync-scripts status \
   --project-id proj_123 \
   --script-id sscript_abc123
 ```
 
-Requires a worker with `ARTIFACTA_API_KEY` and Python 3 on the host (`ARTIFACTA_PYTHON` optional). One queued/running script job per project at a time.
+Requires a running worker with `ARTIFACTA_API_KEY` and Python 3 on the host for Python scripts (`ARTIFACTA_PYTHON` optional). One queued/running script job per project at a time. Triggering is manual in the current release.
 
 ---
 
@@ -414,15 +431,15 @@ Confirm against `docs/IMPLEMENTED-FEATURES.md` on the Artifacta version you targ
 |-------|------|
 | Direct ZIP on `POST /projects` | Returns `400 DEPRECATED` — always use upload session (CLI does this) |
 | `PUT /projects/:id/html` with ZIP | Same — use upload session with `project_id` |
-| Script egress | Subprocess has no outbound network in v1 unless ops adds future allowlist |
-| Cron | Script `schedule` supports daily `M H * * *`; full cron for all dataset jobs may still fall back to worker heuristics |
-| Legacy per-dataset sync | URL/COS/Presto still use `datasets sync set` + `sync trigger`, not `sync_scripts` |
+| Script sandbox | The self-hosted runner limits time/output and strips server secrets, but does not isolate filesystem, network, or memory. Only trusted editors may upload/trigger scripts. |
+| Scheduling | Manual trigger only. A manifest `schedule` value is ignored for execution; do not promise cron. |
+| External connectors | Dataset-level URL/COS/S3/Presto sync has been removed. Use a trusted bundle script or `datasets replace`. |
 
 ---
 
 ## Failure handling
 
-- Missing `ARTIFACTA_API_KEY` → stop and ask.
+- Missing `ARTIFACTA_API_KEY` → direct the user to **Help → API & CLI** (`/settings/api`), then stop until they provide/export the key.
 - `INVALID_ARTIFACT` → validate HTML/ZIP and manifest paths locally.
 - Arbitrary attachments → only sync JSON and bundle contents are first-class; do not promise generic file hosting.
 

@@ -54,7 +54,7 @@ python3 -m http.server 5173       # 已装 Python
 推荐直接使用已发布的 npm 包（零仓库用户默认路径）：
 
 ```bash
-npx @artifacta/cli@latest --help
+npx -y @artifacta/cli@latest --help
 ```
 
 或者全局安装：
@@ -69,6 +69,8 @@ artifacta --help
 ```bash
 pnpm cli -- --help
 ```
+
+下文示例使用较短的全局命令 `artifacta`。如果选择零安装方式，请把它替换为 `npx -y @artifacta/cli@latest`。
 
 ## 第三步：设置环境变量
 
@@ -166,7 +168,7 @@ artifacta sync-scripts trigger --project-id proj_123 --script-id sscript_xxxxxxx
 安装 skill（支持 Claude Code、Cursor、Codex 等 70+ 个 AI 编程助手）：
 
 ```bash
-npx skills add github:shl418/Artifacta --skill artifacta-publisher
+npx -y skills@latest add github:shl418/Artifacta --skill artifacta-publisher
 ```
 
 或手动复制 `skills/artifacta-publisher/SKILL.md`。

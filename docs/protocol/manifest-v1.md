@@ -42,8 +42,7 @@ Each dataset binding declares:
     "id": "main",
     "path": "scripts/sync.py",
     "runtime": "python",
-    "outputs": ["data/sales.csv"],
-    "schedule": "0 8 * * *"
+    "outputs": ["data/sales.csv"]
   }
 ]
 ```
@@ -54,13 +53,13 @@ Rules:
 - `path`: bundle-relative; must end in `.py`, `.js`, or `.mjs`.
 - `runtime`: `python` or `node`.
 - `outputs`: non-empty list of bundle paths; each path must match a `datasets[].path` entry with `refresh: "sync"`.
-- `schedule`: optional cron string; the server may override schedule and secrets.
+- `schedule`: accepted only for backward-compatible parsing and ignored by the current manual-trigger release. Do not rely on cron execution.
 
-Secrets and remote credentials never belong in the ZIP. The server stores them in `source_config` and injects `ARTIFACTA_SOURCE_CONFIG` at runtime.
+Secrets and remote credentials never belong in the ZIP. The server stores them in `source_config` and injects `ARTIFACTA_SOURCE_CONFIG` at runtime. Sync scripts are manually triggered.
 
 ## Safety Rules
 
 - Paths are POSIX relative paths.
 - Absolute paths and parent traversal are invalid.
 - HTML is rendered in a sandboxed iframe.
-- Remote data sources are not declared directly in the bundle; they are bound server-side by project sync configuration.
+- Bundle scripts are executable code. The current self-hosted runner limits time/output and strips server secrets, but does not isolate filesystem, network, or memory; only trusted editors may upload or trigger them.

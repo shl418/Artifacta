@@ -37,56 +37,68 @@ interface ApiKeyRecord {
 }
 
 const scopeOptions = [
-  { value: "projects:read", label: "读取项目" },
-  { value: "projects:write", label: "写入项目" },
-  { value: "datasets:read", label: "读取数据集" },
-  { value: "datasets:write", label: "写入数据集" },
-  { value: "sync:run", label: "触发同步" },
-  { value: "team:read", label: "读取团队" },
-  { value: "team:write", label: "管理团队" },
-  { value: "admin:read", label: "运维只读" },
+  { value: "projects:read", label: { zh: "读取项目", en: "Read projects" } },
+  { value: "projects:write", label: { zh: "写入项目", en: "Write projects" } },
+  { value: "datasets:read", label: { zh: "读取数据集", en: "Read datasets" } },
+  { value: "datasets:write", label: { zh: "写入数据集", en: "Write datasets" } },
+  { value: "sync:run", label: { zh: "触发同步", en: "Run sync scripts" } },
+  { value: "team:read", label: { zh: "读取团队", en: "Read team" } },
+  { value: "team:write", label: { zh: "管理团队", en: "Manage team" } },
+  { value: "admin:read", label: { zh: "运维只读", en: "Read operations" } },
 ] as const
 
-const cliInstallExample = `# 外部用户（推荐）
-npx @artifacta/cli@latest projects list
+function buildCliInstallExample(siteUrl: string, lang: "zh" | "en") {
+  return lang === "zh" ? `# 1. 安装 Artifacta Publisher skill
+npx -y skills@latest add github:shl418/Artifacta --skill artifacta-publisher
 
-# 或全局安装
-npm install -g @artifacta/cli
+# 2. 配置当前站点
+export ARTIFACTA_URL=${siteUrl}
+export ARTIFACTA_API_KEY=art_...
 
-# 仓库内开发者
-pnpm cli -- projects list`
+# 3. 零安装运行 CLI（推荐）
+npx -y @artifacta/cli@latest doctor
+npx -y @artifacta/cli@latest projects list` : `# 1. Install the Artifacta Publisher skill
+npx -y skills@latest add github:shl418/Artifacta --skill artifacta-publisher
 
-const cliExample = `# 创建项目（ZIP 内含 HTML 与数据；单 HTML 仅适合内联数据）
-artifacta projects upload \
+# 2. Configure this site
+export ARTIFACTA_URL=${siteUrl}
+export ARTIFACTA_API_KEY=art_...
+
+# 3. Run the CLI without installing it globally
+npx -y @artifacta/cli@latest doctor
+npx -y @artifacta/cli@latest projects list`
+}
+
+const cliExample = `# ZIP 内含 HTML、数据和静态资源；单 HTML 仅适合内联数据
+npx -y @artifacta/cli@latest projects upload \
   --file ./dashboard.zip \
   --name "Q2 销售看板" \
   --visibility team
 
 # 替换已有项目的 HTML
-artifacta projects update-html \
+npx -y @artifacta/cli@latest projects update-html \
   --project-id proj_123 \
   --file ./dashboard-v2.zip
 
 # 手动触发项目同步脚本
-artifacta sync-scripts trigger \
+npx -y @artifacta/cli@latest sync-scripts trigger \
   --project-id proj_123 \
-  --script-id sscript_456
+  --script-id sscript_456`
 
-# 或直接使用 API Key 列项目
-ARTIFACTA_API_KEY=art_live_xxx artifacta projects list`
-
-const apiExample = `curl -X POST http://localhost:3000/api/v1/upload-sessions \\
+function buildApiExample(siteUrl: string) {
+  return `curl -X POST ${siteUrl}/api/v1/upload-sessions \\
   -H "Authorization: Bearer $ARTIFACTA_API_KEY" \\
   -F "file=@./dashboard.zip"
 # 使用返回的 session_id：
-curl -X POST http://localhost:3000/api/v1/projects \\
+curl -X POST ${siteUrl}/api/v1/projects \\
   -H "Authorization: Bearer $ARTIFACTA_API_KEY" \\
   -F "name=Q2 销售看板" \\
   -F "visibility=team" \\
   -F "upload_session_id=<session_id>"`
+}
 
 export default function ApiDocsPage() {
-  const { t } = useLanguage()
+  const { lang, t } = useLanguage()
   const [apiKeys, setApiKeys] = useState<ApiKeyRecord[]>([])
   const [newKeyName, setNewKeyName] = useState("CI/CD Pipeline")
   const [selectedScopes, setSelectedScopes] = useState<string[]>([])
@@ -96,6 +108,7 @@ export default function ApiDocsPage() {
   const [creatingKey, setCreatingKey] = useState(false)
   const [deletingKey, setDeletingKey] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<ApiKeyRecord | null>(null)
+  const [siteUrl, setSiteUrl] = useState("http://localhost:3000")
 
   const loadKeys = useCallback(async () => {
     try {
@@ -120,6 +133,10 @@ export default function ApiDocsPage() {
     })
   }, [loadKeys, t])
 
+  useEffect(() => {
+    setSiteUrl(window.location.origin)
+  }, [])
+
   const createKey = async () => {
     if (creatingKey) return
     setCreatingKey(true)
@@ -140,6 +157,8 @@ export default function ApiDocsPage() {
         const payload = await response.json().catch(() => null)
         setError(payload?.error?.message ?? t("settings.api.load.error"))
       }
+    } catch {
+      setError(t("common.error.network"))
     } finally {
       setCreatingKey(false)
     }
@@ -157,6 +176,8 @@ export default function ApiDocsPage() {
         return
       }
       await loadKeys()
+    } catch {
+      setError(t("common.error.network"))
     } finally {
       setDeletingKey(false)
     }
@@ -170,6 +191,16 @@ export default function ApiDocsPage() {
           <Header title={t("settings.api.title")} />
           <div className="flex-1 overflow-y-auto p-6">
             <div className="max-w-4xl mx-auto space-y-6">
+              <Alert>
+                <Terminal className="h-4 w-4" />
+                <AlertTitle>{lang === "zh" ? "Agent / CLI 从这里开始" : "Start here for agents and the CLI"}</AlertTitle>
+                <AlertDescription>
+                  {lang === "zh"
+                    ? "在本页创建 API Key，复制一次性密钥，再按下方命令设置 ARTIFACTA_URL 与 ARTIFACTA_API_KEY。"
+                    : "Create an API key on this page, copy the one-time secret, then set ARTIFACTA_URL and ARTIFACTA_API_KEY using the commands below."}
+                </AlertDescription>
+              </Alert>
+
               <Card className="border-border bg-card">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -198,13 +229,14 @@ export default function ApiDocsPage() {
                               type="button"
                               size="sm"
                               variant={active ? "default" : "outline"}
+                              aria-pressed={active}
                               onClick={() =>
                                 setSelectedScopes((current) =>
                                   active ? current.filter((item) => item !== scope.value) : [...current, scope.value],
                                 )
                               }
                             >
-                              {scope.label}
+                              {scope.label[lang]}
                             </Button>
                           )
                         })}
@@ -263,7 +295,14 @@ export default function ApiDocsPage() {
                             ))}
                           </div>
                         </div>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => setPendingDelete(apiKey)}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          aria-label={`${t("common.delete")} ${apiKey.name}`}
+                          title={`${t("common.delete")} ${apiKey.name}`}
+                          onClick={() => setPendingDelete(apiKey)}
+                        >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
@@ -287,11 +326,15 @@ export default function ApiDocsPage() {
                 <TabsContent value="cli">
                   <Card className="border-border bg-card">
                     <CardHeader>
-                      <CardTitle className="text-lg">安装方式</CardTitle>
-                      <CardDescription>对外用户推荐 `npx @artifacta/cli@latest`；仓库内开发者可继续用 `pnpm cli -- ...`。</CardDescription>
+                      <CardTitle className="text-lg">{lang === "zh" ? "安装与连接" : "Install and connect"}</CardTitle>
+                      <CardDescription>
+                        {lang === "zh"
+                          ? "外部用户可通过 npx 安装 skill，并直接运行 CLI，无需克隆 Artifacta 仓库。"
+                          : "External users can install the skill and run the CLI through npx without cloning the Artifacta repository."}
+                      </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <CodeBlock code={cliInstallExample} />
+                      <CodeBlock code={buildCliInstallExample(siteUrl, lang)} />
                     </CardContent>
                   </Card>
 
@@ -309,11 +352,13 @@ export default function ApiDocsPage() {
                 <TabsContent value="api">
                   <Card className="border-border bg-card">
                     <CardHeader>
-                      <CardTitle className="text-lg">上传项目 API</CardTitle>
-                      <CardDescription>默认本地地址为 `http://localhost:3000/api/v1`。</CardDescription>
+                      <CardTitle className="text-lg">{lang === "zh" ? "上传项目 API" : "Project upload API"}</CardTitle>
+                      <CardDescription>
+                        {lang === "zh" ? `当前站点 API 地址为 ${siteUrl}/api/v1。` : `This site's API base is ${siteUrl}/api/v1.`}
+                      </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <CodeBlock code={apiExample} />
+                      <CodeBlock code={buildApiExample(siteUrl)} />
                     </CardContent>
                   </Card>
                 </TabsContent>
@@ -356,12 +401,15 @@ function CodeBlock({ code }: { code: string }) {
 }
 
 function CopyButton({ value }: { value: string }) {
+  const { t } = useLanguage()
   const [copied, setCopied] = useState(false)
   return (
     <Button
       variant="ghost"
       size="icon"
       className="h-8 w-8 bg-white/10 hover:bg-white/20"
+      aria-label={copied ? t("common.copied") : t("common.copy")}
+      title={copied ? t("common.copied") : t("common.copy")}
       onClick={() => {
         navigator.clipboard.writeText(value)
         setCopied(true)

@@ -354,6 +354,46 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/projects/{projectId}/text-editor/session:
+    post:
+      summary: Start a desktop inline-text editing session
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Base revision and sandboxed editor URL
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+  /api/v1/projects/{projectId}/text-edits:
+    put:
+      summary: Publish source-mapped plain-text edits
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Published dashboard revision
+        "409":
+          description: A newer revision exists and a three-way merge is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/projects/{projectId}/text-edits/merge:
+    post:
+      summary: Publish a resolved three-way text merge
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Published merged dashboard revision
+        "409":
+          description: The latest revision changed while resolving the merge
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /api/v1/projects/{projectId}/versions:
     get:
       summary: List dashboard versions
@@ -364,7 +404,7 @@ paths:
           description: Dashboard versions
   /api/v1/projects/{projectId}/versions/{versionId}/rollback:
     post:
-      summary: Roll back dashboard artifact metadata to a recorded version
+      summary: Roll back to an immutable dashboard artifact revision
       parameters:
         - $ref: "#/components/parameters/ProjectId"
         - $ref: "#/components/parameters/VersionId"

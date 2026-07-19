@@ -52,7 +52,7 @@ In the Artifacta web app:
 Use the published npm package (default path for zero-repo users):
 
 ```bash
-npx @artifacta/cli@latest --help
+npx -y @artifacta/cli@latest --help
 ```
 
 Or install it globally:
@@ -67,6 +67,8 @@ If you are developing inside the Artifacta repository, you can also use:
 ```bash
 pnpm cli -- --help
 ```
+
+The examples below use the shorter global command `artifacta`. With the zero-install path, replace it with `npx -y @artifacta/cli@latest`.
 
 ## Step 3: Export Environment Variables
 
@@ -167,7 +169,7 @@ The recommended agent pattern is:
 Install the skill (works with Claude Code, Cursor, Codex, and 70+ other AI coding agents):
 
 ```bash
-npx skills add github:shl418/Artifacta --skill artifacta-publisher
+npx -y skills@latest add github:shl418/Artifacta --skill artifacta-publisher
 ```
 
 Or copy `skills/artifacta-publisher/SKILL.md` manually.

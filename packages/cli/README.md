@@ -13,8 +13,10 @@ npm install -g @artifacta/cli
 Or run it without a global install:
 
 ```bash
-npx @artifacta/cli@latest --help
+npx -y @artifacta/cli@latest --help
 ```
+
+When using the zero-install path, replace `artifacta` in the examples below with `npx -y @artifacta/cli@latest`.
 
 ## Required Environment
 
@@ -40,10 +42,9 @@ artifacta bundle run-script --file ./scripts/sync.py --bundle-root ./dist --outp
 artifacta datasets list [--source manual|all]
 artifacta datasets upload --project-id proj_123 --file ./growth.csv --name "Weekly Growth Data"
 artifacta datasets replace --project-id proj_123 --dataset-id ds_123 --file ./growth-v2.csv
-artifacta datasets sync set --project-id proj_123 --dataset-id ds_123 --config-file ./sync.json
 ```
 
-> Datasets are static (`manual`) by default. Dynamic updates use project-level bundle sync scripts (`sync-scripts ...`); the old `datasets sync set --source-type` / `sync trigger` are deprecated (external sources removed; `sync trigger` returns `410`).
+> Datasets are static (`manual`) by default. Dynamic updates use manually triggered project-level bundle sync scripts (`sync-scripts ...`). Dataset-level URL/COS/S3/Presto connectors and scheduled sync are not available.
 
 `ARTIFACTA_URL` may be either the app root (`https://artifacta.example.com`) or an API base ending in `/api/v1`; the CLI normalizes both.
 

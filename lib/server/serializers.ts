@@ -55,6 +55,7 @@ export function serializeProject(database: Database, project: Project) {
       original_name: project.htmlArtifact.originalName,
       size: project.htmlArtifact.size,
       content_type: project.htmlArtifact.contentType,
+      revision_id: project.htmlArtifact.revisionId ?? null,
       entry_path: project.htmlArtifact.entryPath ?? null,
     },
     created_at: project.createdAt,

@@ -30,7 +30,7 @@ Artifacta 相信另一件事：**让 AI 直接写 HTML 看板**——图表、�
 
 ![Artifacta 概览](public/demo/overview.png)
 
-![托管看板预览](public/demo/dashboard-preview.png)
+![DA Agent 流程模型预览](public/demo/da-agent-process-model.png)
 
 ## 当前已经可用
 
@@ -96,7 +96,7 @@ pnpm cli -- --json projects list
 独立 CLI 已发布到 npm（[`@artifacta/cli`](https://www.npmjs.com/package/@artifacta/cli)），外部用户无需克隆仓库即可安装：
 
 ```bash
-npx @artifacta/cli@latest --help
+npx -y @artifacta/cli@latest --help
 ```
 
 或全局安装：
@@ -114,7 +114,7 @@ npm install -g @artifacta/cli
 Artifacta 提供开源的 `artifacta-publisher` skill，支持 Claude Code、Cursor、Codex 等 [70+ 个 AI 编程助手](https://skills.sh)，帮助 agent 直接完成看板的打包、上传和同步配置。
 
 ```bash
-npx skills add github:shl418/Artifacta --skill artifacta-publisher
+npx -y skills@latest add github:shl418/Artifacta --skill artifacta-publisher
 ```
 
 或手动复制 [skills/artifacta-publisher/SKILL.md](skills/artifacta-publisher/SKILL.md)。

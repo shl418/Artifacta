@@ -188,6 +188,8 @@ export function Sidebar() {
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 text-sidebar-foreground/60 hover:text-sidebar-foreground"
+                aria-label={t("nav.logout")}
+                title={t("nav.logout")}
                 onClick={logout}
               >
                 <LogOut className="h-4 w-4" />

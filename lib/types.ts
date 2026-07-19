@@ -49,8 +49,20 @@ export interface DashboardArtifact {
   path: string
   size: number
   contentType: string
+  revisionId?: string
+  sourceHash?: string
   entryPath?: string
   assetRoot?: string
+  entryHtmlPath?: string
+}
+
+export type DashboardVersionOperation = "upload" | "text_edit" | "merge" | "rollback"
+
+export interface DashboardTextChange {
+  textKey: string
+  context: string
+  before: string
+  after: string
 }
 
 export interface Project {
@@ -232,6 +244,9 @@ export interface DashboardVersion {
   createdBy: string
   createdAt: string
   notes: string
+  operation?: DashboardVersionOperation
+  parentRevisionId?: string | null
+  textChanges?: DashboardTextChange[]
 }
 
 export interface DatasetVersion {

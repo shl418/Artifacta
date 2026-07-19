@@ -7,7 +7,7 @@ export type DomainEvent =
   | { type: "project.created"; organizationId: string; actorId: string; project: { id: string; name: string }; meta?: { upload_session_id?: string; datasets_count?: number } }
   | { type: "project.updated"; organizationId: string; actorId: string; project: { id: string; name: string }; meta?: { visibility?: string } }
   | { type: "project.deleted"; organizationId: string; actorId: string; project: { id: string; name: string } }
-  | { type: "project.html.updated"; organizationId: string; actorId: string; project: { id: string; name: string }; meta: { artifact_kind: string; original_name: string } }
+  | { type: "project.html.updated"; organizationId: string; actorId: string; project: { id: string; name: string }; meta: { artifact_kind: string; original_name: string; text_edit_count?: number; merged?: boolean } }
   | { type: "project.rolled.back"; organizationId: string; actorId: string; project: { id: string; name: string }; meta: { version_id: string; version: number } }
   | { type: "dataset.created"; organizationId: string; actorId: string; dataset: { id: string; name: string; projectId: string; fileType: string } }
   | { type: "dataset.replaced"; organizationId: string; actorId: string; dataset: { id: string; name: string; projectId: string; version: number } }
@@ -39,7 +39,7 @@ export function dispatch(database: Database, event: DomainEvent): void {
 
     case "project.html.updated":
       addActivity(database, { organizationId: event.organizationId, type: "dashboard", userId: event.actorId, action: "更新了看板文件", target: event.project.name, targetId: event.project.id })
-      recordAudit(database, { organizationId: event.organizationId, actorUserId: event.actorId, action: "project.html.update", targetType: "project", targetId: event.project.id, summary: `Updated dashboard artifact for ${event.project.name}`, metadata: { artifact_kind: event.meta.artifact_kind, original_name: event.meta.original_name } })
+      recordAudit(database, { organizationId: event.organizationId, actorUserId: event.actorId, action: "project.html.update", targetType: "project", targetId: event.project.id, summary: `Updated dashboard artifact for ${event.project.name}`, metadata: { artifact_kind: event.meta.artifact_kind, original_name: event.meta.original_name, ...(event.meta.text_edit_count === undefined ? {} : { text_edit_count: event.meta.text_edit_count }), ...(event.meta.merged === undefined ? {} : { merged: event.meta.merged }) } })
       emitWebhooks(database, event.organizationId, "project.updated", { project_id: event.project.id, name: event.project.name })
       return
 
