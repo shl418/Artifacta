@@ -3,7 +3,7 @@
 **Still dragging widgets to build BI dashboards in the AI era?**  
 That is last-generation production: slow, rigid, hard to collaborate, and hard to turn “insights the model just produced” into something you can actually ship.
 
-Artifacta bets on a different path: **let AI write HTML dashboards**—charts, narrative, and interaction in one pass, an order of magnitude faster than dragging controls.
+Artifacta bets on a different path: **let AI write HTML dashboards**—charts, narrative, and interaction in one pass, an order of magnitude faster than dragging controls. After publishing, teams can also revise visible copy directly in the browser without rebuilding the bundle for every title change.
 
 ---
 
@@ -32,10 +32,23 @@ Generate with a local **Skill** in Cursor or Claude Code, then pack and upload w
 
 ![Hosted dashboard preview](public/demo/dashboard-preview.png)
 
+## Highlight: Edit HTML Dashboards In Place
+
+An AI-generated dashboard no longer becomes a hard-to-change static deliverable after upload. Members with edit access can select **Edit text** from the preview, click visible titles, metrics, or annotations, and revise them in place while seeing the real dashboard.
+
+![Artifacta in-place HTML dashboard editor](public/demo/online-html-editor.png)
+
+- **What you see is what you edit:** Click visible text while preserving the dashboard's layout, charts, and interactions.
+- **Controlled changes:** Review before/after values in one place, discard individual edits, undo or redo, and recover a local draft.
+- **Versioned publishing:** **Save and publish** creates a new immutable version while keeping previous versions available for inspection and rollback.
+- **Team-safe merging:** When someone else publishes first, Artifacta automatically carries over non-conflicting edits and provides a conflict-resolution UI for the rest.
+- **Sandboxed by default:** Editing and preview stay inside the sandboxed iframe instead of granting uploaded HTML the main application's privileges.
+
 ## What's Available Today
 
 - Upload a single `.html` dashboard or a `.zip` bundle with CSS, JS, images, and other static assets.
 - Preview dashboards in a sandboxed iframe with private, team, or public visibility.
+- Edit visible dashboard text in place with drafts, undo/redo, versioned publishing, and concurrent merge handling.
 - Upload CSV/JSON datasets with automatic row, column, and schema inspection.
 - Manage folders, team members, project permissions, API keys, and dataset sync configuration.
 - Use signed Cookie sessions in the web console; use Bearer API keys for coding agents, CI, and the CLI.
