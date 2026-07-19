@@ -82,7 +82,7 @@ try {
     ],
   })
   assert.equal(syncScriptDatabase.projectSyncScripts.length, 1)
-  assert.equal(syncScriptDatabase.projectSyncScripts[0].schedule, "0 8 * * *")
+  assert.equal(syncScriptDatabase.projectSyncScripts[0].schedule, null, "manifest schedules are ignored in manual-only mode")
   assert.deepEqual(syncScriptDatabase.projectSyncScripts[0].outputs, ["data/metrics.csv"])
 
   syncScripts.upsertProjectSyncScriptsFromManifest(syncScriptDatabase, "proj_test", {
@@ -98,7 +98,7 @@ try {
   })
   assert.equal(syncScriptDatabase.projectSyncScripts.length, 1)
   assert.equal(syncScriptDatabase.projectSyncScripts[0].scriptPath, "scripts/refresh.py")
-  assert.equal(syncScriptDatabase.projectSyncScripts[0].schedule, "0 9 * * *")
+  assert.equal(syncScriptDatabase.projectSyncScripts[0].schedule, null, "re-upload must not expose a schedule that will never run")
   assert.deepEqual(syncScriptDatabase.projectSyncScripts[0].outputs, ["data/metrics.csv", "data/extra.csv"])
 
   console.log("Script sync helper tests passed.")

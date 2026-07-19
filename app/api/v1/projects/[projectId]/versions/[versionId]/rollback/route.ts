@@ -23,9 +23,16 @@ export async function POST(request: Request, context: RouteContext) {
 
   const updated = await updateDatabase((mutable) => {
     const record = mutable.projects.find((candidate) => candidate.id === projectId)!
-    recordDashboardVersion(mutable, record, auth.user.id, `Rollback point before ${version.id}`)
-    record.htmlArtifact = version.htmlArtifact
+    const parentRevisionId = record.htmlArtifact.revisionId ?? null
+    record.htmlArtifact = { ...version.htmlArtifact }
     record.updatedAt = now()
+    recordDashboardVersion(
+      mutable,
+      record,
+      auth.user.id,
+      `Rolled back to dashboard version ${version.version}`,
+      { operation: "rollback", parentRevisionId },
+    )
     dispatch(mutable, { type: "project.rolled.back", organizationId: auth.user.organizationId, actorId: auth.user.id, project: { id: projectId, name: record.name }, meta: { version_id: version.id, version: version.version } })
     return record
   })

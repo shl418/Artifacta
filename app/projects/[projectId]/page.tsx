@@ -57,11 +57,25 @@ interface ProjectDetail {
   }>
 }
 
+interface DashboardVersionItem {
+  id: string
+  version: number
+  notes: string
+  operation?: "upload" | "text_edit" | "merge" | "rollback"
+  created_at: string
+  text_changes?: Array<{
+    text_key: string
+    context: string
+    before: string
+    after: string
+  }>
+}
+
 export default function ProjectDetailPage() {
   const params = useParams<{ projectId: string }>()
   const { t } = useLanguage()
   const [project, setProject] = useState<ProjectDetail | null>(null)
-  const [versions, setVersions] = useState<Array<{ id: string; version: number; notes: string; created_at: string }>>([])
+  const [versions, setVersions] = useState<DashboardVersionItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
   const [embedUrl, setEmbedUrl] = useState("")
@@ -367,15 +381,36 @@ export default function ProjectDetailPage() {
                     )}
                     {versions.map((version) => (
                       <Card key={version.id}>
-                        <CardContent className="flex flex-col gap-3 p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
-                          <div>
-                            <p className="font-medium">v{version.version}</p>
+                        <CardContent className="flex flex-col gap-3 p-4 text-sm">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium">v{version.version}</p>
+                                {version.operation && <Badge variant="outline">{versionOperationLabel(version.operation)}</Badge>}
+                              </div>
                             <p className="text-muted-foreground">{version.notes}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <p className="text-xs text-muted-foreground">{new Date(version.created_at).toLocaleString()}</p>
+                              <Button variant="outline" size="sm" disabled={pendingAction !== null} onClick={() => rollbackVersion(version.id)}>{t("project.versions.rollback")}</Button>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <p className="text-xs text-muted-foreground">{new Date(version.created_at).toLocaleString()}</p>
-                            <Button variant="outline" size="sm" disabled={pendingAction !== null} onClick={() => rollbackVersion(version.id)}>{t("project.versions.rollback")}</Button>
-                          </div>
+                          {(version.text_changes?.length ?? 0) > 0 && (
+                            <details className="rounded-md border border-border bg-muted/30 px-3 py-2">
+                              <summary className="cursor-pointer text-xs font-medium">
+                                查看 {version.text_changes!.length} 处文字修改
+                              </summary>
+                              <div className="mt-3 space-y-3">
+                                {version.text_changes!.map((change) => (
+                                  <div key={change.text_key} className="rounded border border-border bg-background p-3">
+                                    <p className="text-[11px] text-muted-foreground truncate">{change.context || "页面文字"}</p>
+                                    <p className="mt-2 text-xs text-muted-foreground line-through break-words">{change.before || "（空）"}</p>
+                                    <p className="mt-1 text-xs text-foreground break-words">{change.after || "（删除文字）"}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </details>
+                          )}
                         </CardContent>
                       </Card>
                     ))}
@@ -406,6 +441,16 @@ export default function ProjectDetailPage() {
       </div>
     </div>
   )
+}
+
+function versionOperationLabel(operation: NonNullable<DashboardVersionItem["operation"]>) {
+  const labels = {
+    upload: "上传",
+    text_edit: "文字编辑",
+    merge: "合并",
+    rollback: "回滚",
+  }
+  return labels[operation]
 }
 
 function Metric({ icon: Icon, label, value }: { icon: typeof Eye; label: string; value: number }) {

@@ -1,6 +1,6 @@
 {
   "name": "@artifacta/cli",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "CLI for the Artifacta open protocol — publish HTML/JS data applications, bind datasets, and manage sync from local tools and agents.",
   "license": "MIT",
   "bin": {

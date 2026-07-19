@@ -95,8 +95,8 @@ This file is the maintenance checklist for keeping code and documentation in syn
 
 These are intentionally documented as roadmap or extension points only:
 
-- Subprocess network egress allowlist for bundle scripts (`SCRIPT_EGRESS_ALLOWLIST` is reserved; v1 scripts have no outbound network)
-- Full 5-field cron evaluation for all dataset schedules (daily `H M * * *` style cron is supported for script `next_run_at`)
+- Filesystem/network/memory isolation for bundle script subprocesses. The current runner is for trusted editors only.
+- Scheduled script execution. Bundle scripts are manually triggered and `schedule` / `next_run_at` remain `null`.
 - SAML SSO
 - MySQL metadata adapter
 - Password-protected public links

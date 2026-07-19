@@ -28,7 +28,9 @@ export function upsertProjectSyncScriptsFromManifest(
       current.scriptPath = manifestScript.path
       current.runtime = manifestScript.runtime
       current.outputs = [...manifestScript.outputs]
-      current.schedule = manifestScript.schedule ?? null
+      // Scheduling is intentionally disabled in the current single-node release.
+      // Keep accepting older manifests, but never expose a schedule that will not run.
+      current.schedule = null
       current.nextRunAt = null
       current.updatedAt = timestamp
       continue
@@ -41,7 +43,7 @@ export function upsertProjectSyncScriptsFromManifest(
       scriptPath: manifestScript.path,
       runtime: manifestScript.runtime,
       outputs: [...manifestScript.outputs],
-      schedule: manifestScript.schedule ?? null,
+      schedule: null,
       enabled: true,
       sourceConfig: {},
       lastRunAt: null,

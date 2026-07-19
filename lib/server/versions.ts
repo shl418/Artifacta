@@ -1,19 +1,42 @@
-import type { Database, Dataset, Project } from "@/lib/types"
+import type {
+  DashboardTextChange,
+  DashboardVersionOperation,
+  Database,
+  Dataset,
+  Project,
+} from "@/lib/types"
 import { now } from "@/lib/server/db"
 
-export function recordDashboardVersion(database: Database, project: Project, userId: string, notes: string) {
+interface RecordDashboardVersionOptions {
+  operation?: DashboardVersionOperation
+  parentRevisionId?: string | null
+  textChanges?: DashboardTextChange[]
+}
+
+export function recordDashboardVersion(
+  database: Database,
+  project: Project,
+  userId: string,
+  notes: string,
+  options: RecordDashboardVersionOptions = {},
+) {
   const version = nextProjectVersion(database, project.id)
-  database.dashboardVersions.unshift({
+  const record = {
     id: `dashver_${crypto.randomUUID()}`,
     projectId: project.id,
     organizationId: project.organizationId,
-    htmlArtifact: project.htmlArtifact,
+    htmlArtifact: { ...project.htmlArtifact },
     version,
     createdBy: userId,
     createdAt: now(),
     notes,
-  })
+    operation: options.operation ?? "upload" as const,
+    parentRevisionId: options.parentRevisionId ?? null,
+    textChanges: options.textChanges ?? [],
+  }
+  database.dashboardVersions.unshift(record)
   database.dashboardVersions = database.dashboardVersions.slice(0, 1000)
+  return record
 }
 
 export function recordDatasetVersion(database: Database, dataset: Dataset, userId: string | null) {

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import { LanguageProvider } from "@/lib/i18n/context"
+import { ThemeProvider } from "@/components/theme-provider"
 
 export const metadata: Metadata = {
   title: 'Artifacta — AI 时代的数据应用托管',
@@ -27,11 +28,13 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="zh-CN" className="bg-background">
+    <html lang="zh-CN" className="bg-background" suppressHydrationWarning>
       <body className="font-sans antialiased bg-background text-foreground">
-        <LanguageProvider>
-          {children}
-        </LanguageProvider>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <LanguageProvider>
+            {children}
+          </LanguageProvider>
+        </ThemeProvider>
       </body>
     </html>
   )

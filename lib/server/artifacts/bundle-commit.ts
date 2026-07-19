@@ -27,7 +27,13 @@ import { dataDir } from "@/lib/server/config"
 import { inspectDataset } from "@/lib/server/datasets"
 import { now } from "@/lib/server/db"
 import { readStorageObject, removeStoragePrefix, writeStorageObject } from "@/lib/server/object-storage"
-import { extractProjectZip, sanitizeFileName } from "@/lib/server/storage"
+import {
+  copyStorageEntries,
+  createArtifactRevisionId,
+  extractProjectZip,
+  hashArtifactSource,
+  sanitizeFileName,
+} from "@/lib/server/storage"
 
 function extractIssueCode(message: string): string | null {
   const KNOWN_CODES = ["DATASET_KIND_EXTENSION_MISMATCH"] as const
@@ -143,11 +149,20 @@ export async function commitUploadSession(database: Database, input: CommitUploa
     if (!existing || !user || !canEditProject(database, user, existing)) throw new Error("PROJECT_NOT_FOUND")
   }
   const skipPaths = isUpdate ? buildSyncProtectedPaths(database, projectId) : undefined
+  const previousAssetRoot = isUpdate
+    ? database.projects.find((item) => item.id === projectId)?.htmlArtifact.assetRoot
+    : undefined
+  const revisionId = createArtifactRevisionId()
+  const revisionRoot = `projects/${projectId}/revisions/${revisionId}`
 
-  const relativeZipPath = `projects/${projectId}/${sanitizeFileName(session.originalName)}`
+  const relativeZipPath = `${revisionRoot}/${sanitizeFileName(session.originalName)}`
   await writeStorageObject(relativeZipPath, buffer, "application/zip")
 
-  const extracted = await extractProjectZip(projectId, buffer, skipPaths)
+  const nextAssetRoot = `${revisionRoot}/bundle`
+  if (previousAssetRoot && skipPaths && skipPaths.size > 0) {
+    await copyStorageEntries(previousAssetRoot, nextAssetRoot, skipPaths)
+  }
+  const extracted = await extractProjectZip(projectId, buffer, skipPaths, nextAssetRoot)
   let bundledManifest: ArtifactManifest | null = null
   try {
     bundledManifest = await importManifestFromBundle(extracted.assetRoot)
@@ -212,6 +227,8 @@ export async function commitUploadSession(database: Database, input: CommitUploa
     path: relativeZipPath,
     size: buffer.byteLength,
     contentType: "application/zip",
+    revisionId,
+    sourceHash: hashArtifactSource(await readStorageObject(path.posix.join(extracted.assetRoot, entryPath))),
     entryPath,
     assetRoot: extracted.assetRoot,
   }
@@ -223,7 +240,9 @@ export async function commitUploadSession(database: Database, input: CommitUploa
   const bundleDatasets = await Promise.all(
     datasetBindings.map((item) => {
       const existing = existingBundleDatasets.find(
-        (dataset) => relativizeBundlePath(dataset.filePath, extracted.assetRoot) === item.bundle_path
+        (dataset) =>
+          Boolean(previousAssetRoot) &&
+          relativizeBundlePath(dataset.filePath, previousAssetRoot!) === item.bundle_path
       )
       return buildBundleDatasetRecord({
         projectId,

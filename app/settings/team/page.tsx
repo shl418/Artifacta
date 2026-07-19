@@ -269,7 +269,15 @@ export default function TeamPage() {
                               <SelectItem value="member">{t("common.role.member")}</SelectItem>
                             </SelectContent>
                           </Select>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" disabled={member.status === "disabled"} onClick={() => setPendingDisable(member)}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            aria-label={`${t("settings.team.disable")} ${member.name}`}
+                            title={`${t("settings.team.disable")} ${member.name}`}
+                            disabled={member.status === "disabled"}
+                            onClick={() => setPendingDisable(member)}
+                          >
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>

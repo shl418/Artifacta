@@ -24,6 +24,7 @@ Authorization: Bearer <API_KEY>
 - 已实现：轻量 CLI、`--json` 输出、`artifacta doctor`、API-driven 同步 Worker、API smoke test。
 - 已接入同步执行器：项目级 `sync_scripts`（解包目录内运行 Python/Node 脚本，手动触发）。按数据集的 URL / S3 / Presto 外部同步已移除。
 - 已实现：审计日志、Webhook、数据集预览、版本记录、嵌入 token 和 OIDC 登录入口。
+- 已实现：桌面端入口 HTML 纯文字在线编辑、本地草稿、不可变 artifact revision、文字级版本记录和三方冲突合并。
 - API 错误响应统一使用本文档底部的错误 envelope。
 
 ### OpenAPI
@@ -325,6 +326,56 @@ GET /projects/:project_id/html/render
 
 > 当前实现会对响应附加 CSP sandbox。单 HTML 文件直接渲染；ZIP 包会在上传时解包，入口 `index.html` 通过本接口渲染，相对路径 CSS/JS/图片资源会从 `/projects/:project_id/html/*` 受控路由加载。
 
+### 在线编辑 HTML 文字
+
+在线编辑只接受能够映射回入口 HTML 源码的纯文本节点。JavaScript 动态文字、SVG、Canvas、富文本结构和新增换行不在 V1 范围内。
+
+先创建编辑会话：
+
+```http
+POST /projects/:project_id/text-editor/session
+```
+
+响应包含 `base_revision_id`、sandbox 编辑地址 `edit_url` 和浏览器草稿键 `draft_key`。提交文字修改：
+
+```http
+PUT /projects/:project_id/text-edits
+Content-Type: application/json
+
+{
+  "base_revision_id": "artrev_...",
+  "edits": [
+    {
+      "text_key": "a1b2c3...",
+      "before": "季度销售概览",
+      "after": "Q3 销售概览"
+    }
+  ],
+  "notes": "更新季度标题"
+}
+```
+
+如果当前 revision 已变化，接口返回 `409 MERGE_REQUIRED`，其中 `details` 包含 `latest_revision_id`、可自动合并的 `automatic_changes` 和需要人工处理的 `conflicts`。解决全部冲突后提交：
+
+```http
+POST /projects/:project_id/text-edits/merge
+Content-Type: application/json
+
+{
+  "base_revision_id": "artrev_base",
+  "latest_revision_id": "artrev_latest",
+  "edits": [...],
+  "resolutions": [
+    {
+      "conflict_id": "conflict_...",
+      "choice": "yours"
+    }
+  ]
+}
+```
+
+`choice` 支持 `latest`、`yours` 和 `manual`；`manual` 需同时提供最终纯文字 `value`。提交时若最新版再次变化，会再次返回 `409`，避免覆盖其他人的发布。
+
 ### 读取 ZIP 看板静态资源
 
 ```
@@ -589,7 +640,7 @@ POST /projects
 GET /projects/:project_id/sync-scripts
 ```
 
-**响应:** `{ "data": [ { "id", "manifest_id", "script_path", "runtime", "outputs", "schedule", "enabled", "source_config", "last_run_at", "last_run_status", "next_run_at", ... } ] }`
+**响应:** `{ "data": [ { "id", "manifest_id", "script_path", "runtime", "outputs", "schedule", "enabled", "source_config", "last_run_at", "last_run_status", "next_run_at", ... } ] }`。当前手动触发版本中 `schedule` / `next_run_at` 固定为 `null`，字段仅为协议兼容保留。
 
 项目详情 `GET /projects/:id` 的 `sync_scripts` 字段内容相同。
 
@@ -599,9 +650,9 @@ GET /projects/:project_id/sync-scripts
 PUT /projects/:project_id/sync-scripts/:script_id
 ```
 
-**请求体 (JSON):** 可选 `enabled`, `schedule`, `outputs`（须为已绑定 bundle 数据集路径）, `source_config`。
+**请求体 (JSON):** 可选 `enabled`, `outputs`（须为已绑定 bundle 数据集路径）, `source_config`。
 
-重传 ZIP 时会更新 `script_path` / `runtime`，并**保留**已有 `source_config` 与管理员覆盖的 `outputs` / `schedule`。
+重传 ZIP 时会更新 `script_path` / `runtime` / `outputs`，并保留已有 `source_config` 与 `enabled` 状态。当前版本仅支持手动触发，不执行 cron。
 
 ### 测试脚本（不写盘）
 
@@ -1070,7 +1121,7 @@ pnpm cli -- projects update-html \
 pnpm cli -- sync-scripts list --project-id proj_abc123
 pnpm cli -- sync-scripts trigger --project-id proj_abc123 --script-id sscript_abc123
 pnpm cli -- sync-scripts set --project-id proj_abc123 --script-id sscript_abc123 \
-  --config-file ./script-secrets.json --schedule "0 8 * * *"
+  --config-file ./script-secrets.json
 
 # 本地调试脚本（不调用 API）
 pnpm cli -- bundle run-script \

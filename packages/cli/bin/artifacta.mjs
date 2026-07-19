@@ -51,8 +51,8 @@ Usage:
   artifacta datasets list
   artifacta datasets upload --project-id proj_x --file data.csv [--name "Sales Data"]
   artifacta datasets replace --project-id proj_x --dataset-id ds_x --file data.csv
-  artifacta sync trigger --project-id proj_x --dataset-id ds_x
   artifacta sync-scripts list --project-id proj_x
+  artifacta sync-scripts set --project-id proj_x --script-id sscript_x --config-file secrets.json
   artifacta sync-scripts trigger --project-id proj_x --script-id sscript_x
   artifacta sync-scripts status --project-id proj_x --script-id sscript_x
   artifacta bundle run-script --file ./scripts/sync.py --bundle-root ./dist [--runtime python]
@@ -229,24 +229,16 @@ async function replaceDataset(options) {
 async function datasetSyncCommand(syncArgs) {
   const subcommand = syncArgs[0]
   if (subcommand !== "set") {
-    throw new Error("Usage: artifacta datasets sync set --project-id proj_x --dataset-id ds_x [--config-file ./sync.json]")
+    throw new Error("Usage: artifacta datasets sync set --project-id proj_x --dataset-id ds_x [--source-type manual]")
   }
 
   const options = parseOptions(syncArgs.slice(1))
   const projectId = requiredOption(options, "project-id")
   const datasetId = requiredOption(options, "dataset-id")
-  // Honor the documented flags instead of silently discarding them. The server
-  // currently only accepts source_type "manual" and will reject others with a
-  // clear error rather than this CLI swallowing them.
+  // The server only accepts source_type; other sync fields are controlled by the
+  // manifest or set server-side and cannot be overridden via this endpoint.
   const sourceType = String(options["source-type"] ?? options.source ?? "manual")
-  const config = await readJsonConfig(options)
-  const body = {
-    enabled: Boolean(options.enabled || options.enable),
-    source_type: sourceType,
-    source_config: config,
-    update_mode: String(options["update-mode"] ?? "full"),
-    schedule: optionalString(options, "schedule"),
-  }
+  const body = { source_type: sourceType }
 
   const payload = await request(`/projects/${projectId}/datasets/${datasetId}/sync`, {
     method: "PUT",
@@ -287,7 +279,7 @@ async function syncScriptsCommand(syncArgs) {
     const body = {}
     if (options.enabled || options.enable) body.enabled = true
     if (options.disabled || options.disable) body.enabled = false
-    if (options.schedule !== undefined) body.schedule = optionalString(options, "schedule")
+    // schedule is managed by the bundle manifest and cannot be overridden via this endpoint.
     const config = await readJsonConfig(options)
     if (Object.keys(config).length > 0) body.source_config = config
     const payload = await request(`/projects/${projectId}/sync-scripts/${scriptId}`, {
@@ -348,16 +340,9 @@ async function doctorCommand(options) {
   const checks = []
   checks.push({
     name: "node",
-    ok: Number(process.versions.node.split(".")[0]) >= 22,
+    ok: Number(process.versions.node.split(".")[0]) >= 18,
     details: `v${process.versions.node}`,
   })
-
-  try {
-    const { stdout } = await execFileAsync("pnpm", ["-v"])
-    checks.push({ name: "pnpm", ok: true, details: stdout.trim() })
-  } catch {
-    checks.push({ name: "pnpm", ok: false, details: "pnpm was not found on PATH" })
-  }
 
   const appUrl = String(options["app-url"] ?? process.env.ARTIFACTA_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000")
   checks.push({ name: "app_url", ok: /^https?:\/\//.test(appUrl), details: appUrl })
