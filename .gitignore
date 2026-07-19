@@ -20,6 +20,7 @@ __v0_jsx-dev-runtime.ts
 # Common ignores
 node_modules
 packages/client/dist/
+packages/cli/*.tgz
 .next/
 out/
 coverage/

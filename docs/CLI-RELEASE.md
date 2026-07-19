@@ -30,17 +30,21 @@ pnpm cli:publish:dry-run
 ```
 
 3. Inspect the generated tarball in `packages/cli/`.
-4. Publish to npm with registry credentials:
+   Generated `packages/cli/*.tgz` files are ignored by Git so they do not
+   make the release tree fail pnpm's clean-working-tree check.
+4. Commit all release metadata changes and confirm `git status --short`
+   has no output.
+5. Publish to npm with registry credentials:
 
 ```bash
-cd packages/cli
-npm publish --access public
+pnpm cli:publish
 ```
 
-5. Verify the public install path after publish:
+6. Verify the exact published version and its public install path:
 
 ```bash
-npx -y @artifacta/cli@latest --help
+npm view @artifacta/cli@0.1.2 version
+npx -y @artifacta/cli@0.1.2 --help
 ```
 
 ## Offline / Tarball Distribution
