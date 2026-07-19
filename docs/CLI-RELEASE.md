@@ -43,8 +43,9 @@ pnpm cli:publish
 6. Verify the exact published version and its public install path:
 
 ```bash
-npm view @artifacta/cli@0.1.2 version
-npx -y @artifacta/cli@0.1.2 --help
+VERSION=1.0.0
+npm view @artifacta/cli@$VERSION version
+npx -y @artifacta/cli@$VERSION --help
 ```
 
 ## Offline / Tarball Distribution
@@ -54,7 +55,7 @@ If a user cannot reach the public npm registry, you can still hand off the tarba
 Consumers can install that tarball directly:
 
 ```bash
-npm install -g ./artifacta-cli-0.1.2.tgz
+npm install -g ./artifacta-cli-<version>.tgz
 ```
 
 That gives them the same `artifacta` command locally.
