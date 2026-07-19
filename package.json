@@ -26,6 +26,7 @@
     "test:unit": "node scripts/test-sync-job-persistence.mjs && node scripts/test-script-sync.mjs && node scripts/test-manifest-parser.mjs && node scripts/test-mime.mjs && node scripts/test-entrypoint.mjs && node scripts/test-validate-bundle.mjs && node scripts/test-get-project-by-id.mjs && node scripts/test-asset-routing.mjs && node scripts/test-csv-parser.mjs && node scripts/test-rate-limit.mjs && node scripts/test-request-size.mjs && node scripts/test-embed-token.mjs && node scripts/test-versions.mjs && node scripts/test-text-editor.mjs && node scripts/test-sync-config-validation.mjs && node scripts/test-api-key-scopes.mjs && node scripts/test-job-lifecycle.mjs && node scripts/test-publisher-onboarding.mjs",
     "cli:pack": "cd packages/cli && pnpm pack",
     "cli:publish:dry-run": "cd packages/cli && pnpm publish --dry-run --access public",
+    "cli:publish": "pnpm --dir packages/cli publish --access public",
     "worker:once": "node scripts/sync-worker.mjs --once",
     "test:smoke": "node scripts/smoke-api.mjs",
     "test:security": "node scripts/test-zip-security.mjs && node scripts/test-upload-session.mjs && node scripts/test-cache-control.mjs"

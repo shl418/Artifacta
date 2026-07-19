@@ -40,6 +40,17 @@ assert.equal(cli.status, 0, cli.stderr)
 assert.match(cli.stdout, /sync-scripts set/)
 assert.doesNotMatch(cli.stdout, /artifacta sync trigger/)
 
+const ignoredCliTarball = spawnSync(
+  "git",
+  ["check-ignore", "-q", "packages/cli/artifacta-cli-0.0.0.tgz"],
+  { cwd: repoRoot },
+)
+assert.equal(
+  ignoredCliTarball.status,
+  0,
+  "CLI tarballs must be ignored so pnpm publish sees a clean working tree after cli:pack",
+)
+
 console.log("Publisher onboarding contract tests passed.")
 
 function escapeRegExp(value) {
