@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.0.0 - 2026-07-19
+
+Artifacta's first stable open-source release. The release establishes the hosted HTML/ZIP dashboard workflow, the manifest v1 protocol, the public CLI, and the self-hosting baseline described in the documentation.
+
 ### Publisher onboarding and interaction reliability
 
 - Added a working global Help entry with an in-app publishing guide, direct API Key navigation, current-site environment commands, skill installation, CLI doctor, and publish examples.
